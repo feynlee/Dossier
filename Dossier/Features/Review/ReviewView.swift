@@ -108,10 +108,15 @@ private struct ReviewCard: View {
                 }
             }
 
-            if fact.check == .conflict, let alternate {
+            if fact.check == .conflict, fact.isSensitive, value == nil {
+                Text("Two readings of this number differ. Reveal numbers with Face ID to compare them.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else if fact.check == .conflict, let alternate {
                 Text("The two readings differ. Pick the right one.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                source
                 Picker("Reading", selection: $choice) {
                     Text(display(value)).tag(0)
                     Text(VaultReader.display(alternate, for: fact.key)).tag(1)
@@ -119,12 +124,9 @@ private struct ReviewCard: View {
                 .pickerStyle(.inline)
                 .labelsHidden()
                 .font(.dsFieldValue)
-                HStack {
-                    Text(choice == 0 ? "Private Cloud Compute" : (fact.document?.kind == .driversLicense ? "Licence barcode" : "Machine-readable zone"))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
+                Text(choice == 0 ? "Read by \(fact.document?.engine.displayName ?? "the model")" : (fact.document?.kind == .driversLicense ? "Licence barcode" : "Machine-readable zone"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 Button("Use \(choice == 0 ? display(value) : VaultReader.display(alternate, for: fact.key))") {
                     onConfirm(choice == 0 ? value : alternate)
                 }
@@ -134,13 +136,7 @@ private struct ReviewCard: View {
             } else {
                 Text(display(value))
                     .font(fact.key.isMonospaced ? .dsFieldValue : .body)
-                if let context = VaultReader.context(of: fact) {
-                    Text(context)
-                        .font(.system(.footnote, design: .monospaced))
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(uiColor: .systemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
-                }
+                source
                 Text(fact.check == .pageText ? "Found in the page text." : "Not found in the page text. Check it against the document.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -156,6 +152,21 @@ private struct ReviewCard: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// The strip of the page the value came from. For a sensitive value it appears only once revealed.
+    @ViewBuilder
+    private var source: some View {
+        if let rect = fact.cropRect, let page = fact.cropPage, let path = fact.document?.relativePath, !path.isEmpty,
+           !fact.isSensitive || reveal.value(for: fact) != nil {
+            SourceCropView(relativePath: path, page: page, rect: rect)
+        } else if let context = VaultReader.context(of: fact) {
+            Text(context)
+                .font(.system(.footnote, design: .monospaced))
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(uiColor: .systemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
+        }
     }
 
     private func display(_ value: String?) -> String {

@@ -8,6 +8,7 @@ struct DocumentDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var reveal = RevealState()
     @State private var copied = false
+    @State private var sourceFact: Fact?
 
     private var facts: [Fact] {
         document.facts.filter { $0.status != .superseded }.sorted { $0.key.sortOrder < $1.key.sortOrder }
@@ -27,6 +28,9 @@ struct DocumentDetailView: View {
                         reveal.reveal(facts, reason: "Reveal \(fact.key.label.lowercased())")
                     }
                     .contextMenu {
+                        if fact.cropRect != nil, !document.relativePath.isEmpty, !fact.isSensitive || reveal.value(for: fact) != nil {
+                            Button("Show where this was read", systemImage: "text.viewfinder") { sourceFact = fact }
+                        }
                         if let value = fact.isSensitive ? reveal.value(for: fact) : VaultReader.value(of: fact) {
                             Button("Copy for 60 seconds", systemImage: "doc.on.doc") {
                                 VaultReader.copy(value)
@@ -57,6 +61,24 @@ struct DocumentDetailView: View {
             Text(reveal.error ?? "")
         }
         .sensoryFeedback(.success, trigger: copied)
+        .sheet(item: $sourceFact) { fact in
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let rect = fact.cropRect, let page = fact.cropPage {
+                        SourceCropView(relativePath: document.relativePath, page: page, rect: rect)
+                    }
+                    Text("\(document.fileName) · page \(fact.cropPage ?? fact.page)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding()
+                .navigationTitle(fact.key.label)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { sourceFact = nil } } }
+            }
+            .presentationDetents([.medium])
+        }
     }
 }
 

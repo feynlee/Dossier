@@ -12,6 +12,8 @@ nonisolated enum DocumentKind: String, CaseIterable, Codable, Sendable {
     case uscisNotice
     case i94
     case other
+    /// A record the user added by hand, such as an address for a gap in their history.
+    case addedByYou
 
     var displayName: String {
         switch self {
@@ -25,6 +27,7 @@ nonisolated enum DocumentKind: String, CaseIterable, Codable, Sendable {
         case .uscisNotice: "USCIS notice"
         case .i94: "I-94 record"
         case .other: "Document"
+        case .addedByYou: "Added by you"
         }
     }
 
@@ -38,6 +41,7 @@ nonisolated enum DocumentKind: String, CaseIterable, Codable, Sendable {
         case .lease: "house"
         case .uscisNotice, .other: "doc.text"
         case .i94: "airplane"
+        case .addedByYou: "house"
         }
     }
 }
@@ -67,6 +71,8 @@ nonisolated enum FactKey: String, CaseIterable, Codable, Sendable {
     case classOfAdmission
     case admitUntil
     case i94Number
+    case validFrom
+    case validUntil
 
     var label: String {
         switch self {
@@ -93,6 +99,8 @@ nonisolated enum FactKey: String, CaseIterable, Codable, Sendable {
         case .classOfAdmission: "Class of admission"
         case .admitUntil: "Admit until"
         case .i94Number: "I-94 number"
+        case .validFrom: "Valid from"
+        case .validUntil: "Valid until"
         }
     }
 
@@ -106,7 +114,7 @@ nonisolated enum FactKey: String, CaseIterable, Codable, Sendable {
 
     var isDate: Bool {
         switch self {
-        case .dateOfBirth, .issueDate, .expiryDate, .residentSince, .leaseStartDate, .leaseEndDate, .noticeDate, .admitUntil: true
+        case .dateOfBirth, .issueDate, .expiryDate, .residentSince, .leaseStartDate, .leaseEndDate, .noticeDate, .admitUntil, .validFrom, .validUntil: true
         default: false
         }
     }

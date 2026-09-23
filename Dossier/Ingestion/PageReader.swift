@@ -8,6 +8,8 @@ import Vision
 nonisolated struct ReadPage: Sendable {
     var image: CGImage
     var lines: [String]
+    /// Where each line sits on the page, normalized to 0–1 with a top-left origin. Parallel to `lines`.
+    var boxes: [CGRect]
     /// Decoded PDF417 payloads (driver's licence barcodes).
     var barcodes: [String]
 }
@@ -23,9 +25,10 @@ nonisolated enum PageReader {
     static func read(_ data: Data, fileName: String) async throws -> [ReadPage] {
         var pages: [ReadPage] = []
         for image in try render(data, fileName: fileName) {
-            async let lines = recognizeText(in: image)
+            async let text = recognizeText(in: image)
             async let barcodes = detectBarcodes(in: image)
-            pages.append(ReadPage(image: image, lines: try await lines, barcodes: (try? await barcodes) ?? []))
+            let (lines, boxes) = try await text
+            pages.append(ReadPage(image: image, lines: lines, boxes: boxes, barcodes: (try? await barcodes) ?? []))
         }
         return pages
     }
@@ -70,19 +73,25 @@ nonisolated enum PageReader {
 
     // MARK: Vision
 
-    static func recognizeText(in image: CGImage) async throws -> [String] {
+    static func recognizeText(in image: CGImage) async throws -> (lines: [String], boxes: [CGRect]) {
         var request = RecognizeTextRequest()
         request.recognitionLevel = .accurate
         // Language correction "fixes" document numbers and MRZ lines into words; keep the raw reading.
         request.usesLanguageCorrection = false
         let observations = try await request.perform(on: image)
         // Vision's origin is bottom-left: sort top to bottom, then left to right.
-        return observations
-            .sorted { lhs, rhs in
-                let dy = lhs.boundingBox.origin.y - rhs.boundingBox.origin.y
-                return abs(dy) > 0.01 ? dy > 0 : lhs.boundingBox.origin.x < rhs.boundingBox.origin.x
-            }
-            .compactMap { $0.topCandidates(1).first?.string }
+        let sorted = observations.sorted { lhs, rhs in
+            let dy = lhs.boundingBox.origin.y - rhs.boundingBox.origin.y
+            return abs(dy) > 0.01 ? dy > 0 : lhs.boundingBox.origin.x < rhs.boundingBox.origin.x
+        }
+        var lines: [String] = [], boxes: [CGRect] = []
+        for observation in sorted {
+            guard let text = observation.topCandidates(1).first?.string else { continue }
+            let box = observation.boundingBox
+            lines.append(text)
+            boxes.append(CGRect(x: box.origin.x, y: 1 - box.origin.y - box.height, width: box.width, height: box.height))
+        }
+        return (lines, boxes)
     }
 
     static func detectBarcodes(in image: CGImage) async throws -> [String] {

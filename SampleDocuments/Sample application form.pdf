@@ -1,0 +1,102 @@
+%PDF-1.7
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Catalog /Pages 3 0 R /AcroForm << /Fields [5 0 R 6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 15 0 R 16 0 R 17 0 R 18 0 R] /NeedAppearances true /DA (/Helv 10 Tf 0 g) /DR << /Font << /Helv 1 0 R >> >> >> >>
+endobj
+3 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Annots [5 0 R 6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 15 0 R 16 0 R 17 0 R 18 0 R] /Contents 19 0 R >>
+endobj
+5 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line1a_FamilyName[0]) /TU (Family Name (Last Name)) /Rect [50 700 400 716] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+6 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line1b_GivenName[0]) /TU (Given Name (First Name)) /Rect [50 654 400 670] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+7 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line1c_MiddleName[0]) /TU (Middle Name) /Rect [50 608 400 624] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+8 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line5_StreetNumberName[0]) /TU (Street Number and Name) /Rect [50 562 400 578] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+9 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line5_AptSteFlrNumber[0]) /TU (Apt. Ste. Flr. Number) /Rect [50 516 400 532] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+10 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line5_CityOrTown[0]) /TU (City or Town) /Rect [50 470 400 486] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+11 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line5_State[0]) /TU (State) /Rect [50 424 400 440] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+12 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line5_ZipCode[0]) /TU (ZIP Code) /Rect [50 378 400 394] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+13 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line7_AlienNumber[0]) /TU (A-Number) /Rect [50 332 400 348] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+14 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line19_DateOfBirth[0]) /TU (Date of Birth (mm/dd/yyyy)) /Rect [50 286 400 302] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+15 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line20a_PassportNumber[0]) /TU (Passport Number) /Rect [50 240 400 256] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+16 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line21_DateOfLastArrival[0]) /TU (Date of Last Arrival (mm/dd/yyyy)) /Rect [50 194 400 210] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+17 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt2Line27_EligibilityCategory[0]) /TU (Eligibility Category) /Rect [50 148 400 164] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+18 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (form1[0].Pt3Line7_Signature[0]) /TU (Applicant's Signature) /Rect [50 102 400 118] /P 4 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>
+endobj
+19 0 obj
+<< /Length 759 >>
+stream
+BT /F1 16 Tf 50 750 Td (SAMPLE APPLICATION FORM - SPECIMEN FOR TESTING) Tj ET
+BT /F1 9 Tf 50 718 Td (Family Name [Last Name]) Tj ET
+BT /F1 9 Tf 50 672 Td (Given Name [First Name]) Tj ET
+BT /F1 9 Tf 50 626 Td (Middle Name) Tj ET
+BT /F1 9 Tf 50 580 Td (Street Number and Name) Tj ET
+BT /F1 9 Tf 50 534 Td (Apt. Ste. Flr. Number) Tj ET
+BT /F1 9 Tf 50 488 Td (City or Town) Tj ET
+BT /F1 9 Tf 50 442 Td (State) Tj ET
+BT /F1 9 Tf 50 396 Td (ZIP Code) Tj ET
+BT /F1 9 Tf 50 350 Td (A-Number) Tj ET
+BT /F1 9 Tf 50 304 Td (Date of Birth [mm/dd/yyyy]) Tj ET
+BT /F1 9 Tf 50 258 Td (Passport Number) Tj ET
+BT /F1 9 Tf 50 212 Td (Date of Last Arrival [mm/dd/yyyy]) Tj ET
+BT /F1 9 Tf 50 166 Td (Eligibility Category) Tj ET
+BT /F1 9 Tf 50 120 Td (Applicant's Signature) Tj ET
+endstream
+endobj
+xref
+0 20
+0000000000 65535 f 
+0000000009 00000 n 
+0000000079 00000 n 
+0000000325 00000 n 
+0000000382 00000 n 
+0000000612 00000 n 
+0000000826 00000 n 
+0000001039 00000 n 
+0000001241 00000 n 
+0000001459 00000 n 
+0000001675 00000 n 
+0000001878 00000 n 
+0000002069 00000 n 
+0000002265 00000 n 
+0000002465 00000 n 
+0000002684 00000 n 
+0000002896 00000 n 
+0000003128 00000 n 
+0000003349 00000 n 
+0000003560 00000 n 
+trailer
+<< /Size 20 /Root 2 0 R >>
+startxref
+4371
+%%EOF

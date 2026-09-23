@@ -99,6 +99,66 @@ def samples():
     pdf("I-94 travel history.pdf", [table])
 
 
+def sample_form():
+    """A one-page AcroForm PDF with USCIS-style field names, written by hand (no PDF library needed)."""
+    fields = [
+        ("form1[0].Pt2Line1a_FamilyName[0]", "Family Name (Last Name)"),
+        ("form1[0].Pt2Line1b_GivenName[0]", "Given Name (First Name)"),
+        ("form1[0].Pt2Line1c_MiddleName[0]", "Middle Name"),
+        ("form1[0].Pt2Line5_StreetNumberName[0]", "Street Number and Name"),
+        ("form1[0].Pt2Line5_AptSteFlrNumber[0]", "Apt. Ste. Flr. Number"),
+        ("form1[0].Pt2Line5_CityOrTown[0]", "City or Town"),
+        ("form1[0].Pt2Line5_State[0]", "State"),
+        ("form1[0].Pt2Line5_ZipCode[0]", "ZIP Code"),
+        ("form1[0].Pt2Line7_AlienNumber[0]", "A-Number"),
+        ("form1[0].Pt2Line19_DateOfBirth[0]", "Date of Birth (mm/dd/yyyy)"),
+        ("form1[0].Pt2Line20a_PassportNumber[0]", "Passport Number"),
+        ("form1[0].Pt2Line21_DateOfLastArrival[0]", "Date of Last Arrival (mm/dd/yyyy)"),
+        ("form1[0].Pt2Line27_EligibilityCategory[0]", "Eligibility Category"),
+        ("form1[0].Pt3Line7_Signature[0]", "Applicant's Signature"),
+    ]
+    objects = []  # index 0 -> object 1
+    def add(body):
+        objects.append(body)
+        return len(objects)
+
+    font = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    field_ids = list(range(len(objects) + 4, len(objects) + 4 + len(fields)))
+    catalog = add(f"<< /Type /Catalog /Pages 3 0 R /AcroForm << /Fields [{' '.join(f'{i} 0 R' for i in field_ids)}] "
+                  f"/NeedAppearances true /DA (/Helv 10 Tf 0 g) /DR << /Font << /Helv {font} 0 R >> >> >> >>")
+    pages = add("<< /Type /Pages /Kids [4 0 R] /Count 1 >>")
+    lines = ["BT /F1 16 Tf 50 750 Td (SAMPLE APPLICATION FORM - SPECIMEN FOR TESTING) Tj ET"]
+    y = 700
+    rects = []
+    for name, label in fields:
+        lines.append(f"BT /F1 9 Tf 50 {y + 18} Td ({label.replace('(', '[').replace(')', ']')}) Tj ET")
+        rects.append((50, y, 400, y + 16))
+        y -= 46
+    stream = "\n".join(lines)
+    content_id = len(objects) + 1 + 1 + len(fields)  # after page and fields
+    page = add(f"<< /Type /Page /Parent 3 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 {font} 0 R >> >> "
+               f"/Annots [{' '.join(f'{i} 0 R' for i in field_ids)}] /Contents {content_id} 0 R >>")
+    for (name, label), (x1, y1, x2, y2) in zip(fields, rects):
+        add(f"<< /Type /Annot /Subtype /Widget /FT /Tx /T ({name}) /TU ({label}) /Rect [{x1} {y1} {x2} {y2}] "
+            f"/P {page} 0 R /F 4 /DA (/Helv 10 Tf 0 g) /MK << /BC [0.6 0.6 0.6] >> >>")
+    add(f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream")
+    assert catalog == 2 and pages == 3 and page == 4
+
+    out = b"%PDF-1.7\n"
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n{body}\nendobj\n".encode("latin-1")
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode()
+    out += f"trailer\n<< /Size {len(objects) + 1} /Root 2 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    with open(os.path.join(ROOT, "SampleDocuments", "Sample application form.pdf"), "wb") as f:
+        f.write(out)
+
+
 if __name__ == "__main__":
     app_icon()
     samples()
+    sample_form()

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import SwiftData
 
@@ -7,16 +8,20 @@ import SwiftData
 final class SourceDocument {
     @Attribute(.unique) var contentHash: String
     var fileName: String
+    /// The file's path inside the documents folder, for re-reading a page to show a source crop.
+    var relativePath: String = ""
     var kindRaw: String
     var title: String
     var ingestedAt: Date
     var engineRaw: String
     var pageCount: Int
     @Relationship(deleteRule: .cascade, inverse: \Fact.document) var facts: [Fact] = []
+    @Relationship(deleteRule: .cascade, inverse: \TravelEvent.document) var travel: [TravelEvent] = []
 
-    init(contentHash: String, fileName: String, kind: DocumentKind, title: String, engine: ExtractionEngine, pageCount: Int) {
+    init(contentHash: String, fileName: String, relativePath: String, kind: DocumentKind, title: String, engine: ExtractionEngine, pageCount: Int) {
         self.contentHash = contentHash
         self.fileName = fileName
+        self.relativePath = relativePath
         self.kindRaw = kind.rawValue
         self.title = title
         self.ingestedAt = .now
@@ -28,6 +33,10 @@ final class SourceDocument {
     var engine: ExtractionEngine { ExtractionEngine(rawValue: engineRaw) ?? .onDevice }
 
     var needsReview: Bool { facts.contains { $0.status == .needsReview } }
+
+    func fact(_ key: FactKey) -> Fact? {
+        facts.first { $0.key == key && $0.status != .superseded }
+    }
 
     var expiryDate: Date? {
         facts.first { $0.key == .expiryDate && $0.status != .superseded }?.plainDate
@@ -60,7 +69,26 @@ final class Fact {
     var page: Int
     /// Issue, expiry and lease dates in the clear, for sorting and expiry badges. Never set for birth dates.
     var plainDate: Date?
+    /// Where the value was read: the 1-based page and the line's box, normalized with a top-left origin.
+    var cropPage: Int?
+    var cropX: Double?
+    var cropY: Double?
+    var cropWidth: Double?
+    var cropHeight: Double?
     var document: SourceDocument?
+
+    var cropRect: CGRect? {
+        guard let cropX, let cropY, let cropWidth, let cropHeight else { return nil }
+        return CGRect(x: cropX, y: cropY, width: cropWidth, height: cropHeight)
+    }
+
+    func setCrop(page: Int, rect: CGRect) {
+        cropPage = page
+        cropX = rect.minX
+        cropY = rect.minY
+        cropWidth = rect.width
+        cropHeight = rect.height
+    }
 
     init(key: FactKey, sealedValue: Data, sealedHint: Data?, status: FactStatus, check: FactCheck, page: Int) {
         self.keyRaw = key.rawValue
@@ -82,6 +110,24 @@ final class Fact {
     var check: FactCheck {
         get { FactCheck(rawValue: checkRaw) ?? .unchecked }
         set { checkRaw = newValue.rawValue }
+    }
+}
+
+/// One arrival or departure from an I-94 travel history. Values are sealed like facts.
+@Model
+final class TravelEvent {
+    var uuid = UUID()
+    var sealedDate: Data
+    var isArrival: Bool
+    var sealedPort: Data
+    /// For a departure: where the user says they went. Entered by hand; I-94 records don't say.
+    var sealedDestination: Data?
+    var document: SourceDocument?
+
+    init(sealedDate: Data, isArrival: Bool, sealedPort: Data) {
+        self.sealedDate = sealedDate
+        self.isArrival = isArrival
+        self.sealedPort = sealedPort
     }
 }
 

@@ -38,10 +38,10 @@ struct MainTabView: View {
                 VaultView()
             }
             Tab("Timeline", systemImage: "clock") {
-                ComingSoonView(title: "Timeline", symbol: "clock", message: "Where you’ve lived and travelled, on a list, a map and a chart.")
+                TimelineView()
             }
             Tab("Forms", systemImage: "doc.text") {
-                ComingSoonView(title: "Forms", symbol: "doc.text", message: "Fill PDF forms such as the I-765 from your verified facts.")
+                FormsView()
             }
             Tab("Settings", systemImage: "gearshape") {
                 SettingsView(hasFolder: $hasFolder)

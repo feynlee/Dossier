@@ -12,6 +12,8 @@ nonisolated struct FolderAccess: Sendable {
     struct FolderFile: Sendable, Hashable {
         var url: URL
         var name: String
+        /// Path inside the chosen folder, such as "Immigration/I-797.pdf".
+        var relativePath: String
     }
 
     struct Listing: Sendable {
@@ -87,7 +89,10 @@ nonisolated struct FolderAccess: Sendable {
                         continue
                     }
                     guard let type = values.contentType, readableTypes.contains(where: { type.conforms(to: $0) }) else { continue }
-                    listing.files.append(FolderFile(url: fileURL, name: fileURL.lastPathComponent))
+                    let root = url.standardizedFileURL.path
+                    let path = fileURL.standardizedFileURL.path
+                    let relative = path.hasPrefix(root) ? String(path.dropFirst(root.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/")) : fileURL.lastPathComponent
+                    listing.files.append(FolderFile(url: fileURL, name: fileURL.lastPathComponent, relativePath: relative))
                 } catch {
                     enumerationError = error
                 }
@@ -109,6 +114,13 @@ nonisolated struct FolderAccess: Sendable {
         }
         if let coordinationError { throw coordinationError }
         return try result.get()
+    }
+
+    /// Reads a file by its path inside the folder, for showing a source crop later.
+    static func read(relativePath: String) throws -> Data {
+        guard let folder = resolve() else { throw CocoaError(.fileNoSuchFile) }
+        let url = folder.appending(path: relativePath)
+        return try read(FolderFile(url: url, name: url.lastPathComponent, relativePath: relativePath), in: folder)
     }
 
     static func contentHash(_ data: Data) -> String {

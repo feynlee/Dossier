@@ -99,7 +99,9 @@ final class ImportCoordinator {
 
         let kind = DocumentKind(rawValue: reading.kind) ?? .other
         let title = reading.title.isEmpty ? kind.displayName : reading.title
-        let document = SourceDocument(contentHash: hash, fileName: file.name, kind: kind, title: title, engine: engine, pageCount: pages.count)
+        let document = SourceDocument(
+            contentHash: hash, fileName: file.name, relativePath: file.relativePath, kind: kind, title: title, engine: engine, pageCount: pages.count
+        )
         context.insert(document)
 
         for item in verified {
@@ -115,8 +117,22 @@ final class ImportCoordinator {
             if let context = item.context, !item.key.isSensitive { fact.sealedContext = try sealer.seal(context, sensitive: false) }
             // Only non-personal dates go in the clear, for sorting and expiry badges.
             if item.key.isDate, item.key != .dateOfBirth { fact.plainDate = SimpleDate(iso: item.value)?.date }
+            if let location = item.location, pages.indices.contains(location.page), pages[location.page].boxes.indices.contains(location.line) {
+                fact.setCrop(page: location.page + 1, rect: pages[location.page].boxes[location.line])
+            }
             fact.document = document
             context.insert(fact)
+        }
+
+        for row in reading.travel {
+            guard let date = SimpleDate(iso: row.date) else { continue }
+            let event = TravelEvent(
+                sealedDate: try sealer.seal(date.iso, sensitive: false),
+                isArrival: row.kind == "arrival",
+                sealedPort: try sealer.seal(row.port.uppercased(), sensitive: false)
+            )
+            event.document = document
+            context.insert(event)
         }
         try context.save()
     }

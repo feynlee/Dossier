@@ -20,7 +20,7 @@ struct OnboardingView: View {
                             .foregroundStyle(.secondary)
                     }
                     .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
+                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
                 }
 
                 Section {

@@ -3,7 +3,7 @@ import SwiftUI
 
 @main
 struct DossierApp: App {
-    private let container = DossierApp.makeContainer()
+    private let container = VaultStore.container
     @State private var importer = ImportCoordinator()
 
     var body: some Scene {
@@ -14,6 +14,11 @@ struct DossierApp: App {
         }
         .modelContainer(container)
     }
+}
+
+/// The one vault store, shared by the app and its App Intents.
+enum VaultStore {
+    static let container = makeContainer()
 
     /// The vault store lives in Application Support with complete file protection (unreadable while the
     /// phone is locked) and is excluded from iCloud and device backups.
@@ -30,7 +35,7 @@ struct DossierApp: App {
 
         let configuration = ModelConfiguration(url: directory.appending(path: "vault.store"))
         do {
-            return try ModelContainer(for: SourceDocument.self, Fact.self, configurations: configuration)
+            return try ModelContainer(for: SourceDocument.self, Fact.self, TravelEvent.self, configurations: configuration)
         } catch {
             fatalError("The vault couldn’t be opened: \(error)")
         }

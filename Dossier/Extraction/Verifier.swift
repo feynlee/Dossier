@@ -11,6 +11,13 @@ nonisolated struct VerifiedFact: Equatable, Sendable {
     var alternate: String?
     /// The OCR line the value was found on.
     var context: String?
+    /// Where that line is: 0-based page and line indexes into the OCR output.
+    var location: LineLocation?
+}
+
+nonisolated struct LineLocation: Equatable, Sendable {
+    var page: Int
+    var line: Int
 }
 
 /// Cross-checks model output against deterministic sources: the MRZ check digits on passports and cards,
@@ -31,26 +38,31 @@ nonisolated enum Verifier {
         for field in fields {
             let value = normalizedValue(field.value, for: field.key)
             guard !value.isEmpty, seen.insert(field.key).inserted else { continue }
-            let context = line(containing: value, key: field.key, in: pages)
+            let location = locate(value, key: field.key, in: pages)
+            let context = location.map { pages[$0.page][$0.line] }
 
             if let reference = references[field.key] {
                 if matches(value, reference.value, key: field.key) {
-                    results.append(VerifiedFact(key: field.key, value: value, page: field.page, status: .verified, check: reference.check, context: context))
+                    results.append(VerifiedFact(key: field.key, value: value, page: field.page, status: .verified, check: reference.check, context: context, location: location))
                 } else {
                     results.append(VerifiedFact(
                         key: field.key, value: value, page: field.page, status: .needsReview, check: .conflict,
-                        alternate: reference.value, context: context
+                        alternate: reference.value, context: context, location: location
                     ))
                 }
             } else {
                 let check: FactCheck = context != nil ? .pageText : .unchecked
-                results.append(VerifiedFact(key: field.key, value: value, page: field.page, status: .needsReview, check: check, context: context))
+                results.append(VerifiedFact(key: field.key, value: value, page: field.page, status: .needsReview, check: check, context: context, location: location))
             }
         }
 
         // Facts the checksum-bearing source has but the model missed.
         for (key, reference) in references.sorted(by: { $0.key.sortOrder < $1.key.sortOrder }) where !seen.contains(key) {
-            results.append(VerifiedFact(key: key, value: reference.value, page: reference.page, status: .verified, check: reference.check))
+            let location = locate(reference.value, key: key, in: pages)
+            results.append(VerifiedFact(
+                key: key, value: reference.value, page: location.map { $0.page + 1 } ?? reference.page, status: .verified,
+                check: reference.check, context: location.map { pages[$0.page][$0.line] }, location: location
+            ))
         }
         return results.sorted { $0.key.sortOrder < $1.key.sortOrder }
     }
@@ -109,7 +121,7 @@ nonisolated enum Verifier {
     }
 
     /// The OCR line that contains the value, allowing for the many ways documents print dates.
-    static func line(containing value: String, key: FactKey, in pages: [[String]]) -> String? {
+    static func locate(_ value: String, key: FactKey, in pages: [[String]]) -> LineLocation? {
         let candidates: [String]
         if key.isDate, let date = SimpleDate(iso: value) {
             candidates = dateSpellings(date).map(compact)
@@ -117,9 +129,10 @@ nonisolated enum Verifier {
             candidates = [compact(value)]
         }
         guard candidates.allSatisfy({ $0.count >= 2 }) else { return nil }
-        for line in pages.joined() {
-            let compacted = compact(line)
-            if candidates.contains(where: compacted.contains) { return line }
+        for (pageIndex, lines) in pages.enumerated() {
+            for (lineIndex, line) in lines.enumerated() where candidates.contains(where: compact(line).contains) {
+                return LineLocation(page: pageIndex, line: lineIndex)
+            }
         }
         return nil
     }
