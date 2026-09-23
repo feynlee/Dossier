@@ -24,7 +24,10 @@ struct FoldersView: View {
                 ForEach(folders) { folder in
                     TileRow(symbol: "folder", badge: nil, title: folder.name, subtitle: subtitle(for: folder))
                         .swipeActions {
+                            // Destructive actions keep the system red, as everywhere else in iOS; the app tint
+                            // would otherwise override it.
                             Button("Remove", systemImage: "minus.circle", role: .destructive) { removing = folder }
+                                .tint(.red)
                         }
                         .contextMenu {
                             Button("Remove folder", systemImage: "minus.circle", role: .destructive) { removing = folder }
