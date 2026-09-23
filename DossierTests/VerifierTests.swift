@@ -52,6 +52,16 @@ struct VerifierTests {
         #expect(results.first?.status == .needsReview)
     }
 
+    @Test func flagsLinesThatAlsoShowASensitiveNumber() {
+        let facts = Verifier.verify(
+            [.init(key: .surname, value: "ERIKSSON", page: 1), .init(key: .documentNumber, value: "PX7204821", page: 1)],
+            pages: [["Name: ERIKSSON, ANNA MARIA · Passport: PX7204821"]], mrz: nil, license: nil
+        )
+        let surname = facts.first { $0.key == .surname }!
+        #expect(Verifier.line(surname.context!, showsAnyOf: facts))
+        #expect(!Verifier.line("Tenant: Anna Eriksson", showsAnyOf: facts))
+    }
+
     @Test func keepsTheFirstReadingOfADuplicateKey() {
         let results = Verifier.verify(
             [.init(key: .surname, value: "Eriksson", page: 1), .init(key: .surname, value: "Erikson", page: 2)],

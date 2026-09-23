@@ -13,31 +13,32 @@ enum TimelineLoader {
 
         for document in documents {
             let id = document.contentHash
+            let review = document.needsReview
             let text = { (key: FactKey) -> String? in document.fact(key).flatMap { VaultReader.value(of: $0) } }
             let date = { (key: FactKey) -> SimpleDate? in text(key).flatMap(SimpleDate.init(iso:)) }
 
             switch document.kind {
             case .lease, .addedByYou:
                 if let address = text(.address), let start = date(.leaseStartDate) ?? date(.validFrom) ?? date(.issueDate) {
-                    homes.append(.init(id: id, address: address, start: start, end: date(.leaseEndDate) ?? date(.validUntil), source: document.title))
+                    homes.append(.init(id: id, address: address, start: start, end: date(.leaseEndDate) ?? date(.validUntil), source: document.title, needsReview: review))
                 }
             case .driversLicense, .stateID:
                 if let address = text(.address), let start = date(.issueDate) {
-                    homes.append(.init(id: id, address: address, start: start, end: nil, source: document.title, fromLicence: true))
+                    homes.append(.init(id: id, address: address, start: start, end: nil, source: document.title, fromLicence: true, needsReview: review))
                 }
             case .greenCard:
                 if let start = date(.residentSince) ?? date(.issueDate) {
                     let category = text(.uscisCategory).map { " (\($0))" } ?? ""
-                    statuses.append(.init(id: id, name: "Permanent resident\(category)", start: start, end: nil, source: document.title))
+                    statuses.append(.init(id: id, name: "Permanent resident\(category)", start: start, end: nil, source: document.title, needsReview: review))
                 }
             case .employmentAuthorization:
                 if let start = date(.validFrom) ?? date(.issueDate) {
                     let category = text(.uscisCategory).map { " \($0)" } ?? ""
-                    statuses.append(.init(id: id, name: "EAD\(category)", start: start, end: date(.validUntil) ?? date(.expiryDate), source: document.title))
+                    statuses.append(.init(id: id, name: "EAD\(category)", start: start, end: date(.validUntil) ?? date(.expiryDate), source: document.title, needsReview: review))
                 }
             case .uscisNotice, .i94:
                 if let start = date(.validFrom), let name = text(.uscisCategory) ?? text(.classOfAdmission) {
-                    statuses.append(.init(id: id, name: name, start: start, end: date(.validUntil) ?? date(.admitUntil), source: document.title))
+                    statuses.append(.init(id: id, name: name, start: start, end: date(.validUntil) ?? date(.admitUntil), source: document.title, needsReview: review))
                 }
             case .passport, .visa, .other:
                 break
@@ -45,7 +46,7 @@ enum TimelineLoader {
 
             if [.passport, .greenCard, .employmentAuthorization, .visa, .driversLicense, .stateID].contains(document.kind),
                let expiry = date(.expiryDate) {
-                spans.append(.init(id: id, name: document.title, start: date(.issueDate), end: expiry, source: document.fileName))
+                spans.append(.init(id: id, name: document.title, start: date(.issueDate), end: expiry, source: document.fileName, needsReview: review))
             }
 
             for event in document.travel {
@@ -55,7 +56,8 @@ enum TimelineLoader {
                     date: day,
                     isArrival: event.isArrival,
                     port: (try? Sealer.shared.open(event.sealedPort)) ?? "",
-                    destination: event.sealedDestination.flatMap { try? Sealer.shared.open($0) }
+                    destination: event.sealedDestination.flatMap { try? Sealer.shared.open($0) },
+                    needsReview: review
                 ))
             }
         }

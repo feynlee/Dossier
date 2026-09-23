@@ -75,7 +75,12 @@ final class Fact {
     var cropY: Double?
     var cropWidth: Double?
     var cropHeight: Double?
+    /// The line this value was read from also shows a sensitive number, so its crop needs Face ID.
+    var cropRevealsNumber = false
     var document: SourceDocument?
+
+    /// Whether the source crop can be shown without Face ID.
+    var cropNeedsFaceID: Bool { isSensitive || cropRevealsNumber }
 
     var cropRect: CGRect? {
         guard let cropX, let cropY, let cropWidth, let cropHeight else { return nil }

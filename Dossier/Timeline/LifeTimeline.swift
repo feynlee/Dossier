@@ -11,6 +11,8 @@ nonisolated struct LifeTimeline: Sendable {
         var end: SimpleDate?
         var source: String
         var fromLicence = false
+        /// The facts behind this home still need review.
+        var needsReview = false
     }
 
     struct Span: Identifiable, Hashable, Sendable {
@@ -19,6 +21,7 @@ nonisolated struct LifeTimeline: Sendable {
         var start: SimpleDate?
         var end: SimpleDate?
         var source: String
+        var needsReview = false
     }
 
     struct Gap: Hashable, Sendable {
@@ -32,6 +35,7 @@ nonisolated struct LifeTimeline: Sendable {
         var isArrival: Bool
         var port: String
         var destination: String?
+        var needsReview = false
     }
 
     struct Trip: Identifiable, Hashable, Sendable {
@@ -45,6 +49,7 @@ nonisolated struct LifeTimeline: Sendable {
         var destination: String?
         /// The last departure on record with no arrival after it: you may still be away.
         var isOngoing = false
+        var needsReview = false
 
         /// A trip with a missing return record isn't counted; the UI says the return isn't on record.
         var isMissingReturn: Bool { arrival == nil && !isOngoing }
@@ -180,7 +185,7 @@ nonisolated struct LifeTimeline: Sendable {
             trips.append(Trip(
                 departureID: row.id, departure: row.date, departurePort: row.port,
                 arrival: arrival?.date, arrivalPort: arrival?.port, destination: row.destination,
-                isOngoing: next == nil
+                isOngoing: next == nil, needsReview: row.needsReview || arrival?.needsReview == true
             ))
         }
         return trips

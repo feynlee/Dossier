@@ -13,18 +13,19 @@ struct FormsView: View {
         NavigationStack {
             List {
                 Section {
+                    Button("Choose a PDF form", systemImage: "doc.badge.plus") { isPicking = true }
+                } header: {
                     VStack(alignment: .leading, spacing: 12) {
                         BadgedTile(symbol: "doc.text", badge: nil, size: 56)
                         Text("Fill a PDF form")
                             .font(.title2.bold())
                         Text("Choose a fillable PDF, such as a USCIS form or a rental application. Dossier fills what it knows from your verified facts and saves a copy. The original isn’t changed.")
+                            .font(.body)
                             .foregroundStyle(.secondary)
                     }
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
-                }
-                Section {
-                    Button("Choose a PDF form", systemImage: "doc.badge.plus") { isPicking = true }
+                    .textCase(nil)
+                    .foregroundStyle(.primary)
+                    .padding(.bottom, 12)
                 } footer: {
                     Text("Only the form’s field labels are sent to Private Cloud Compute to match fields. Your values never are.")
                 }

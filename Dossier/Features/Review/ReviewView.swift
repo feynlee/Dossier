@@ -23,17 +23,15 @@ struct ReviewView: View {
                     .listRowBackground(Color.clear)
             } else {
                 Section {
-                    Text("Confirm each fact before Dossier uses it.")
-                        .foregroundStyle(.secondary)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
-                }
-                if pending.contains(where: \.isSensitive), reveal.values.isEmpty {
-                    Section {
+                    if pending.contains(where: \.isSensitive), reveal.values.isEmpty {
                         Button("Reveal numbers with Face ID", systemImage: "faceid") {
                             reveal.reveal(pending, reason: "Reveal numbers to review them")
                         }
                     }
+                } header: {
+                    Text("Confirm each fact before Dossier uses it.")
+                        .font(.body)
+                        .textCase(nil)
                 }
             }
             ForEach(grouped, id: \.0?.persistentModelID) { document, facts in
@@ -158,7 +156,7 @@ private struct ReviewCard: View {
     @ViewBuilder
     private var source: some View {
         if let rect = fact.cropRect, let page = fact.cropPage, let path = fact.document?.relativePath, !path.isEmpty,
-           !fact.isSensitive || reveal.value(for: fact) != nil {
+           !fact.cropNeedsFaceID || !reveal.values.isEmpty {
             SourceCropView(relativePath: path, page: page, rect: rect)
         } else if let context = VaultReader.context(of: fact) {
             Text(context)

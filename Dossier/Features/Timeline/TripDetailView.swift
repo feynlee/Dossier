@@ -15,9 +15,9 @@ struct TripDetailView: View {
     var body: some View {
         List {
             Section {
-                TileRow(symbol: "airplane", badge: .verified, title: "Left the US", subtitle: "\(trip.departure.display) · \(trip.departurePort)")
+                TileRow(symbol: "airplane", badge: trip.needsReview ? .review : .verified, title: "Left the US", subtitle: "\(trip.departure.display) · \(trip.departurePort)")
                 if let arrival = trip.arrival {
-                    TileRow(symbol: "airplane", badge: .verified, title: "Came back", subtitle: "\(arrival.display) · \(trip.arrivalPort ?? "")")
+                    TileRow(symbol: "airplane", badge: trip.needsReview ? .review : .verified, title: "Came back", subtitle: "\(arrival.display) · \(trip.arrivalPort ?? "")")
                 } else {
                     TileRow(symbol: "airplane", badge: .review, title: trip.isOngoing ? "Not back yet" : "Return not on record", subtitle: trip.isOngoing ? "No arrival after this departure." : "Check your I-94 history for this arrival.")
                 }

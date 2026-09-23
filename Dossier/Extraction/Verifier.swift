@@ -137,6 +137,17 @@ nonisolated enum Verifier {
         return nil
     }
 
+    /// Whether an OCR line shows any of the sensitive values read from the same document, such as an I-94
+    /// line that prints the name and the passport number together.
+    static func line(_ line: String, showsAnyOf facts: [VerifiedFact]) -> Bool {
+        let compacted = compact(line)
+        return facts
+            .filter(\.key.isSensitive)
+            .flatMap { [$0.value, $0.alternate].compactMap { $0 } }
+            .map(compact)
+            .contains { $0.count >= 4 && compacted.contains($0) }
+    }
+
     static func dateSpellings(_ date: SimpleDate) -> [String] {
         let months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
         let fullMonths = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]

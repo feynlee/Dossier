@@ -98,11 +98,15 @@ final class ImportCoordinator {
         let verified = Verifier.verify(inputs, pages: pageLines, mrz: mrz, license: license)
 
         let kind = DocumentKind(rawValue: reading.kind) ?? .other
-        let title = reading.title.isEmpty ? kind.displayName : reading.title
+        // Documents often print titles in capitals; the design system uses sentence case.
+        let title = reading.title.isEmpty || reading.title == reading.title.uppercased() ? kind.displayName : reading.title
         let document = SourceDocument(
             contentHash: hash, fileName: file.name, relativePath: file.relativePath, kind: kind, title: title, engine: engine, pageCount: pages.count
         )
         context.insert(document)
+
+        // Lines that show a sensitive number: their text isn't stored and their crop needs Face ID.
+        let showsNumber = { (line: String) in Verifier.line(line, showsAnyOf: verified) }
 
         for item in verified {
             let fact = Fact(
@@ -114,7 +118,10 @@ final class ImportCoordinator {
                 page: item.page
             )
             if let alternate = item.alternate { fact.sealedAlternate = try sealer.seal(alternate, sensitive: item.key.isSensitive) }
-            if let context = item.context, !item.key.isSensitive { fact.sealedContext = try sealer.seal(context, sensitive: false) }
+            if let context = item.context, !item.key.isSensitive, !showsNumber(context) {
+                fact.sealedContext = try sealer.seal(context, sensitive: false)
+            }
+            fact.cropRevealsNumber = item.context.map(showsNumber) ?? false
             // Only non-personal dates go in the clear, for sorting and expiry badges.
             if item.key.isDate, item.key != .dateOfBirth { fact.plainDate = SimpleDate(iso: item.value)?.date }
             if let location = item.location, pages.indices.contains(location.page), pages[location.page].boxes.indices.contains(location.line) {

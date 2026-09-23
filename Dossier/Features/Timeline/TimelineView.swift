@@ -35,18 +35,10 @@ struct TimelineView: View {
                 }
             }
             .navigationTitle("Timeline")
-            .navigationBarTitleDisplayMode(mode == .map ? .inline : .large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    if mode == .map { modePicker.frame(width: 260) }
-                }
-            }
-            .safeAreaInset(edge: .top) {
-                if mode != .map {
-                    modePicker
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
-                        .background(Color(uiColor: .systemGroupedBackground))
+                    modePicker.frame(width: 280)
                 }
             }
             .navigationDestination(for: LifeTimeline.Trip.self) { trip in

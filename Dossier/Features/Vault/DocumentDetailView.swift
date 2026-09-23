@@ -17,18 +17,12 @@ struct DocumentDetailView: View {
     var body: some View {
         List {
             Section {
-                StatusLine(document: document)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
-            }
-
-            Section {
                 ForEach(facts) { fact in
                     FactRow(fact: fact, reveal: reveal) {
                         reveal.reveal(facts, reason: "Reveal \(fact.key.label.lowercased())")
                     }
                     .contextMenu {
-                        if fact.cropRect != nil, !document.relativePath.isEmpty, !fact.isSensitive || reveal.value(for: fact) != nil {
+                        if fact.cropRect != nil, !document.relativePath.isEmpty, !fact.cropNeedsFaceID || !reveal.values.isEmpty {
                             Button("Show where this was read", systemImage: "text.viewfinder") { sourceFact = fact }
                         }
                         if let value = fact.isSensitive ? reveal.value(for: fact) : VaultReader.value(of: fact) {
@@ -39,6 +33,10 @@ struct DocumentDetailView: View {
                         }
                     }
                 }
+            } header: {
+                StatusLine(document: document).textCase(nil)
+            } footer: {
+                Text("Touch and hold a fact to copy it or see where it was read.")
             }
 
             Section("Source") {

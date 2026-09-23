@@ -24,7 +24,7 @@ struct TimelineListView: View {
                     Text("Nothing on record for \(String(selectedYear)).").foregroundStyle(.secondary)
                 }
                 ForEach(homes) { home in
-                    TileRow(symbol: "house", badge: .verified, title: home.address, subtitle: "Home · \(intervalText(home.start, home.end))")
+                    TileRow(symbol: "house", badge: home.needsReview ? .review : .verified, title: home.address, subtitle: "Home · \(intervalText(home.start, home.end))")
                 }
                 ForEach(gaps, id: \.start) { gap in
                     Button { onFillGap(gap) } label: {
@@ -34,11 +34,11 @@ struct TimelineListView: View {
                 }
                 ForEach(trips) { trip in
                     NavigationLink(value: trip) {
-                        TileRow(symbol: "airplane", badge: trip.isMissingReturn ? .review : .verified, title: trip.destination ?? "Outside the US", subtitle: tripSubtitle(trip))
+                        TileRow(symbol: "airplane", badge: trip.isMissingReturn || trip.needsReview ? .review : .verified, title: trip.destination ?? "Outside the US", subtitle: tripSubtitle(trip))
                     }
                 }
                 ForEach(statuses) { status in
-                    TileRow(symbol: "checkmark.shield", badge: .verified, title: status.name, subtitle: "Status · \(intervalText(status.start, status.end))")
+                    TileRow(symbol: "checkmark.shield", badge: status.needsReview ? .review : .verified, title: status.name, subtitle: "Status · \(intervalText(status.start, status.end))")
                 }
             } header: {
                 HStack(alignment: .firstTextBaseline) {

@@ -30,18 +30,11 @@ struct FormFillView: View {
 
     var body: some View {
         List {
-            Section {
-                Text("\(matched.count) of \(form.fields.count) fields matched")
-                    .foregroundStyle(.secondary)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
-            }
-
             if isMatching {
                 Section { Label("Matching fields…", systemImage: "sparkles").foregroundStyle(.secondary) }
             }
 
-            Section("Will be filled") {
+            Section("\(matched.count) of \(form.fields.count) fields matched") {
                 ForEach(matched) { field in
                     let value = mapping[field.name]!
                     Toggle(isOn: Binding(get: { !skipped.contains(field.name) }, set: { if $0 { skipped.remove(field.name) } else { skipped.insert(field.name) } })) {

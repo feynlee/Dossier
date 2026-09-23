@@ -7,8 +7,6 @@ struct YearScrubber: View {
     let timeline: LifeTimeline
     @Binding var selectedYear: Int
 
-    @State private var rawSelection: Date?
-
     private var years: ClosedRange<Int> { timeline.years }
 
     var body: some View {
@@ -52,11 +50,11 @@ struct YearScrubber: View {
                     AxisValueLabel(format: .dateTime.year(.twoDigits), centered: true)
                 }
             }
-            .chartXSelection(value: $rawSelection)
-            .frame(height: 70)
-            .onChange(of: rawSelection) { _, date in
-                if let date { selectedYear = SimpleDate(utc: date).year }
+            .chartDateSelection { date in
+                let year = SimpleDate(utc: date).year
+                if years.contains(year) { selectedYear = year }
             }
+            .frame(height: 70)
 
             HStack {
                 Button("Previous year", systemImage: "chevron.left") { selectedYear -= 1 }
@@ -71,5 +69,27 @@ struct YearScrubber: View {
             .buttonStyle(.borderless)
         }
         .sensoryFeedback(.selection, trigger: selectedYear)
+    }
+}
+
+extension View {
+    /// Tap or drag across a chart's plot area to pick a date. Charts' own selection doesn't receive touches
+    /// inside a List row, so this reads the position through the chart proxy instead.
+    func chartDateSelection(_ onSelect: @escaping (Date) -> Void) -> some View {
+        chartOverlay { proxy in
+            GeometryReader { geometry in
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                guard let plotFrame = proxy.plotFrame else { return }
+                                let x = value.location.x - geometry[plotFrame].origin.x
+                                if let date: Date = proxy.value(atX: x) { onSelect(date) }
+                            }
+                    )
+            }
+        }
     }
 }

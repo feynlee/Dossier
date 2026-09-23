@@ -76,7 +76,7 @@ struct TimelineOverviewView: View {
                 }
             }
         }
-        .chartXSelection(value: $selectedDate)
+        .chartDateSelection { selectedDate = $0 }
     }
 
     @ChartContentBuilder
@@ -84,7 +84,7 @@ struct TimelineOverviewView: View {
         let from = start ?? SimpleDate(utc: domain.lowerBound)
         let to = end ?? timeline.today
         let active = selectedDate.map { SimpleDate(utc: $0) }.map { from <= $0 && $0 <= to } ?? (end == nil)
-        RectangleMark(xStart: .value("From", from.date), xEnd: .value("To", min(to.date, domain.upperBound)), y: .value("Lane", lane), height: 18)
+        RectangleMark(xStart: .value("From", max(from.date, domain.lowerBound)), xEnd: .value("To", min(to.date, domain.upperBound)), y: .value("Lane", lane), height: 18)
             .foregroundStyle(active ? Color.dsTintFill : Color.dsTintSoft)
             .clipShape(RoundedRectangle(cornerRadius: 5))
             .annotation(position: .overlay, alignment: .leading) {

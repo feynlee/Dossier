@@ -12,21 +12,21 @@ struct OnboardingView: View {
         NavigationStack {
             List {
                 Section {
+                    TileRow(symbol: "folder", badge: nil, title: "Files stay where they are", subtitle: "Read in place, never copied.")
+                    TileRow(symbol: "cloud", badge: nil, title: "Private Cloud Compute", subtitle: "Pages are read by Apple’s Private Cloud Compute for accuracy. Nothing is kept.")
+                    TileRow(symbol: "faceid", badge: nil, title: "Locked with Face ID", subtitle: "Numbers stay masked until you look.")
+                } header: {
                     VStack(alignment: .leading, spacing: 12) {
                         BadgedTile(symbol: "checkmark.shield", badge: nil, size: 64)
                         Text("Welcome to Dossier")
                             .font(.largeTitle.bold())
                         Text("Choose the iCloud Drive folder that holds your documents. Dossier reads them and keeps what it finds on this iPhone.")
+                            .font(.body)
                             .foregroundStyle(.secondary)
                     }
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
-                }
-
-                Section {
-                    TileRow(symbol: "folder", badge: nil, title: "Files stay where they are", subtitle: "Read in place, never copied.")
-                    TileRow(symbol: "cloud", badge: nil, title: "Private Cloud Compute", subtitle: "Pages are read by Apple’s Private Cloud Compute for accuracy. Nothing is kept.")
-                    TileRow(symbol: "faceid", badge: nil, title: "Locked with Face ID", subtitle: "Numbers stay masked until you look.")
+                    .textCase(nil)
+                    .foregroundStyle(.primary)
+                    .padding(.bottom, 12)
                 }
 
                 if let errorMessage {
