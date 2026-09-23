@@ -20,7 +20,7 @@ struct OnboardingView: View {
                         BadgedTile(symbol: "checkmark.shield", badge: nil, size: 64)
                         Text("Welcome to Dossier")
                             .font(.largeTitle.bold())
-                        Text("Choose the iCloud Drive folder that holds your documents. Dossier reads them and keeps what it finds on this iPhone.")
+                        Text("Choose the iCloud Drive folders that hold your documents. Dossier reads them and keeps what it finds on this iPhone.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                     }
@@ -41,25 +41,25 @@ struct OnboardingView: View {
                     Button {
                         isPickingFolder = true
                     } label: {
-                        Text("Choose folder")
+                        Text("Choose folders")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.capsule)
-                    Text("You can switch to on-device reading in Settings.")
+                    Text("You can add or remove folders later in Settings.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
                 .padding()
             }
-            .fileImporter(isPresented: $isPickingFolder, allowedContentTypes: [.folder]) { result in
+            .fileImporter(isPresented: $isPickingFolder, allowedContentTypes: [.folder], allowsMultipleSelection: true) { result in
                 switch result {
-                case .success(let url):
+                case .success(let urls):
                     do {
-                        try FolderAccess.save(url)
-                        onFinish()
+                        for url in urls { try FolderAccess.add(url) }
+                        if !urls.isEmpty { onFinish() }
                     } catch {
                         errorMessage = "That folder couldn’t be opened: \(error.localizedDescription)"
                     }

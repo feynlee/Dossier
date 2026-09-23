@@ -8,8 +8,11 @@ import SwiftData
 final class SourceDocument {
     @Attribute(.unique) var contentHash: String
     var fileName: String
-    /// The file's path inside the documents folder, for re-reading a page to show a source crop.
+    /// The file's path inside its folder, for re-reading a page to show a source crop.
     var relativePath: String = ""
+    /// Which of your folders the file is in (`FolderAccess.Folder.id`). Empty for documents you added by hand
+    /// and for documents read before Dossier supported several folders.
+    var folderID: String = ""
     var kindRaw: String
     var title: String
     var ingestedAt: Date
@@ -18,10 +21,11 @@ final class SourceDocument {
     @Relationship(deleteRule: .cascade, inverse: \Fact.document) var facts: [Fact] = []
     @Relationship(deleteRule: .cascade, inverse: \TravelEvent.document) var travel: [TravelEvent] = []
 
-    init(contentHash: String, fileName: String, relativePath: String, kind: DocumentKind, title: String, engine: ExtractionEngine, pageCount: Int) {
+    init(contentHash: String, fileName: String, relativePath: String, folderID: String = "", kind: DocumentKind, title: String, engine: ExtractionEngine, pageCount: Int) {
         self.contentHash = contentHash
         self.fileName = fileName
         self.relativePath = relativePath
+        self.folderID = folderID
         self.kindRaw = kind.rawValue
         self.title = title
         self.ingestedAt = .now

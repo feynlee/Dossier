@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Home: facts to review, import progress, and every document with its badged tile.
 struct VaultView: View {
@@ -8,6 +9,8 @@ struct VaultView: View {
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
     @State private var searchText = ""
+    @State private var isAddingFolder = false
+    @State private var folderError: String?
 
     private var reviewCount: Int {
         documents.reduce(0) { $0 + $1.facts.filter { $0.status == .needsReview }.count }
@@ -44,8 +47,12 @@ struct VaultView: View {
 
                 Section("Documents") {
                     if filtered.isEmpty, !importer.isRunning {
-                        Text(searchText.isEmpty ? "Documents Dossier reads will appear here." : "No matches.")
-                            .foregroundStyle(.secondary)
+                        if searchText.isEmpty, !FolderAccess.hasFolder {
+                            Button("Add a folder", systemImage: "folder.badge.plus") { isAddingFolder = true }
+                        } else {
+                            Text(searchText.isEmpty ? "Documents Dossier reads will appear here." : "No matches.")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     ForEach(filtered) { document in
                         NavigationLink(value: document) {
@@ -55,6 +62,24 @@ struct VaultView: View {
                 }
             }
             .navigationTitle("Vault")
+            .fileImporter(isPresented: $isAddingFolder, allowedContentTypes: [.folder], allowsMultipleSelection: true) { result in
+                switch result {
+                case .success(let urls):
+                    do {
+                        for url in urls { try FolderAccess.add(url) }
+                        importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
+                    } catch {
+                        folderError = error.localizedDescription
+                    }
+                case .failure(let error):
+                    folderError = error.localizedDescription
+                }
+            }
+            .alert("Couldn’t add the folder", isPresented: Binding(get: { folderError != nil }, set: { if !$0 { folderError = nil } })) {
+                Button("OK") { folderError = nil }
+            } message: {
+                Text(folderError ?? "")
+            }
             .navigationDestination(for: SourceDocument.self) { DocumentDetailView(document: $0) }
             .searchable(text: $searchText, prompt: "Search")
             .refreshable {
@@ -62,12 +87,20 @@ struct VaultView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
+                    Menu {
+                        Button("Add folder", systemImage: "folder.badge.plus") { isAddingFolder = true }
+                        Button("Check for new documents", systemImage: "arrow.clockwise") {
+                            importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
+                        }
+                        .disabled(importer.isRunning)
+                        NavigationLink {
+                            FoldersView()
+                        } label: {
+                            Label("Manage folders", systemImage: "folder")
+                        }
                     } label: {
-                        Label("Check for new documents", systemImage: "arrow.clockwise")
+                        Label("Add", systemImage: "plus")
                     }
-                    .disabled(importer.isRunning)
                 }
             }
         }

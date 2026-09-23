@@ -46,31 +46,41 @@ final class ImportCoordinator {
     private func run(context: ModelContext, preferPrivateCloud: Bool) async {
         errorMessage = nil
         failures = [:]
-        guard let folder = FolderAccess.resolve() else {
-            errorMessage = "Choose your documents folder again in Settings."
+        let folders = FolderAccess.folders()
+        guard !folders.isEmpty else {
+            errorMessage = FolderAccess.hasFolder
+                ? "Your folders can’t be reached. Add them again in Settings › Folders."
+                : "Add a folder to read your documents."
             phase = .idle
             return
         }
+        adoptLegacyDocuments(into: folders, context: context)
 
         phase = .listing
-        let listing: FolderAccess.Listing
-        do {
-            listing = try await Self.list(folder)
-        } catch {
-            errorMessage = "The folder couldn’t be opened: \(error.localizedDescription)"
-            phase = .idle
-            return
+        var files: [(folder: FolderAccess.Folder, file: FolderAccess.FolderFile)] = []
+        var waiting = 0
+        for folder in folders {
+            do {
+                let listing = try await Self.list(folder)
+                files += listing.files.map { (folder, $0) }
+                waiting += listing.waitingForDownload
+            } catch {
+                failures[folder.name] = "The folder couldn’t be opened: \(error.localizedDescription)"
+            }
         }
-        waitingForDownload = listing.waitingForDownload
+        waitingForDownload = waiting
 
         let known = Set((try? context.fetch(FetchDescriptor<SourceDocument>()))?.map(\.contentHash) ?? [])
+        var seen = Set<String>()
         var added = 0
-        for (index, file) in listing.files.enumerated() {
+        for (index, entry) in files.enumerated() {
             if Task.isCancelled { return }
-            phase = .reading(done: index, total: listing.files.count)
+            let file = entry.file
+            phase = .reading(done: index, total: files.count)
             do {
-                let loaded = try await Self.load(file, in: folder)
-                guard !known.contains(loaded.hash) else { continue }
+                let loaded = try await Self.load(file, in: entry.folder.url)
+                // The same file in two folders (or a folder inside another) is read once.
+                guard !known.contains(loaded.hash), seen.insert(loaded.hash).inserted else { continue }
                 let pages = try await PageReader.read(loaded.data, fileName: file.name)
                 guard !pages.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
                 let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud)
@@ -101,7 +111,8 @@ final class ImportCoordinator {
         // Documents often print titles in capitals; the design system uses sentence case.
         let title = reading.title.isEmpty || reading.title == reading.title.uppercased() ? kind.displayName : reading.title
         let document = SourceDocument(
-            contentHash: hash, fileName: file.name, relativePath: file.relativePath, kind: kind, title: title, engine: engine, pageCount: pages.count
+            contentHash: hash, fileName: file.name, relativePath: file.relativePath, folderID: file.folderID.uuidString,
+            kind: kind, title: title, engine: engine, pageCount: pages.count
         )
         context.insert(document)
 
@@ -144,10 +155,22 @@ final class ImportCoordinator {
         try context.save()
     }
 
+    /// Documents read before Dossier supported several folders have no folder. With exactly one folder they
+    /// can only have come from it.
+    private func adoptLegacyDocuments(into folders: [FolderAccess.Folder], context: ModelContext) {
+        guard folders.count == 1, let documents = try? context.fetch(FetchDescriptor<SourceDocument>()) else { return }
+        var changed = false
+        for document in documents where document.folderID.isEmpty && !document.relativePath.isEmpty {
+            document.folderID = folders[0].id.uuidString
+            changed = true
+        }
+        if changed { try? context.save() }
+    }
+
     // MARK: Off the main actor
 
     @concurrent
-    private static func list(_ folder: URL) async throws -> FolderAccess.Listing {
+    private static func list(_ folder: FolderAccess.Folder) async throws -> FolderAccess.Listing {
         try FolderAccess.list(folder)
     }
 

@@ -63,7 +63,7 @@ struct DocumentDetailView: View {
             NavigationStack {
                 VStack(alignment: .leading, spacing: 12) {
                     if let rect = fact.cropRect, let page = fact.cropPage {
-                        SourceCropView(relativePath: document.relativePath, page: page, rect: rect)
+                        SourceCropView(relativePath: document.relativePath, folderID: document.folderID, page: page, rect: rect)
                     }
                     Text("\(document.fileName) · page \(fact.cropPage ?? fact.page)")
                         .font(.footnote)

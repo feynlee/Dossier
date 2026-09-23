@@ -3,12 +3,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
-    @Binding var hasFolder: Bool
+    @Binding var hasOnboarded: Bool
 
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
-    @State private var isPickingFolder = false
     @State private var confirmReread = false
     @State private var confirmDelete = false
     @State private var privateCloudStatus: String?
@@ -20,17 +19,11 @@ struct SettingsView: View {
                     Toggle(isOn: $usePrivateCloud) {
                         TileRow(symbol: "cloud", badge: nil, title: "Private Cloud Compute", subtitle: "More accurate. Pages aren’t kept.")
                     }
-                    Button {
-                        isPickingFolder = true
+                    NavigationLink {
+                        FoldersView()
                     } label: {
-                        TileRow(
-                            symbol: "folder",
-                            badge: nil,
-                            title: "Documents folder",
-                            subtitle: FolderAccess.resolve().map(FolderAccess.displayPath) ?? "Not chosen"
-                        )
+                        TileRow(symbol: "folder", badge: nil, title: "Folders", subtitle: foldersSummary)
                     }
-                    .foregroundStyle(.primary)
                 } header: {
                     Text("Reading")
                 } footer: {
@@ -56,11 +49,6 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .task { privateCloudStatus = DocumentExtractor.privateCloudStatus() }
-            .fileImporter(isPresented: $isPickingFolder, allowedContentTypes: [.folder]) { result in
-                if case .success(let url) = result, (try? FolderAccess.save(url)) != nil {
-                    importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
-                }
-            }
             .confirmationDialog("Re-read all documents?", isPresented: $confirmReread, titleVisibility: .visible) {
                 Button("Re-read") {
                     deleteDocuments()
@@ -74,12 +62,21 @@ struct SettingsView: View {
                     importer.cancel()
                     deleteDocuments()
                     VaultKeys.shared.destroyAll()
-                    FolderAccess.forget()
-                    hasFolder = false
+                    FolderAccess.forgetAll()
+                    hasOnboarded = false
                 }
             } message: {
                 Text("Dossier forgets every fact and its keys. Your original files stay in iCloud Drive.")
             }
+        }
+    }
+
+    private var foldersSummary: String {
+        let folders = FolderAccess.folders()
+        switch folders.count {
+        case 0: return "Add a folder to read your documents"
+        case 1: return folders[0].displayPath
+        default: return "\(folders.count) folders"
         }
     }
 

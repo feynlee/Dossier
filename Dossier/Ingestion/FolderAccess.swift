@@ -2,18 +2,32 @@ import CryptoKit
 import Foundation
 import UniformTypeIdentifiers
 
-/// The user's documents folder, remembered as a bookmark so Dossier can read it again on later launches.
+/// The user's documents folders, remembered as bookmarks so Dossier can read them again on later launches.
 /// Files are read in place and never copied.
 nonisolated struct FolderAccess: Sendable {
-    private static let bookmarkKey = "documentsFolderBookmark"
+    private static let foldersKey = "documentsFolders"
+    /// Where the single folder of earlier versions was stored; migrated into `foldersKey` on first read.
+    private static let legacyBookmarkKey = "documentsFolderBookmark"
+    /// Where folder bookmarks are kept. Tests point this at a scratch suite.
+    nonisolated(unsafe) static var store = UserDefaults.standard
 
     static let readableTypes: [UTType] = [.pdf, .jpeg, .png, .heic, .tiff]
+
+    /// A folder you added.
+    struct Folder: Identifiable, Hashable, Sendable {
+        var id: UUID
+        var url: URL
+
+        var name: String { url.lastPathComponent }
+        var displayPath: String { FolderAccess.displayPath(for: url) }
+    }
 
     struct FolderFile: Sendable, Hashable {
         var url: URL
         var name: String
-        /// Path inside the chosen folder, such as "Immigration/I-797.pdf".
+        /// Path inside its folder, such as "Immigration/I-797.pdf".
         var relativePath: String
+        var folderID: UUID
     }
 
     struct Listing: Sendable {
@@ -23,44 +37,101 @@ nonisolated struct FolderAccess: Sendable {
         var waitingForDownload: Int
     }
 
-    // MARK: Bookmark
+    private struct SavedFolder: Codable {
+        var id: UUID
+        var bookmark: Data
+    }
 
-    static func save(_ url: URL) throws {
+    // MARK: Folders
+
+    /// Every folder you added, in the order you added them. Folders whose bookmark no longer resolves (the
+    /// folder was deleted or moved out of reach) are skipped until they come back.
+    static func folders() -> [Folder] {
+        var saved = savedFolders()
+        var changed = false
+        var result: [Folder] = []
+        for (index, entry) in saved.enumerated() {
+            var isStale = false
+            guard let url = try? URL(resolvingBookmarkData: entry.bookmark, options: [], relativeTo: nil, bookmarkDataIsStale: &isStale) else {
+                continue
+            }
+            if isStale, let fresh = try? bookmark(for: url) {
+                saved[index].bookmark = fresh
+                changed = true
+            }
+            result.append(Folder(id: entry.id, url: url))
+        }
+        if changed { store(saved) }
+        return result
+    }
+
+    static func folder(id: String) -> Folder? {
+        folders().first { $0.id.uuidString == id }
+    }
+
+    static var hasFolder: Bool { !savedFolders().isEmpty }
+
+    /// Adds a folder, or returns the existing one if you already added it.
+    @discardableResult
+    static func add(_ url: URL) throws -> Folder {
+        if let existing = folders().first(where: { $0.url.standardizedFileURL.path == url.standardizedFileURL.path }) {
+            return existing
+        }
+        let entry = SavedFolder(id: UUID(), bookmark: try bookmark(for: url))
+        store(savedFolders() + [entry])
+        return Folder(id: entry.id, url: url)
+    }
+
+    static func remove(_ id: UUID) {
+        store(savedFolders().filter { $0.id != id })
+    }
+
+    static func forgetAll() {
+        store.removeObject(forKey: foldersKey)
+        store.removeObject(forKey: legacyBookmarkKey)
+    }
+
+    private static func bookmark(for url: URL) throws -> Data {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        let data = try url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
-        UserDefaults.standard.set(data, forKey: bookmarkKey)
+        return try url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
     }
 
-    static func resolve() -> URL? {
-        guard let data = UserDefaults.standard.data(forKey: bookmarkKey) else { return nil }
-        var isStale = false
-        guard let url = try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &isStale) else {
-            return nil
+    private static func savedFolders() -> [SavedFolder] {
+        let defaults = store
+        if let data = defaults.data(forKey: foldersKey), let saved = try? JSONDecoder().decode([SavedFolder].self, from: data) {
+            return saved
         }
-        if isStale { try? save(url) }
-        return url
+        if let legacy = defaults.data(forKey: legacyBookmarkKey) {
+            let migrated = [SavedFolder(id: UUID(), bookmark: legacy)]
+            store(migrated)
+            defaults.removeObject(forKey: legacyBookmarkKey)
+            return migrated
+        }
+        return []
     }
 
-    static var hasFolder: Bool { UserDefaults.standard.data(forKey: bookmarkKey) != nil }
-
-    static func forget() {
-        UserDefaults.standard.removeObject(forKey: bookmarkKey)
+    private static func store(_ folders: [SavedFolder]) {
+        store.set(try? JSONEncoder().encode(folders), forKey: foldersKey)
     }
 
     /// "iCloud Drive › Documents › Personal"-style path for display.
     static func displayPath(for url: URL) -> String {
-        let components = url.pathComponents
+        let components = url.standardizedFileURL.pathComponents
         if let index = components.firstIndex(of: "com~apple~CloudDocs") {
             return (["iCloud Drive"] + components[(index + 1)...]).joined(separator: " › ")
         }
-        return components.suffix(3).joined(separator: " › ")
+        if let index = components.firstIndex(of: "File Provider Storage") {
+            return (["On My iPhone"] + components[(index + 1)...]).joined(separator: " › ")
+        }
+        return components.suffix(2).joined(separator: " › ")
     }
 
     // MARK: Listing
 
     /// Lists readable files in the folder and its subfolders, and starts downloads for iCloud placeholders.
-    static func list(_ folder: URL) throws -> Listing {
+    static func list(_ source: Folder) throws -> Listing {
+        let folder = source.url
         let accessing = folder.startAccessingSecurityScopedResource()
         defer { if accessing { folder.stopAccessingSecurityScopedResource() } }
 
@@ -92,7 +163,7 @@ nonisolated struct FolderAccess: Sendable {
                     let root = url.standardizedFileURL.path
                     let path = fileURL.standardizedFileURL.path
                     let relative = path.hasPrefix(root) ? String(path.dropFirst(root.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/")) : fileURL.lastPathComponent
-                    listing.files.append(FolderFile(url: fileURL, name: fileURL.lastPathComponent, relativePath: relative))
+                    listing.files.append(FolderFile(url: fileURL, name: fileURL.lastPathComponent, relativePath: relative, folderID: source.id))
                 } catch {
                     enumerationError = error
                 }
@@ -116,11 +187,21 @@ nonisolated struct FolderAccess: Sendable {
         return try result.get()
     }
 
-    /// Reads a file by its path inside the folder, for showing a source crop later.
-    static func read(relativePath: String) throws -> Data {
-        guard let folder = resolve() else { throw CocoaError(.fileNoSuchFile) }
-        let url = folder.appending(path: relativePath)
-        return try read(FolderFile(url: url, name: url.lastPathComponent, relativePath: relativePath), in: folder)
+    /// Reads a file by its path inside one of your folders, for showing a source crop later. Documents read
+    /// before folders had identifiers (`folderID` empty) are looked up in every folder.
+    static func read(relativePath: String, folderID: String) throws -> Data {
+        let candidates = folders().filter { folderID.isEmpty || $0.id.uuidString == folderID }
+        guard !candidates.isEmpty else { throw CocoaError(.fileNoSuchFile) }
+        var lastError: Error = CocoaError(.fileNoSuchFile)
+        for folder in candidates {
+            let url = folder.url.appending(path: relativePath)
+            do {
+                return try read(FolderFile(url: url, name: url.lastPathComponent, relativePath: relativePath, folderID: folder.id), in: folder.url)
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError
     }
 
     static func contentHash(_ data: Data) -> String {

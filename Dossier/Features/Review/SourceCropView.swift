@@ -6,6 +6,7 @@ import UIKit
 /// from the page is stored in the vault: only the line's position.
 struct SourceCropView: View {
     let relativePath: String
+    let folderID: String
     let page: Int
     let rect: CGRect
 
@@ -27,15 +28,15 @@ struct SourceCropView: View {
             }
         }
         .task(id: "\(relativePath)#\(page)#\(rect.debugDescription)") {
-            image = await Self.crop(relativePath: relativePath, page: page, rect: rect)
+            image = await Self.crop(relativePath: relativePath, folderID: folderID, page: page, rect: rect)
             failed = image == nil
         }
     }
 
     @concurrent
-    static func crop(relativePath: String, page: Int, rect: CGRect) async -> UIImage? {
+    static func crop(relativePath: String, folderID: String, page: Int, rect: CGRect) async -> UIImage? {
         guard !relativePath.isEmpty,
-              let data = try? FolderAccess.read(relativePath: relativePath),
+              let data = try? FolderAccess.read(relativePath: relativePath, folderID: folderID),
               let pages = try? PageReader.render(data, fileName: relativePath),
               pages.indices.contains(page - 1) else { return nil }
         let image = pages[page - 1]

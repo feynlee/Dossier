@@ -3,14 +3,16 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @State private var hasFolder = FolderAccess.hasFolder
+    /// Set once you've added a first folder. Removing folders later keeps you in the app, so you can add
+    /// others; only "Delete all extracted data" returns to onboarding.
+    @AppStorage("hasOnboarded") private var hasOnboarded = FolderAccess.hasFolder
 
     var body: some View {
         Group {
-            if hasFolder {
-                MainTabView(hasFolder: $hasFolder)
+            if hasOnboarded {
+                MainTabView(hasOnboarded: $hasOnboarded)
             } else {
-                OnboardingView { hasFolder = true }
+                OnboardingView { hasOnboarded = true }
             }
         }
         // Hide everything in the app switcher.
@@ -27,7 +29,7 @@ struct RootView: View {
 }
 
 struct MainTabView: View {
-    @Binding var hasFolder: Bool
+    @Binding var hasOnboarded: Bool
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
@@ -44,7 +46,7 @@ struct MainTabView: View {
                 FormsView()
             }
             Tab("Settings", systemImage: "gearshape") {
-                SettingsView(hasFolder: $hasFolder)
+                SettingsView(hasOnboarded: $hasOnboarded)
             }
         }
         .task {

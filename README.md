@@ -16,7 +16,8 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | Timeline › Overview | Swimlanes for homes, status, documents and trips, days abroad per year, and an "on this date" crosshair |
 | Forms | Choose a fillable PDF, match its fields to your facts, fill with Face ID for numbers, save a copy |
 | Siri and Shortcuts | "What's my passport number in Dossier", expiry dates, "Where did I live", days abroad |
-| Settings | Private Cloud Compute on/off, folder, re-read everything, delete all extracted data |
+| Folders | Add several folders, see how many documents came from each, remove one and keep or delete what was read from it (Settings › Folders, or + in the Vault) |
+| Settings | Private Cloud Compute on/off, folders, re-read everything, delete all extracted data |
 
 ## Layout
 
@@ -26,7 +27,7 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | `Dossier/DesignSystem` | Indigo tint tokens, `BadgedTile`, `MaskedValueView` |
 | `Dossier/Models` | SwiftData `SourceDocument`, `Fact`, `TravelEvent`; `FactKey`, `DocumentKind` |
 | `Dossier/Security` | `VaultKeys` (Keychain AES key + Secure Enclave key), `Sealer`, Face ID, `VaultReader` |
-| `Dossier/Ingestion` | Folder bookmark and listing, page rendering, Vision text (with line positions) and PDF417 |
+| `Dossier/Ingestion` | Folder bookmarks (several, with migration from the single-folder version), listing, page rendering, Vision text (with line positions) and PDF417 |
 | `Dossier/Parsing` | `MRZParser` (ICAO 9303 TD1/TD3 with check digits), `AAMVAParser`, `SimpleDate` |
 | `Dossier/Extraction` | `@Generable` schema, `DocumentExtractor` (PCC with on-device fallback), `Verifier` |
 | `Dossier/Import` | `ImportCoordinator`: list → read → extract → verify → seal → save |

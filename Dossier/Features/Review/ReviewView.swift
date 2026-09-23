@@ -157,7 +157,7 @@ private struct ReviewCard: View {
     private var source: some View {
         if let rect = fact.cropRect, let page = fact.cropPage, let path = fact.document?.relativePath, !path.isEmpty,
            !fact.cropNeedsFaceID || !reveal.values.isEmpty {
-            SourceCropView(relativePath: path, page: page, rect: rect)
+            SourceCropView(relativePath: path, folderID: fact.document?.folderID ?? "", page: page, rect: rect)
         } else if let context = VaultReader.context(of: fact) {
             Text(context)
                 .font(.system(.footnote, design: .monospaced))
