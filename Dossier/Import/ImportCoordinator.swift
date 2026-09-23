@@ -1,0 +1,136 @@
+import Foundation
+import Observation
+import os
+import SwiftData
+
+/// Runs the import pipeline over the documents folder: list files, skip ones already read, then for each new
+/// file read its pages locally, extract with PCC, verify, and save sealed facts.
+@Observable
+final class ImportCoordinator {
+    enum Phase: Equatable {
+        case idle
+        case listing
+        case reading(done: Int, total: Int)
+        case finished(added: Int, failed: Int)
+    }
+
+    private(set) var phase = Phase.idle
+    private(set) var waitingForDownload = 0
+    /// File name → why it couldn't be read, for the last run.
+    private(set) var failures: [String: String] = [:]
+    private(set) var lastEngine: ExtractionEngine?
+    private(set) var errorMessage: String?
+
+    var isRunning: Bool {
+        switch phase {
+        case .listing, .reading: true
+        default: false
+        }
+    }
+
+    @ObservationIgnored private let extractor = DocumentExtractor()
+    @ObservationIgnored private let sealer = Sealer.shared
+    @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private let logger = Logger(subsystem: "liziyue.Dossier", category: "Import")
+
+    func start(context: ModelContext, preferPrivateCloud: Bool) {
+        guard !isRunning else { return }
+        task = Task { await run(context: context, preferPrivateCloud: preferPrivateCloud) }
+    }
+
+    func cancel() {
+        task?.cancel()
+        phase = .idle
+    }
+
+    private func run(context: ModelContext, preferPrivateCloud: Bool) async {
+        errorMessage = nil
+        failures = [:]
+        guard let folder = FolderAccess.resolve() else {
+            errorMessage = "Choose your documents folder again in Settings."
+            phase = .idle
+            return
+        }
+
+        phase = .listing
+        let listing: FolderAccess.Listing
+        do {
+            listing = try await Self.list(folder)
+        } catch {
+            errorMessage = "The folder couldn’t be opened: \(error.localizedDescription)"
+            phase = .idle
+            return
+        }
+        waitingForDownload = listing.waitingForDownload
+
+        let known = Set((try? context.fetch(FetchDescriptor<SourceDocument>()))?.map(\.contentHash) ?? [])
+        var added = 0
+        for (index, file) in listing.files.enumerated() {
+            if Task.isCancelled { return }
+            phase = .reading(done: index, total: listing.files.count)
+            do {
+                let loaded = try await Self.load(file, in: folder)
+                guard !known.contains(loaded.hash) else { continue }
+                let pages = try await PageReader.read(loaded.data, fileName: file.name)
+                guard !pages.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud)
+                lastEngine = engine
+                try save(reading, engine: engine, pages: pages, file: file, hash: loaded.hash, in: context)
+                added += 1
+            } catch {
+                logger.error("Couldn't read \(file.name, privacy: .private): \(error.localizedDescription, privacy: .public)")
+                failures[file.name] = error.localizedDescription
+            }
+        }
+        phase = .finished(added: added, failed: failures.count)
+    }
+
+    // MARK: Saving
+
+    private func save(_ reading: DocumentReading, engine: ExtractionEngine, pages: [ReadPage], file: FolderAccess.FolderFile, hash: String, in context: ModelContext) throws {
+        let pageLines = pages.map(\.lines)
+        let mrz = MRZParser.find(in: pageLines.flatMap { $0 })
+        let license = pages.flatMap(\.barcodes).lazy.compactMap(AAMVAParser.parse).first
+
+        let inputs = reading.fields.compactMap { field in
+            FactKey(rawValue: field.key).map { Verifier.Input(key: $0, value: field.value, page: max(1, field.page)) }
+        }
+        let verified = Verifier.verify(inputs, pages: pageLines, mrz: mrz, license: license)
+
+        let kind = DocumentKind(rawValue: reading.kind) ?? .other
+        let title = reading.title.isEmpty ? kind.displayName : reading.title
+        let document = SourceDocument(contentHash: hash, fileName: file.name, kind: kind, title: title, engine: engine, pageCount: pages.count)
+        context.insert(document)
+
+        for item in verified {
+            let fact = Fact(
+                key: item.key,
+                sealedValue: try sealer.seal(item.value, sensitive: item.key.isSensitive),
+                sealedHint: item.key.isSensitive ? try sealer.seal(String(item.value.suffix(4)), sensitive: false) : nil,
+                status: item.status,
+                check: item.check,
+                page: item.page
+            )
+            if let alternate = item.alternate { fact.sealedAlternate = try sealer.seal(alternate, sensitive: item.key.isSensitive) }
+            if let context = item.context, !item.key.isSensitive { fact.sealedContext = try sealer.seal(context, sensitive: false) }
+            // Only non-personal dates go in the clear, for sorting and expiry badges.
+            if item.key.isDate, item.key != .dateOfBirth { fact.plainDate = SimpleDate(iso: item.value)?.date }
+            fact.document = document
+            context.insert(fact)
+        }
+        try context.save()
+    }
+
+    // MARK: Off the main actor
+
+    @concurrent
+    private static func list(_ folder: URL) async throws -> FolderAccess.Listing {
+        try FolderAccess.list(folder)
+    }
+
+    @concurrent
+    private static func load(_ file: FolderAccess.FolderFile, in folder: URL) async throws -> (data: Data, hash: String) {
+        let data = try FolderAccess.read(file, in: folder)
+        return (data, FolderAccess.contentHash(data))
+    }
+}
