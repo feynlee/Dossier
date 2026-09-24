@@ -141,3 +141,84 @@ struct ReconcilerTests {
         #expect(!Reconciler.namesCompatible("MARIA", "ANNA MARIA"))
     }
 }
+
+struct DocumentIdentityTests {
+    func keys(_ kind: DocumentKind, _ values: [FactKey: String], travel: [String] = []) -> DocumentKeys {
+        DocumentIdentity.plainKeys(kind: kind, values: values, travel: travel)
+    }
+
+    let passport: [FactKey: String] = [
+        .surname: "ERIKSSON", .givenNames: "ANNA MARIA", .dateOfBirth: "1990-08-12",
+        .documentNumber: "PX7204821", .issueDate: "2019-03-15", .expiryDate: "2029-03-14",
+    ]
+
+    @Test func twoScansOfTheSamePassportAreDuplicates() {
+        var rescan = passport
+        rescan[.documentNumber] = "px 720 4821"
+        #expect(DocumentIdentity.match(keys(.passport, rescan), against: keys(.passport, passport)) == .duplicate)
+    }
+
+    @Test func aCorrectedReadingOfTheSameDocumentIsAnUpdate() {
+        var corrected = passport
+        corrected[.givenNames] = "ANNA MARIE"
+        #expect(DocumentIdentity.match(keys(.passport, corrected), against: keys(.passport, passport)) == .update)
+    }
+
+    @Test func aRenewedLicenceWithTheSameNumberIsASeparateDocument() {
+        let old: [FactKey: String] = [.documentNumber: "D1234567", .issueDate: "2023-01-30", .expiryDate: "2027-01-30", .address: "88 Pine Ave"]
+        var renewed = old
+        renewed[.issueDate] = "2027-01-15"
+        renewed[.expiryDate] = "2031-01-30"
+        #expect(DocumentIdentity.match(keys(.driversLicense, renewed), against: keys(.driversLicense, old)) == .newVersion)
+    }
+
+    @Test func differentDocumentsDontMatch() {
+        var other = passport
+        other[.documentNumber] = "PX9999999"
+        #expect(DocumentIdentity.match(keys(.passport, other), against: keys(.passport, passport)) == .none)
+        #expect(DocumentIdentity.match(keys(.passport, [:]), against: keys(.passport, [:])) == .none, "no number, no match")
+    }
+
+    @Test func aNewerI94HistoryUpdatesTheOldOne() {
+        let old = keys(.i94, [.surname: "ERIKSSON"], travel: ["2021-06-12 departure SEA"])
+        let newer = keys(.i94, [.surname: "ERIKSSON"], travel: ["2021-06-12 departure SEA", "2021-07-03 arrival SEA"])
+        #expect(DocumentIdentity.match(newer, against: old) == .update)
+        #expect(DocumentIdentity.match(old, against: old) == .duplicate)
+    }
+
+    @Test func leasesMatchByAddressAndStart() {
+        let lease: [FactKey: String] = [.address: "88 Pine Ave, Portland", .leaseStartDate: "2023-01-01", .leaseEndDate: "2027-12-31"]
+        var extended = lease
+        extended[.leaseEndDate] = "2028-12-31"
+        var next = lease
+        next[.leaseStartDate] = "2028-01-01"
+        #expect(DocumentIdentity.match(keys(.lease, extended), against: keys(.lease, lease)) == .update)
+        #expect(DocumentIdentity.match(keys(.lease, next), against: keys(.lease, lease)) == .none)
+    }
+
+    @Test func noticesARemovedFile() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "Passport.pdf")
+        try Data("%PDF-1.4".utf8).write(to: file)
+        let bookmark = try FileAccess.bookmark(for: file)
+        #expect(FileAccess.resolve(bookmark).map { FileAccess.exists($0.url) } == true)
+        try FileManager.default.removeItem(at: file)
+        #expect(FileAccess.resolve(bookmark).map { FileAccess.exists($0.url) } != true)
+    }
+
+    @Test func followsAMovedFile() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder.appending(path: "IDs"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "Passport.pdf")
+        try Data("%PDF-1.4".utf8).write(to: file)
+        let bookmark = try FileAccess.bookmark(for: file)
+        let moved = folder.appending(path: "IDs/Passport renamed.pdf")
+        try FileManager.default.moveItem(at: file, to: moved)
+        let resolved = try #require(FileAccess.resolve(bookmark))
+        #expect(resolved.url.lastPathComponent == "Passport renamed.pdf")
+        #expect(FileAccess.exists(resolved.url))
+    }
+}

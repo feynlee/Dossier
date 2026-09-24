@@ -58,6 +58,15 @@ nonisolated enum FileAccess {
         )
     }
 
+    /// Whether the file is still there. A file in the Trash counts as removed. An iCloud file that isn't
+    /// downloaded yet still exists.
+    static func exists(_ url: URL) -> Bool {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        if url.standardizedFileURL.pathComponents.contains(where: { $0 == ".Trash" || $0 == ".Trashes" }) { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
     /// Asks iCloud to download a file. The download continues in the system even if Dossier is suspended.
     static func requestDownload(_ url: URL) {
         let accessing = url.startAccessingSecurityScopedResource()

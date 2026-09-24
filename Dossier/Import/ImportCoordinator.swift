@@ -103,6 +103,7 @@ final class ImportCoordinator {
         migrateFolderDocuments(context: context)
 
         let documents = (try? context.fetch(FetchDescriptor<SourceDocument>(sortBy: [SortDescriptor(\.ingestedAt)]))) ?? []
+        await checkSources(documents)
         markChangedFiles(documents)
         var queue = documents.filter { [.queued, .downloading, .reading].contains($0.state) }
         var waiting = 0
@@ -133,10 +134,13 @@ final class ImportCoordinator {
             do {
                 let loaded = try await Self.load(resolved.url)
                 if let other = documents.first(where: { $0 !== document && $0.contentHash == loaded.hash && !$0.isDeleted }) {
-                    // The same file was already added (perhaps from another folder). Keep the older entry.
-                    logger.notice("Duplicate of \(other.fileName, privacy: .private); removing the new entry")
-                    duplicates.append(document.fileName)
-                    context.delete(document)
+                    // An exact copy of a file already in the vault, in another place. Ask which file to keep
+                    // as the source; there's nothing new to read.
+                    document.state = .awaitingDecision
+                    document.decisionRaw = "duplicate"
+                    document.relatedHash = other.contentHash
+                    document.kindRaw = other.kindRaw
+                    document.title = other.title
                     try? context.save()
                     continue
                 }
@@ -145,6 +149,8 @@ final class ImportCoordinator {
                 let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud)
                 lastEngine = engine
                 try save(reading, engine: engine, pages: pages, hash: loaded.hash, info: info, into: document, context: context)
+                classify(document, among: documents)
+                try? context.save()
             } catch {
                 logger.error("Couldn't read \(document.fileName, privacy: .private): \(error.localizedDescription, privacy: .public)")
                 fail(document, error.localizedDescription)
@@ -232,6 +238,16 @@ final class ImportCoordinator {
             context.insert(fact)
         }
 
+        // Fingerprints for spotting another file of the same document later, taken while the values are in
+        // the clear. Only fingerprints are stored.
+        var values: [FactKey: String] = [:]
+        for item in verified where values[item.key] == nil { values[item.key] = item.value }
+        let rows = kind == .i94 ? reading.travel.map { "\($0.date) \($0.kind) \($0.port.uppercased())" } : []
+        let plain = DocumentIdentity.plainKeys(kind: kind, values: values, travel: rows)
+        document.identityKey = try plain.identity.map { try sealer.fingerprint($0).base64EncodedString() }
+        document.versionKey = try plain.version.map { try sealer.fingerprint($0).base64EncodedString() }
+        document.contentSignature = try sealer.fingerprint(plain.signature).base64EncodedString()
+
         for row in reading.travel where kind == .i94 {
             guard let date = SimpleDate(iso: row.date) else { continue }
             let event = TravelEvent(
@@ -245,6 +261,104 @@ final class ImportCoordinator {
         document.state = .ready
         document.failureReason = nil
         try context.save()
+    }
+
+    // MARK: Same document, several files
+
+    /// Compares a newly read document with the rest of the vault. A duplicate or an update waits for you to
+    /// choose; a renewal (same number, new dates) is simply another document.
+    private func classify(_ document: SourceDocument, among documents: [SourceDocument]) {
+        guard document.keys.identity != nil else { return }
+        var found: (match: DocumentMatch, other: SourceDocument)?
+        for other in documents where other !== document && !other.isDeleted && other.isReady && other.kind == document.kind {
+            guard !document.keptAlongside.contains(other.contentHash), !other.keptAlongside.contains(document.contentHash) else { continue }
+            let match = DocumentIdentity.match(document.keys, against: other.keys)
+            if match == .duplicate { found = (match, other); break }
+            if match == .update, found == nil { found = (match, other) }
+        }
+        guard let found else { return }
+        document.state = .awaitingDecision
+        document.decisionRaw = found.match == .duplicate ? "duplicate" : "update"
+        document.relatedHash = found.other.contentHash
+    }
+
+    enum Decision {
+        /// Duplicate: keep the file already in the vault; forget the new one.
+        case keepExisting
+        /// Duplicate: use the new file as the source, keeping everything already confirmed.
+        case useNewFile
+        /// Update: the new file replaces the old document.
+        case replace
+        /// Update: keep both as separate documents.
+        case keepBoth
+        /// Update: don't add the new file.
+        case discardNew
+    }
+
+    func resolve(_ document: SourceDocument, with decision: Decision, context: ModelContext) {
+        let other = document.relatedHash.flatMap { hash in
+            try? context.fetch(FetchDescriptor<SourceDocument>(predicate: #Predicate { $0.contentHash == hash })).first
+        }
+        switch decision {
+        case .keepExisting, .discardNew:
+            context.delete(document)
+        case .useNewFile:
+            if let other {
+                // Same content, so the facts (and anything you confirmed) stay; only the source changes.
+                let (bookmark, name, size, modified, hash) = (document.bookmark, document.fileName, document.fileSize, document.fileModifiedAt, document.contentHash)
+                context.delete(document)
+                try? context.save()
+                other.bookmark = bookmark
+                other.fileName = name
+                other.fileSize = size
+                other.fileModifiedAt = modified
+                other.contentHash = hash
+                other.sourceMissing = false
+            } else {
+                finishDecision(document)
+            }
+        case .replace:
+            if let other { context.delete(other) }
+            finishDecision(document)
+        case .keepBoth:
+            if let other { document.keptAlongside.append(other.contentHash) }
+            finishDecision(document)
+        }
+        try? context.save()
+    }
+
+    private func finishDecision(_ document: SourceDocument) {
+        document.state = .ready
+        document.decisionRaw = nil
+        document.relatedHash = nil
+    }
+
+    // MARK: Source files
+
+    /// Notices files that were deleted, and follows files that were moved: a bookmark resolves to a moved or
+    /// renamed file's new location, which is saved.
+    private func checkSources(_ documents: [SourceDocument]) async {
+        for document in documents {
+            guard let bookmark = document.bookmark else {
+                document.sourceMissing = !document.relativePath.isEmpty
+                continue
+            }
+            let status = await Self.sourceStatus(bookmark)
+            if !status.missing { document.missingAcknowledged = false }
+            document.sourceMissing = status.missing
+            if let refreshed = status.refreshed { document.bookmark = refreshed }
+        }
+    }
+
+    /// Gives a document a new source file (after its file was removed) and reads it again.
+    func attach(_ url: URL, to document: SourceDocument, context: ModelContext, preferPrivateCloud: Bool) throws {
+        document.bookmark = try FileAccess.bookmark(for: url)
+        document.fileName = url.lastPathComponent
+        document.sourceMissing = false
+        document.missingAcknowledged = false
+        document.state = .queued
+        try context.save()
+        start(context: context, preferPrivateCloud: preferPrivateCloud)
     }
 
     // MARK: Earlier versions
@@ -271,6 +385,12 @@ final class ImportCoordinator {
     }
 
     // MARK: Off the main actor
+
+    @concurrent
+    private static func sourceStatus(_ bookmark: Data) async -> (missing: Bool, refreshed: Data?) {
+        guard let resolved = FileAccess.resolve(bookmark) else { return (true, nil) }
+        return (!FileAccess.exists(resolved.url), resolved.refreshed)
+    }
 
     @concurrent
     private static func info(_ url: URL) async -> FileAccess.Info? {

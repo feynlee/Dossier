@@ -17,6 +17,8 @@ struct DocumentDetailView: View {
     @State private var previewExpanded = false
     @State private var editing: Fact?
     @State private var draft = ""
+    @State private var showingMissing = false
+    @State private var showingDecision = false
 
     private var facts: [Fact] {
         document.facts.filter { $0.status != .superseded }.sorted { $0.key.sortOrder < $1.key.sortOrder }
@@ -64,17 +66,26 @@ struct DocumentDetailView: View {
             if editing?.key.isDate == true { Text("Use the format YYYY-MM-DD.") }
         }
         .sensoryFeedback(.success, trigger: copied)
+        .sheet(isPresented: $showingMissing) { MissingSourceSheet(document: document) }
+        .sheet(isPresented: $showingDecision) { DocumentDecisionSheet(document: document) }
     }
 
     private var factList: some View {
         List {
-            if document.state != .ready {
+            if document.state != .ready || document.sourceMissing {
                 Section {
                     DocumentRow(document: document)
                     if document.state == .failed {
                         Button("Try again", systemImage: "arrow.clockwise") {
                             importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
                         }
+                    }
+                    if document.state == .awaitingDecision {
+                        Button(document.decision == .duplicate ? "Choose which file to keep" : "Review the update", systemImage: "arrow.left.arrow.right") {
+                            showingDecision = true
+                        }
+                    } else if document.sourceMissing {
+                        Button("Attach a new file", systemImage: "paperclip") { showingMissing = true }
                     }
                 }
             }
@@ -107,6 +118,7 @@ struct DocumentDetailView: View {
 
             Section("Source") {
                 LabeledContent("File", value: document.fileName)
+                LabeledContent("Location", value: document.sourceMissing ? "Removed" : (document.locationDescription ?? "Unknown"))
                 LabeledContent("Pages read", value: "\(document.pageCount)")
                 LabeledContent("Read by", value: document.engine.displayName)
                 Button("Read again", systemImage: "arrow.clockwise") {

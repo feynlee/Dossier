@@ -40,6 +40,10 @@ struct VaultView: View {
                     }
                 }
 
+                if searchText.isEmpty {
+                    AttentionSection(documents: documents)
+                }
+
                 if reviewCount > 0, searchText.isEmpty {
                     Section {
                         NavigationLink {
@@ -127,11 +131,11 @@ struct DocumentRow: View {
     var body: some View {
         let badge = document.badge
         TileRow(
-            symbol: document.isReady ? document.kind.symbol : "doc",
+            symbol: document.isReady || document.state == .awaitingDecision ? document.kind.symbol : "doc",
             badge: badge,
             title: document.title,
             subtitle: subtitle,
-            subtitleIsWarning: badge == .expiring || document.state == .failed
+            subtitleIsWarning: badge == .expiring || document.state == .failed || (document.sourceMissing && document.isReady)
         )
     }
 
@@ -141,8 +145,11 @@ struct DocumentRow: View {
         case .downloading: return "Downloading from iCloud"
         case .reading: return "Reading…"
         case .failed: return "Couldn’t read: \(document.failureReason ?? "unknown error")"
+        case .awaitingDecision:
+            return document.decision == .duplicate ? "Same as a document in your vault · choose a file" : "Updated version · replace the old one?"
         case .ready: break
         }
+        if document.sourceMissing { return "File removed · attach a new one" }
         let uncertain = document.facts.filter { $0.status == .needsReview }.count
         if uncertain > 0 { return uncertain == 1 ? "1 field needs a look" : "\(uncertain) fields need a look" }
         if let expiry = document.expiryDate {

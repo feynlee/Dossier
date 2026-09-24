@@ -14,6 +14,20 @@ final class SourceDocument {
     var stateRaw: String = DocumentState.ready.rawValue
     /// Why the file couldn't be read, when `state` is `.failed`.
     var failureReason: String?
+    /// The source file was deleted or can't be reached any more. What was read from it stays usable.
+    var sourceMissing: Bool = false
+    /// You chose to keep the document without its file, so Dossier stops asking.
+    var missingAcknowledged: Bool = false
+    /// Fingerprints (HMAC under the vault key) of what identifies the document, its issue/expiry dates, and
+    /// all its important facts. Used to spot a second file for the same document without decrypting anything.
+    var identityKey: String?
+    var versionKey: String?
+    var contentSignature: String?
+    /// For a document in `.awaitingDecision`: whether it duplicates or updates another, and which one.
+    var decisionRaw: String?
+    var relatedHash: String?
+    /// Documents you chose to keep alongside this one, so the question isn't asked again.
+    var keptAlongside: [String] = []
     /// Earlier versions found files through folders; kept only to give those documents a bookmark.
     var relativePath: String = ""
     var folderID: String = ""
@@ -62,6 +76,16 @@ final class SourceDocument {
 
     var isReady: Bool { state == .ready }
 
+    var decision: DocumentMatch? {
+        switch decisionRaw {
+        case "duplicate": .duplicate
+        case "update": .update
+        default: nil
+        }
+    }
+
+    var keys: DocumentKeys { DocumentKeys(identity: identityKey, version: versionKey, signature: contentSignature ?? "") }
+
     var needsReview: Bool { facts.contains { $0.status == .needsReview } }
 
     func fact(_ key: FactKey) -> Fact? {
@@ -76,9 +100,10 @@ final class SourceDocument {
     var badge: TileBadge {
         switch state {
         case .queued, .downloading, .reading: return .reading
-        case .failed: return .review
+        case .failed, .awaitingDecision: return .review
         case .ready: break
         }
+        if sourceMissing { return .review }
         if needsReview { return .review }
         if let expiryDate, expiryDate < Calendar.current.date(byAdding: .month, value: 6, to: .now)! { return .expiring }
         return .verified
@@ -181,6 +206,8 @@ nonisolated enum DocumentState: String, Codable, Sendable {
     case reading
     case ready
     case failed
+    /// Read, but it duplicates or updates another document: waiting for you to choose.
+    case awaitingDecision
 }
 
 /// A value you set for your compiled personal information, replacing what the documents say.
