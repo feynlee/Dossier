@@ -31,6 +31,32 @@ nonisolated enum DocumentKind: String, CaseIterable, Codable, Sendable {
         }
     }
 
+    /// The facts worth keeping from this kind of document. Anything else the model reports is dropped.
+    var importantKeys: [FactKey] {
+        switch self {
+        case .passport:
+            [.surname, .givenNames, .dateOfBirth, .placeOfBirth, .sex, .nationality, .documentNumber, .issueDate, .expiryDate, .issuingAuthority]
+        case .greenCard:
+            [.surname, .givenNames, .dateOfBirth, .placeOfBirth, .sex, .alienNumber, .uscisCategory, .residentSince, .documentNumber, .expiryDate]
+        case .employmentAuthorization:
+            [.surname, .givenNames, .dateOfBirth, .placeOfBirth, .sex, .alienNumber, .uscisCategory, .documentNumber, .validFrom, .validUntil, .expiryDate]
+        case .visa:
+            [.surname, .givenNames, .dateOfBirth, .nationality, .documentNumber, .uscisCategory, .issueDate, .expiryDate]
+        case .driversLicense, .stateID:
+            [.surname, .givenNames, .dateOfBirth, .sex, .address, .documentNumber, .licenseClass, .issueDate, .expiryDate]
+        case .lease:
+            [.address, .leaseStartDate, .leaseEndDate]
+        case .uscisNotice:
+            [.surname, .givenNames, .dateOfBirth, .alienNumber, .formType, .receiptNumber, .noticeDate, .uscisCategory, .validFrom, .validUntil]
+        case .i94:
+            [.surname, .givenNames, .dateOfBirth, .i94Number, .classOfAdmission, .admitUntil, .documentNumber]
+        case .other:
+            [.surname, .givenNames, .dateOfBirth, .address, .documentNumber, .issueDate, .expiryDate]
+        case .addedByYou:
+            [.address, .validFrom, .validUntil]
+        }
+    }
+
     /// SF Symbols from the design system's iconography table.
     var symbol: String {
         switch self {

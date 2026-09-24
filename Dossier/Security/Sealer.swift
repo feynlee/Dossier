@@ -22,6 +22,12 @@ nonisolated struct Sealer: Sendable {
         try Self.string(keys.openSensitive(sealed, context: context))
     }
 
+    /// A keyed hash of a normalized value, for telling whether two sealed values are the same without
+    /// opening them. Useless without this device's vault key.
+    func fingerprint(_ normalized: String) throws -> Data {
+        Data(HMAC<SHA256>.authenticationCode(for: Data(normalized.utf8), using: try keys.standardKey()))
+    }
+
     // MARK: AES-GCM primitives (testable without the Keychain)
 
     static func seal(_ data: Data, with key: SymmetricKey) throws -> Data {

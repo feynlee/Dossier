@@ -1,34 +1,46 @@
 import SwiftData
 import SwiftUI
-import UniformTypeIdentifiers
 
-/// Home: facts to review, import progress, and every document with its badged tile.
+/// Home: your compiled personal information, what needs review, and every document you added.
 struct VaultView: View {
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
+    @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
-    @State private var isAddingFolder = false
-    @State private var folderError: String?
+    @State private var isPickingFiles = false
+    @State private var isPickingFolder = false
+    @State private var profile = Profile(entries: [])
+    @State private var removing: SourceDocument?
 
     private var reviewCount: Int {
-        documents.reduce(0) { $0 + $1.facts.filter { $0.status == .needsReview }.count }
+        documents.filter(\.isReady).reduce(0) { $0 + $1.facts.filter { $0.status == .needsReview }.count } + profile.conflicts.count
     }
 
     private var filtered: [SourceDocument] {
         guard !searchText.isEmpty else { return documents }
         return documents.filter {
             $0.title.localizedCaseInsensitiveContains(searchText)
+                || $0.fileName.localizedCaseInsensitiveContains(searchText)
                 || $0.kind.displayName.localizedCaseInsensitiveContains(searchText)
-                || $0.facts.contains { $0.key.label.localizedCaseInsensitiveContains(searchText) }
         }
     }
 
     var body: some View {
         NavigationStack {
             List {
-                if reviewCount > 0 {
+                if searchText.isEmpty, documents.contains(where: \.isReady) {
+                    Section {
+                        NavigationLink {
+                            ProfileView()
+                        } label: {
+                            TileRow(symbol: "person.crop.circle", badge: profile.conflicts.isEmpty ? .verified : .review, title: "Personal information", subtitle: profileSummary)
+                        }
+                    }
+                }
+
+                if reviewCount > 0, searchText.isEmpty {
                     Section {
                         NavigationLink {
                             ReviewView()
@@ -36,8 +48,8 @@ struct VaultView: View {
                             TileRow(
                                 symbol: "doc.text.magnifyingglass",
                                 badge: .review,
-                                title: reviewCount == 1 ? "1 fact to review" : "\(reviewCount) facts to review",
-                                subtitle: documents.filter(\.needsReview).map(\.title).prefix(2).joined(separator: " · ")
+                                title: reviewCount == 1 ? "1 item to review" : "\(reviewCount) items to review",
+                                subtitle: "Readings Dossier wasn’t sure about, and documents that disagree"
                             )
                         }
                     }
@@ -46,64 +58,66 @@ struct VaultView: View {
                 ImportStatusSection()
 
                 Section("Documents") {
-                    if filtered.isEmpty, !importer.isRunning {
-                        if searchText.isEmpty, !FolderAccess.hasFolder {
-                            Button("Add a folder", systemImage: "folder.badge.plus") { isAddingFolder = true }
-                        } else {
-                            Text(searchText.isEmpty ? "Documents Dossier reads will appear here." : "No matches.")
-                                .foregroundStyle(.secondary)
-                        }
+                    if documents.isEmpty {
+                        Button("Add documents", systemImage: "doc.badge.plus") { isPickingFiles = true }
+                        Button("Choose from a folder", systemImage: "folder") { isPickingFolder = true }
+                    } else if filtered.isEmpty {
+                        Text("No matches.").foregroundStyle(.secondary)
                     }
                     ForEach(filtered) { document in
                         NavigationLink(value: document) {
                             DocumentRow(document: document)
                         }
+                        .swipeActions {
+                            Button("Remove", systemImage: "trash", role: .destructive) { removing = document }
+                                .tint(.red)
+                            Button("Read again", systemImage: "arrow.clockwise") {
+                                importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                            }
+                            .tint(Color.dsTintFill)
+                        }
                     }
                 }
             }
             .navigationTitle("Vault")
-            .fileImporter(isPresented: $isAddingFolder, allowedContentTypes: [.folder], allowsMultipleSelection: true) { result in
-                switch result {
-                case .success(let urls):
-                    do {
-                        for url in urls { try FolderAccess.add(url) }
-                        importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
-                    } catch {
-                        folderError = error.localizedDescription
-                    }
-                case .failure(let error):
-                    folderError = error.localizedDescription
-                }
-            }
-            .alert("Couldn’t add the folder", isPresented: Binding(get: { folderError != nil }, set: { if !$0 { folderError = nil } })) {
-                Button("OK") { folderError = nil }
-            } message: {
-                Text(folderError ?? "")
-            }
             .navigationDestination(for: SourceDocument.self) { DocumentDetailView(document: $0) }
             .searchable(text: $searchText, prompt: "Search")
-            .refreshable {
-                importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
-            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button("Add folder", systemImage: "folder.badge.plus") { isAddingFolder = true }
-                        Button("Check for new documents", systemImage: "arrow.clockwise") {
-                            importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
-                        }
-                        .disabled(importer.isRunning)
-                        NavigationLink {
-                            FoldersView()
-                        } label: {
-                            Label("Manage folders", systemImage: "folder")
-                        }
+                        Button("Add documents", systemImage: "doc.badge.plus") { isPickingFiles = true }
+                        Button("Choose from a folder", systemImage: "folder") { isPickingFolder = true }
                     } label: {
                         Label("Add", systemImage: "plus")
                     }
                 }
             }
+            .addDocuments(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder)
+            .confirmationDialog(
+                "Remove “\(removing?.title ?? "")”?",
+                isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                titleVisibility: .visible,
+                presenting: removing
+            ) { document in
+                Button("Remove from vault", role: .destructive) {
+                    modelContext.delete(document)
+                    try? modelContext.save()
+                }
+            } message: { _ in
+                Text("Dossier forgets what it read from this document. The file itself isn’t changed.")
+            }
+            .task(id: documents.map { "\($0.persistentModelID.hashValue)\($0.stateRaw)" } + overrides.map { "\($0.keyRaw)\($0.editedAt)" }) {
+                profile = Profile.build(documents: documents, overrides: overrides)
+            }
         }
+    }
+
+    private var profileSummary: String {
+        let name = [profile.entry(.givenNames)?.value, profile.entry(.surname)?.value].compactMap { $0 }.joined(separator: " ")
+        let birth = profile.entry(.dateOfBirth)?.value.flatMap(SimpleDate.init(iso:)).map { "born \($0.display)" }
+        let summary = [name.isEmpty ? nil : name, birth].compactMap { $0 }.joined(separator: " · ")
+        if !profile.conflicts.isEmpty { return "Documents disagree on \(profile.conflicts.map(\.key.label).joined(separator: ", ").lowercased())" }
+        return summary.isEmpty ? "Compiled from your documents" : summary
     }
 }
 
@@ -113,15 +127,24 @@ struct DocumentRow: View {
     var body: some View {
         let badge = document.badge
         TileRow(
-            symbol: document.kind.symbol,
+            symbol: document.isReady ? document.kind.symbol : "doc",
             badge: badge,
             title: document.title,
             subtitle: subtitle,
-            subtitleIsWarning: badge == .expiring
+            subtitleIsWarning: badge == .expiring || document.state == .failed
         )
     }
 
     private var subtitle: String {
+        switch document.state {
+        case .queued: return "Waiting to be read"
+        case .downloading: return "Downloading from iCloud"
+        case .reading: return "Reading…"
+        case .failed: return "Couldn’t read: \(document.failureReason ?? "unknown error")"
+        case .ready: break
+        }
+        let uncertain = document.facts.filter { $0.status == .needsReview }.count
+        if uncertain > 0 { return uncertain == 1 ? "1 field needs a look" : "\(uncertain) fields need a look" }
         if let expiry = document.expiryDate {
             return (expiry < .now ? "Expired " : "Expires ") + SimpleDate(utc: expiry).display
         }
@@ -129,49 +152,34 @@ struct DocumentRow: View {
     }
 }
 
-/// Progress of the current or last import.
+/// What the reader is doing, and anything it couldn't add.
 private struct ImportStatusSection: View {
     @Environment(ImportCoordinator.self) private var importer
 
     var body: some View {
-        switch importer.phase {
-        case .listing:
-            Section { TileRow(symbol: "folder", badge: .reading, title: "Checking your folder…") }
-        case .reading(let done, let total):
+        if let current = importer.current {
             Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    TileRow(symbol: "cloud", badge: .reading, title: "Reading \(done + 1) of \(total) documents")
-                    ProgressView(value: Double(done), total: Double(max(total, 1)))
-                }
+                TileRow(
+                    symbol: "cloud", badge: .reading, title: "Reading \(current.name)",
+                    subtitle: current.remaining == 0 ? "Last one" : "\(current.remaining) more after this"
+                )
             }
-        case .finished, .idle:
-            if importer.waitingForDownload > 0 || !importer.failures.isEmpty || importer.errorMessage != nil || !importer.unsupportedFiles.isEmpty {
-                Section {
-                    if let message = importer.errorMessage {
-                        Label(message, systemImage: "exclamationmark.triangle")
+        }
+        if !importer.unsupportedFiles.isEmpty || !importer.duplicates.isEmpty {
+            Section {
+                if !importer.unsupportedFiles.isEmpty {
+                    let files = importer.unsupportedFiles
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(files.count == 1 ? "1 file isn’t a PDF or photo" : "\(files.count) files aren’t PDFs or photos", systemImage: "doc.questionmark")
+                        Text("Not added: \(files.prefix(3).joined(separator: ", "))\(files.count > 3 ? " and \(files.count - 3) more" : "").")
+                            .font(.footnote).foregroundStyle(.secondary)
                     }
-                    if importer.waitingForDownload > 0 {
-                        Label(
-                            importer.waitingForDownload == 1
-                                ? "1 file is downloading from iCloud. Dossier reads it when it arrives."
-                                : "\(importer.waitingForDownload) files are downloading from iCloud. Dossier reads them when they arrive.",
-                            systemImage: "icloud.and.arrow.down"
-                        )
-                    }
-                    if !importer.unsupportedFiles.isEmpty {
-                        let count = importer.unsupportedFiles.count
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label(count == 1 ? "1 file isn’t a PDF or image" : "\(count) files aren’t PDFs or images", systemImage: "doc.questionmark")
-                            Text("Dossier reads PDFs and photos. Skipped: \(importer.unsupportedFiles.prefix(3).joined(separator: ", "))\(count > 3 ? " and \(count - 3) more" : "").")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    ForEach(importer.failures.sorted(by: { $0.key < $1.key }), id: \.key) { name, reason in
-                        VStack(alignment: .leading) {
-                            Text(name)
-                            Text(reason).font(.footnote).foregroundStyle(.secondary)
-                        }
+                }
+                if !importer.duplicates.isEmpty {
+                    let files = importer.duplicates
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(files.count == 1 ? "1 file was already in your vault" : "\(files.count) files were already in your vault", systemImage: "checkmark.circle")
+                        Text(files.prefix(3).joined(separator: ", ")).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
             }

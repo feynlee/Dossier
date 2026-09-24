@@ -35,7 +35,7 @@ enum VaultStore {
 
         let configuration = ModelConfiguration(url: directory.appending(path: "vault.store"))
         do {
-            return try ModelContainer(for: SourceDocument.self, Fact.self, TravelEvent.self, configurations: configuration)
+            return try ModelContainer(for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self, configurations: configuration)
         } catch {
             fatalError("The vault couldn’t be opened: \(error)")
         }

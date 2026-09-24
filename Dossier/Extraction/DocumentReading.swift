@@ -19,7 +19,7 @@ nonisolated struct DocumentReading {
     @Guide(description: "A short title in sentence case, such as \"Passport\", \"Green card\" or \"Lease for 88 Pine Ave\".")
     var title: String
 
-    @Guide(description: "Every listed fact that is printed on the document. Omit facts that are not printed; never guess.")
+    @Guide(description: "The important facts printed on the document, as listed for its kind in the instructions. Omit facts that are not printed; never guess.")
     var fields: [ReadField]
 
     @Guide(description: "For an I-94 travel history only: every arrival and departure row. Empty for every other document.")
@@ -57,4 +57,14 @@ nonisolated struct ReadField {
 
     @Guide(description: "The 1-based page the value is printed on.")
     var page: Int
+
+    @Guide(
+        description: """
+            high when every character is clearly printed and it is certainly this fact. low when any part is \
+            blurry, cut off, covered, handwritten, ambiguous (0 or O, 1 or I), or you had to choose between \
+            several candidates.
+            """,
+        .anyOf(["high", "low"])
+    )
+    var confidence: String
 }

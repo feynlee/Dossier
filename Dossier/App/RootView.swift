@@ -3,13 +3,14 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
-    /// Set once you've added a first folder. Removing folders later keeps you in the app, so you can add
-    /// others; only "Delete all extracted data" returns to onboarding.
-    @AppStorage("hasOnboarded") private var hasOnboarded = FolderAccess.hasFolder
+    /// Set once you've added your first documents. Only "Delete all extracted data" returns to onboarding.
+    @AppStorage("hasOnboarded") private var hasOnboarded = false
+    @Query private var documents: [SourceDocument]
 
     var body: some View {
         Group {
-            if hasOnboarded {
+            // A vault with documents (or folders from an earlier version) never shows onboarding again.
+            if hasOnboarded || !documents.isEmpty || FolderAccess.hasLegacyFolders {
                 MainTabView(hasOnboarded: $hasOnboarded)
             } else {
                 OnboardingView { hasOnboarded = true }
@@ -24,6 +25,9 @@ struct RootView: View {
                 }
                 .ignoresSafeArea()
             }
+        }
+        .onAppear {
+            if !hasOnboarded, !documents.isEmpty || FolderAccess.hasLegacyFolders { hasOnboarded = true }
         }
     }
 }
@@ -50,8 +54,7 @@ struct MainTabView: View {
                 SettingsView(hasOnboarded: $hasOnboarded)
             }
         }
-        // Check the folders each time the app opens, so iCloud files that finished downloading while it was
-        // in the background are read.
+        // Each time the app opens, read files that finished downloading from iCloud or changed since.
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud) }
         }

@@ -5,8 +5,8 @@ import UIKit
 /// The strip of the original page a value was read from, re-rendered from the file in your folder. Nothing
 /// from the page is stored in the vault: only the line's position.
 struct SourceCropView: View {
-    let relativePath: String
-    let folderID: String
+    let bookmark: Data?
+    let fileName: String
     let page: Int
     let rect: CGRect
 
@@ -27,17 +27,17 @@ struct SourceCropView: View {
                     .overlay(ProgressView())
             }
         }
-        .task(id: "\(relativePath)#\(page)#\(rect.debugDescription)") {
-            image = await Self.crop(relativePath: relativePath, folderID: folderID, page: page, rect: rect)
+        .task(id: "\(fileName)#\(page)#\(rect.debugDescription)") {
+            image = await Self.crop(bookmark: bookmark, fileName: fileName, page: page, rect: rect)
             failed = image == nil
         }
     }
 
     @concurrent
-    static func crop(relativePath: String, folderID: String, page: Int, rect: CGRect) async -> UIImage? {
-        guard !relativePath.isEmpty,
-              let data = try? FolderAccess.read(relativePath: relativePath, folderID: folderID),
-              let image = try? PageReader.renderPage(page - 1, of: data, fileName: relativePath) else { return nil }
+    static func crop(bookmark: Data?, fileName: String, page: Int, rect: CGRect) async -> UIImage? {
+        guard let bookmark, let url = FileAccess.resolve(bookmark)?.url,
+              let data = try? FileAccess.read(url),
+              let image = try? PageReader.renderPage(page - 1, of: data, fileName: fileName) else { return nil }
         let width = CGFloat(image.width), height = CGFloat(image.height)
         // Pad around the line so the value is shown with a little of its surroundings.
         let padded = CGRect(

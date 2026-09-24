@@ -48,8 +48,20 @@ actor DocumentExtractor {
         The images are the source of truth; the OCR text helps with hard-to-read characters but can contain \
         mistakes.
 
+        Report only the important facts for the document's kind:
+        - passport: surname, givenNames, dateOfBirth, placeOfBirth, sex, nationality, documentNumber, issueDate, expiryDate, issuingAuthority
+        - greenCard: surname, givenNames, dateOfBirth, placeOfBirth, sex, alienNumber, uscisCategory, residentSince, documentNumber, expiryDate
+        - employmentAuthorization: surname, givenNames, dateOfBirth, placeOfBirth, sex, alienNumber, uscisCategory, documentNumber, validFrom, validUntil
+        - visa: surname, givenNames, dateOfBirth, nationality, documentNumber, uscisCategory, issueDate, expiryDate
+        - driversLicense or stateID: surname, givenNames, dateOfBirth, sex, address, documentNumber, licenseClass, issueDate, expiryDate
+        - lease: address, leaseStartDate, leaseEndDate
+        - uscisNotice: surname, givenNames, dateOfBirth, alienNumber, formType, receiptNumber, noticeDate, uscisCategory, validFrom, validUntil
+        - i94: surname, givenNames, dateOfBirth, i94Number, classOfAdmission, admitUntil, documentNumber, plus every travel row
+        - other: surname, givenNames, dateOfBirth, address, documentNumber, issueDate, expiryDate
+
         Rules:
         - Report only facts printed on the document. Never infer, guess or fill in a value that is not printed.
+        - Report the document holder's facts only, not a landlord's, petitioner's, officer's or anyone else's.
         - Copy numbers exactly, character by character. Don't confuse 0 with O or 1 with I.
         - Write every date as YYYY-MM-DD. Read day-month order from the document's own convention.
         - For a machine-readable zone (lines of capital letters and < signs), prefer the printed fields above \

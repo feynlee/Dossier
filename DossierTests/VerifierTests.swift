@@ -49,7 +49,22 @@ struct VerifierTests {
         let results = Verifier.verify([.init(key: .leaseStartDate, value: "2023-01-01", page: 1)], pages: pages, mrz: nil, license: nil)
         #expect(results.first?.check == .pageText)
         #expect(results.first?.context == "Lease term begins January 1, 2023")
-        #expect(results.first?.status == .needsReview)
+        #expect(results.first?.status == .verified)
+    }
+
+    @Test func sendsOnlyDoubtfulReadingsToReview() {
+        let results = Verifier.verify(
+            [
+                .init(key: .address, value: "412 Alder St, Seattle", page: 1),
+                .init(key: .placeOfBirth, value: "Stockholm", page: 1, isConfident: false),
+                .init(key: .receiptNumber, value: "IOE0912345678", page: 1),
+            ],
+            pages: [["Tenant: Anna Eriksson"]], mrz: nil, license: nil
+        )
+        #expect(results.first { $0.key == .address }?.status == .verified, "confident names and addresses are accepted")
+        #expect(results.first { $0.key == .address }?.check == .model)
+        #expect(results.first { $0.key == .placeOfBirth }?.status == .needsReview, "the model said it wasn't sure")
+        #expect(results.first { $0.key == .receiptNumber }?.status == .needsReview, "a number OCR can't find")
     }
 
     @Test func flagsLinesThatAlsoShowASensitiveNumber() {

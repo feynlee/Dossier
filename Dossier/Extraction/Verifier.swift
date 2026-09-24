@@ -21,13 +21,16 @@ nonisolated struct LineLocation: Equatable, Sendable {
 }
 
 /// Cross-checks model output against deterministic sources: the MRZ check digits on passports and cards,
-/// the PDF417 barcode on licences, and the page's own OCR text. Only values confirmed by a checksum-bearing
-/// source are verified automatically; everything else goes to the review queue.
+/// the PDF417 barcode on licences, and the page's own OCR text. A value goes to review only when there's a
+/// reason to doubt it: the model wasn't sure, a checksum-bearing source disagrees, or a number or date can't
+/// be found anywhere in the page text. Everything else is accepted.
 nonisolated enum Verifier {
     struct Input {
         var key: FactKey
         var value: String
         var page: Int
+        /// The model's own rating: false when it said the reading is uncertain.
+        var isConfident = true
     }
 
     static func verify(_ fields: [Input], pages: [[String]], mrz: MRZResult?, license: AAMVARecord?) -> [VerifiedFact] {
@@ -51,8 +54,14 @@ nonisolated enum Verifier {
                     ))
                 }
             } else {
-                let check: FactCheck = context != nil ? .pageText : .unchecked
-                results.append(VerifiedFact(key: field.key, value: value, page: field.page, status: .needsReview, check: check, context: context, location: location))
+                // OCR reliably finds printed numbers and dates, so one it can't find is worth a look. Names and
+                // addresses can be read from the image even where OCR fails, so those aren't flagged for it.
+                let isUncertain = !field.isConfident || (field.key.isMonospaced && context == nil)
+                let check: FactCheck = context != nil ? .pageText : (isUncertain ? .unchecked : .model)
+                results.append(VerifiedFact(
+                    key: field.key, value: value, page: field.page, status: isUncertain ? .needsReview : .verified,
+                    check: check, context: context, location: location
+                ))
             }
         }
 

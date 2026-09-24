@@ -9,15 +9,17 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 
 | Tab or surface | What it does |
 | --- | --- |
-| Vault | Documents with badged icon tiles, search, and the review queue with the source line cropped from the page |
-| Document detail | Facts, sensitive numbers masked until Face ID, copy for 60 s, "Show where this was read" |
+| Vault | Personal information, what needs review, and the documents you added, with reading status |
+| Adding documents | Add documents (pick several files, iCloud included) or Choose from a folder (tick files). Only added files are read; a changed file is read again and its result replaced |
+| Personal information | Name, birth date, sex, place of birth, nationality, A-Number, current passport and licence numbers, and current address, reconciled across documents. Agreeing values are accepted automatically; any value can be edited |
+| Review | Only readings the model wasn't sure about, checksum disagreements, and profile values where documents disagree |
+| Document detail | Zoomable preview of the file (Face ID if it shows a number) above its facts; tap a fact to zoom to where it was read; uncertain fields are marked and can be filtered |
 | Timeline › List | Year scrubber, homes, trips, statuses and address gaps (with "Add address") for the selected year |
 | Timeline › Map | Homes as numbered pins joined by moves; trips with a destination as arcs; the scrubber moves the camera |
 | Timeline › Overview | Swimlanes for homes, status, documents and trips, days abroad per year, and an "on this date" crosshair |
 | Forms | Choose a fillable PDF, match its fields to your facts, fill with Face ID for numbers, save a copy |
 | Siri and Shortcuts | "What's my passport number in Dossier", expiry dates, "Where did I live", days abroad |
-| Folders | Add several folders, see how many documents came from each, remove one and keep or delete what was read from it (Settings › Folders, or + in the Vault) |
-| Settings | Private Cloud Compute on/off, folders, re-read everything, delete all extracted data |
+| Settings | Private Cloud Compute on/off, re-read everything, delete all extracted data |
 
 ## Layout
 
@@ -27,10 +29,11 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | `Dossier/DesignSystem` | Indigo tint tokens, `BadgedTile`, `MaskedValueView` |
 | `Dossier/Models` | SwiftData `SourceDocument`, `Fact`, `TravelEvent`; `FactKey`, `DocumentKind` |
 | `Dossier/Security` | `VaultKeys` (Keychain AES key + Secure Enclave key), `Sealer`, Face ID, `VaultReader` |
-| `Dossier/Ingestion` | Folder bookmarks (several, with migration from the single-folder version), listing, page rendering, Vision text (with line positions) and PDF417 |
+| `Dossier/Ingestion` | `FileAccess` (a bookmark per added file), folder browsing for the checklist, page rendering, Vision text (with line positions) and PDF417 |
 | `Dossier/Parsing` | `MRZParser` (ICAO 9303 TD1/TD3 with check digits), `AAMVAParser`, `SimpleDate` |
 | `Dossier/Extraction` | `@Generable` schema, `DocumentExtractor` (PCC with on-device fallback), `Verifier` |
-| `Dossier/Import` | `ImportCoordinator`: list → read → extract → verify → seal → save |
+| `Dossier/Import` | `ImportCoordinator`: a queue of added files → download → read → extract → verify → seal, one result per file |
+| `Dossier/Profile` | `Reconciler` (pure matching rules) and `Profile` (compiled personal information and your edits) |
 | `Dossier/Timeline` | `LifeTimeline` (pure interval logic), `TimelineLoader`, `Geocoder` |
 | `Dossier/Forms` | `FormFieldMatcher` rules, `AddressParts`, `FormFiller` (PDFKit), `FormFieldAssistant` (labels only to the model), `FactBook` |
 | `Dossier/Intents` | App Intents, entities and App Shortcuts |

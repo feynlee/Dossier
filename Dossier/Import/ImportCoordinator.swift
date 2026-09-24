@@ -3,32 +3,19 @@ import Observation
 import os
 import SwiftData
 
-/// Runs the import pipeline over the documents folder: list files, skip ones already read, then for each new
-/// file read its pages locally, extract with PCC, verify, and save sealed facts.
+/// Reads the files you add to the vault, one at a time: download from iCloud if needed, read the pages
+/// locally, extract with PCC, verify, and save one sealed result per file. Only files you added are read; a
+/// file that changed since it was read is read again and its old result replaced.
 @Observable
 final class ImportCoordinator {
-    enum Phase: Equatable {
-        case idle
-        case listing
-        case reading(done: Int, total: Int)
-        case finished(added: Int, failed: Int)
-    }
-
-    private(set) var phase = Phase.idle
-    private(set) var waitingForDownload = 0
-    /// Files in your folders that aren't PDFs or images, from the last check.
+    private(set) var isRunning = false
+    /// The document being read and how many are left, for progress.
+    private(set) var current: (name: String, remaining: Int)?
+    /// Files you picked that Dossier can't read (Word documents…), from the last add.
     private(set) var unsupportedFiles: [String] = []
-    /// File name → why it couldn't be read, for the last run.
-    private(set) var failures: [String: String] = [:]
+    /// Files you added that were already in the vault, from the last add.
+    private(set) var duplicates: [String] = []
     private(set) var lastEngine: ExtractionEngine?
-    private(set) var errorMessage: String?
-
-    var isRunning: Bool {
-        switch phase {
-        case .listing, .reading: true
-        default: false
-        }
-    }
 
     @ObservationIgnored private let extractor = DocumentExtractor()
     @ObservationIgnored private let sealer = Sealer.shared
@@ -41,139 +28,180 @@ final class ImportCoordinator {
         rechecks < 20 ? .seconds(15) : .seconds(60)
     }
 
+    // MARK: Adding
+
+    /// Adds files you picked and starts reading them. Pass the folder when the files came from a folder you
+    /// picked. Returns how many were added.
+    @discardableResult
+    func add(_ urls: [URL], within folder: URL? = nil, context: ModelContext, preferPrivateCloud: Bool) -> Int {
+        let existing = (try? context.fetch(FetchDescriptor<SourceDocument>())) ?? []
+        let existingPaths = Set(existing.compactMap { $0.bookmark.flatMap(FileAccess.resolve)?.url.standardizedFileURL.path })
+        unsupportedFiles = []
+        duplicates = []
+        var added = 0
+        for url in urls {
+            guard FileAccess.isReadable(url) else {
+                unsupportedFiles.append(url.lastPathComponent)
+                continue
+            }
+            guard !existingPaths.contains(url.standardizedFileURL.path) else {
+                duplicates.append(url.lastPathComponent)
+                continue
+            }
+            do {
+                let bookmark = try FileAccess.bookmark(for: url, within: folder)
+                context.insert(SourceDocument.pending(fileName: url.lastPathComponent, bookmark: bookmark))
+                added += 1
+            } catch {
+                logger.error("Couldn't bookmark a file: \(error.localizedDescription, privacy: .public)")
+                unsupportedFiles.append(url.lastPathComponent)
+            }
+        }
+        try? context.save()
+        start(context: context, preferPrivateCloud: preferPrivateCloud)
+        return added
+    }
+
+    /// Reads a document again from its file.
+    func reread(_ document: SourceDocument, context: ModelContext, preferPrivateCloud: Bool) {
+        document.state = .queued
+        document.failureReason = nil
+        try? context.save()
+        start(context: context, preferPrivateCloud: preferPrivateCloud)
+    }
+
+    // MARK: Processing
+
     func start(context: ModelContext, preferPrivateCloud: Bool) {
         guard !isRunning else { return }
         task?.cancel()
         task = Task {
-            await run(context: context, preferPrivateCloud: preferPrivateCloud)
-            // Files in an iCloud folder that weren't on the device were asked to download. Look again until
-            // they arrive, so you don't have to tap "Check for new documents" yourself.
             var rechecks = 0
-            while waitingForDownload > 0, !Task.isCancelled {
+            while !Task.isCancelled {
+                let waiting = await run(context: context, preferPrivateCloud: preferPrivateCloud)
+                guard waiting > 0 else { break }
+                // Files still downloading from iCloud: look again until they arrive.
                 try? await Task.sleep(for: Self.recheckDelay(after: rechecks))
-                guard !Task.isCancelled else { return }
                 rechecks += 1
-                await run(context: context, preferPrivateCloud: preferPrivateCloud)
             }
         }
     }
 
     func cancel() {
         task?.cancel()
-        phase = .idle
+        isRunning = false
+        current = nil
     }
 
-    private func run(context: ModelContext, preferPrivateCloud: Bool) async {
-        errorMessage = nil
-        failures = [:]
-        let folders = FolderAccess.folders()
-        guard !folders.isEmpty else {
-            errorMessage = FolderAccess.hasFolder
-                ? "Your folders can’t be reached. Add them again in Settings › Folders."
-                : "Add a folder to read your documents."
-            phase = .idle
-            return
+    /// One pass over the queue. Returns how many files are still downloading.
+    private func run(context: ModelContext, preferPrivateCloud: Bool) async -> Int {
+        isRunning = true
+        defer {
+            isRunning = false
+            current = nil
         }
-        adoptLegacyDocuments(into: folders, context: context)
+        migrateFolderDocuments(context: context)
 
-        phase = .listing
-        var files: [(folder: FolderAccess.Folder, file: FolderAccess.FolderFile)] = []
-        var unsupported: [String] = []
-        for folder in folders {
-            do {
-                let listing = try await Self.list(folder)
-                files += listing.files.map { (folder, $0) }
-                unsupported += listing.unsupported
-            } catch {
-                failures[folder.name] = "The folder couldn’t be opened: \(error.localizedDescription)"
-            }
-        }
-        unsupportedFiles = unsupported.sorted()
-
-        let documents = (try? context.fetch(FetchDescriptor<SourceDocument>())) ?? []
-        var byHash = Dictionary(documents.map { ($0.contentHash, $0) }, uniquingKeysWith: { first, _ in first })
-        var known: [String: KnownFile] = [:]
-        for document in documents where !document.relativePath.isEmpty {
-            known[ImportPlan.key(folderID: document.folderID, relativePath: document.relativePath)] =
-                KnownFile(size: document.fileSize > 0 ? document.fileSize : nil, modified: document.fileModifiedAt)
-        }
-
-        // Decide first, so downloads start right away and progress counts only files to read.
-        var toRead: [(folder: FolderAccess.Folder, file: FolderAccess.FolderFile)] = []
+        let documents = (try? context.fetch(FetchDescriptor<SourceDocument>(sortBy: [SortDescriptor(\.ingestedAt)]))) ?? []
+        markChangedFiles(documents)
+        var queue = documents.filter { [.queued, .downloading, .reading].contains($0.state) }
         var waiting = 0
-        for entry in files {
-            switch ImportPlan.decide(entry.file, known: known) {
-            case .skip:
-                continue
-            case .download:
-                await Self.requestDownload(entry.file, in: entry.folder.url)
-                waiting += 1
-            case .downloadFailed(let reason):
-                failures[entry.file.name] = "iCloud couldn’t download it: \(reason)"
-            case .read:
-                toRead.append(entry)
-            }
-        }
-        waitingForDownload = waiting
 
-        var added = 0
-        for (index, entry) in toRead.enumerated() {
-            if Task.isCancelled { return }
-            let file = entry.file
-            phase = .reading(done: index, total: toRead.count)
+        while !queue.isEmpty, !Task.isCancelled {
+            let document = queue.removeFirst()
+            guard let bookmark = document.bookmark, let resolved = FileAccess.resolve(bookmark) else {
+                fail(document, "The file can’t be found. It may have been moved or deleted.")
+                continue
+            }
+            if let refreshed = resolved.refreshed { document.bookmark = refreshed }
+            let info = await Self.info(resolved.url)
+
+            if let error = info?.downloadError {
+                fail(document, "iCloud couldn’t download it: \(error)")
+                continue
+            }
+            if info?.isDownloaded == false {
+                await Self.requestDownload(resolved.url)
+                document.state = .downloading
+                waiting += 1
+                continue
+            }
+
+            current = (document.fileName, queue.count)
+            document.state = .reading
+            try? context.save()
             do {
-                let loaded = try await Self.load(file, in: entry.folder.url)
-                if let existing = byHash[loaded.hash] {
-                    // Already read (moved, renamed, or read by an earlier version): remember where it is now so
-                    // the next check can skip it without downloading.
-                    remember(file, on: existing)
+                let loaded = try await Self.load(resolved.url)
+                if let other = documents.first(where: { $0 !== document && $0.contentHash == loaded.hash && !$0.isDeleted }) {
+                    // The same file was already added (perhaps from another folder). Keep the older entry.
+                    logger.notice("Duplicate of \(other.fileName, privacy: .private); removing the new entry")
+                    duplicates.append(document.fileName)
+                    context.delete(document)
                     try? context.save()
                     continue
                 }
-                let pages = try await PageReader.read(loaded.data, fileName: file.name)
+                let pages = try await PageReader.read(loaded.data, fileName: document.fileName)
                 guard !pages.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
                 let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud)
                 lastEngine = engine
-                let document = try save(reading, engine: engine, pages: pages, file: file, hash: loaded.hash, in: context)
-                byHash[loaded.hash] = document
-                added += 1
+                try save(reading, engine: engine, pages: pages, hash: loaded.hash, info: info, into: document, context: context)
             } catch {
-                logger.error("Couldn't read \(file.name, privacy: .private): \(error.localizedDescription, privacy: .public)")
-                failures[file.name] = error.localizedDescription
+                logger.error("Couldn't read \(document.fileName, privacy: .private): \(error.localizedDescription, privacy: .public)")
+                fail(document, error.localizedDescription)
             }
         }
-        phase = .finished(added: added, failed: failures.count)
+        try? context.save()
+        return waiting
+    }
+
+    private func fail(_ document: SourceDocument, _ reason: String) {
+        document.state = .failed
+        document.failureReason = reason
+    }
+
+    /// A file you edited since it was read is read again, so each file has one current result.
+    private func markChangedFiles(_ documents: [SourceDocument]) {
+        for document in documents where document.state == .ready {
+            guard let bookmark = document.bookmark, let url = FileAccess.resolve(bookmark)?.url, let info = FileAccess.info(for: url),
+                  let modified = info.modified, let before = document.fileModifiedAt else { continue }
+            if abs(modified.timeIntervalSince(before)) >= 1 || (info.size != nil && info.size != document.fileSize && document.fileSize > 0) {
+                document.state = .queued
+            }
+        }
     }
 
     // MARK: Saving
 
-    private func remember(_ file: FolderAccess.FolderFile, on document: SourceDocument) {
-        document.folderID = file.folderID.uuidString
-        document.relativePath = file.relativePath
-        document.fileSize = file.size ?? 0
-        document.fileModifiedAt = file.modified
-    }
-
-    @discardableResult
-    private func save(_ reading: DocumentReading, engine: ExtractionEngine, pages: [ReadPage], file: FolderAccess.FolderFile, hash: String, in context: ModelContext) throws -> SourceDocument {
+    /// Replaces the document's result with this reading: one result per file.
+    private func save(
+        _ reading: DocumentReading, engine: ExtractionEngine, pages: [ReadPage], hash: String, info: FileAccess.Info?,
+        into document: SourceDocument, context: ModelContext
+    ) throws {
         let pageLines = pages.map(\.lines)
         let mrz = MRZParser.find(in: pageLines.flatMap { $0 })
         let license = pages.flatMap(\.barcodes).lazy.compactMap(AAMVAParser.parse).first
-
-        let inputs = reading.fields.compactMap { field in
-            FactKey(rawValue: field.key).map { Verifier.Input(key: $0, value: field.value, page: max(1, field.page)) }
-        }
-        let verified = Verifier.verify(inputs, pages: pageLines, mrz: mrz, license: license)
-
         let kind = DocumentKind(rawValue: reading.kind) ?? .other
+
+        // Only the important facts for this kind of document are kept.
+        let important = Set(kind.importantKeys)
+        let inputs = reading.fields.compactMap { field -> Verifier.Input? in
+            guard let key = FactKey(rawValue: field.key), important.contains(key) else { return nil }
+            return Verifier.Input(key: key, value: field.value, page: max(1, field.page), isConfident: field.confidence != "low")
+        }
+        let verified = Verifier.verify(inputs, pages: pageLines, mrz: mrz, license: license).filter { important.contains($0.key) }
+
+        for fact in document.facts { context.delete(fact) }
+        for event in document.travel { context.delete(event) }
+
+        document.contentHash = hash
+        document.kindRaw = kind.rawValue
         // Documents often print titles in capitals; the design system uses sentence case.
-        let title = reading.title.isEmpty || reading.title == reading.title.uppercased() ? kind.displayName : reading.title
-        let document = SourceDocument(
-            contentHash: hash, fileName: file.name, relativePath: file.relativePath, folderID: file.folderID.uuidString,
-            kind: kind, title: title, engine: engine, pageCount: pages.count
-        )
-        remember(file, on: document)
-        context.insert(document)
+        document.title = reading.title.isEmpty || reading.title == reading.title.uppercased() ? kind.displayName : reading.title
+        document.engineRaw = engine.rawValue
+        document.pageCount = pages.count
+        document.fileSize = info?.size ?? 0
+        document.fileModifiedAt = info?.modified
+        document.ingestedAt = .now
 
         // Lines that show a sensitive number: their text isn't stored and their crop needs Face ID.
         let showsNumber = { (line: String) in Verifier.line(line, showsAnyOf: verified) }
@@ -187,9 +215,12 @@ final class ImportCoordinator {
                 check: item.check,
                 page: item.page
             )
+            if let profileKey = ProfileKey.allCases.first(where: { $0.factKey == item.key }), profileKey.isSensitive {
+                fact.fingerprint = try sealer.fingerprint(Reconciler.normalize(item.value, for: profileKey))
+            }
             if let alternate = item.alternate { fact.sealedAlternate = try sealer.seal(alternate, sensitive: item.key.isSensitive) }
-            if let context = item.context, !item.key.isSensitive, !showsNumber(context) {
-                fact.sealedContext = try sealer.seal(context, sensitive: false)
+            if let line = item.context, !item.key.isSensitive, !showsNumber(line) {
+                fact.sealedContext = try sealer.seal(line, sensitive: false)
             }
             fact.cropRevealsNumber = item.context.map(showsNumber) ?? false
             // Only non-personal dates go in the clear, for sorting and expiry badges.
@@ -201,7 +232,7 @@ final class ImportCoordinator {
             context.insert(fact)
         }
 
-        for row in reading.travel {
+        for row in reading.travel where kind == .i94 {
             guard let date = SimpleDate(iso: row.date) else { continue }
             let event = TravelEvent(
                 sealedDate: try sealer.seal(date.iso, sensitive: false),
@@ -211,37 +242,49 @@ final class ImportCoordinator {
             event.document = document
             context.insert(event)
         }
+        document.state = .ready
+        document.failureReason = nil
         try context.save()
-        return document
     }
 
-    /// Documents read before Dossier supported several folders have no folder. With exactly one folder they
-    /// can only have come from it.
-    private func adoptLegacyDocuments(into folders: [FolderAccess.Folder], context: ModelContext) {
-        guard folders.count == 1, let documents = try? context.fetch(FetchDescriptor<SourceDocument>()) else { return }
-        var changed = false
-        for document in documents where document.folderID.isEmpty && !document.relativePath.isEmpty {
-            document.folderID = folders[0].id.uuidString
-            changed = true
+    // MARK: Earlier versions
+
+    /// Earlier versions found files through folders. Give each of those documents a bookmark to its own file,
+    /// so it can be shown and re-read like a file you added.
+    private func migrateFolderDocuments(context: ModelContext) {
+        guard FolderAccess.hasLegacyFolders else { return }
+        let folders = FolderAccess.legacyFolders()
+        let documents = (try? context.fetch(FetchDescriptor<SourceDocument>())) ?? []
+        for document in documents where document.bookmark == nil && !document.relativePath.isEmpty {
+            let candidates = folders.filter { document.folderID.isEmpty || $0.id == document.folderID }
+            for folder in candidates {
+                let url = folder.url.appending(path: document.relativePath)
+                if let bookmark = try? FileAccess.bookmark(for: url, within: folder.url),
+                   FileAccess.resolve(bookmark) != nil {
+                    document.bookmark = bookmark
+                    break
+                }
+            }
         }
-        if changed { try? context.save() }
+        try? context.save()
+        FolderAccess.forgetLegacyFolders()
     }
 
     // MARK: Off the main actor
 
     @concurrent
-    private static func list(_ folder: FolderAccess.Folder) async throws -> FolderAccess.Listing {
-        try FolderAccess.list(folder)
+    private static func info(_ url: URL) async -> FileAccess.Info? {
+        FileAccess.info(for: url)
     }
 
     @concurrent
-    private static func requestDownload(_ file: FolderAccess.FolderFile, in folder: URL) async {
-        FolderAccess.requestDownload(file, in: folder)
+    private static func requestDownload(_ url: URL) async {
+        FileAccess.requestDownload(url)
     }
 
     @concurrent
-    private static func load(_ file: FolderAccess.FolderFile, in folder: URL) async throws -> (data: Data, hash: String) {
-        let data = try FolderAccess.read(file, in: folder)
-        return (data, FolderAccess.contentHash(data))
+    private static func load(_ url: URL) async throws -> (data: Data, hash: String) {
+        let data = try FileAccess.read(url)
+        return (data, FileAccess.contentHash(data))
     }
 }

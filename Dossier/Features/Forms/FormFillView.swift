@@ -8,6 +8,7 @@ struct FormFillView: View {
     let form: OpenedForm
 
     @Query private var documents: [SourceDocument]
+    @Query private var overrides: [ProfileOverride]
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
     @State private var mapping: [String: FormValue] = [:]
     @State private var skipped: Set<String> = []
@@ -86,12 +87,12 @@ struct FormFillView: View {
     }
 
     private func preview(_ value: FormValue, for field: FormFieldInfo) -> String {
-        if value.isSensitive, let fact = book.fact(for: value) { return VaultReader.masked(fact) }
+        if value.isSensitive { return book.masked(value) ?? "—" }
         return book.string(for: value, dateStyle: FormDateStyle.style(for: field), context: nil) ?? "—"
     }
 
     private func match() async {
-        book = FactBook(documents: documents)
+        book = FactBook(documents: documents, overrides: overrides)
         var result: [String: FormValue] = [:]
         for field in form.fields {
             if let value = FormFieldMatcher.match(field) { result[field.name] = value }

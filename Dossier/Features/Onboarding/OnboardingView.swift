@@ -1,12 +1,12 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// First run: explain the three promises, then pick the documents folder.
+/// First run: explain the three promises, then add the documents to read.
 struct OnboardingView: View {
     let onFinish: () -> Void
 
+    @State private var isPickingFiles = false
     @State private var isPickingFolder = false
-    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -20,7 +20,7 @@ struct OnboardingView: View {
                         BadgedTile(symbol: "checkmark.shield", badge: nil, size: 64)
                         Text("Welcome to Dossier")
                             .font(.largeTitle.bold())
-                        Text("Choose the iCloud Drive folders that hold your documents. Dossier reads them and keeps what it finds on this iPhone.")
+                        Text("Add your passport, cards, leases and notices from iCloud Drive or this iPhone. Dossier reads only the files you add, and keeps what it finds on this iPhone.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                     }
@@ -28,45 +28,26 @@ struct OnboardingView: View {
                     .foregroundStyle(.primary)
                     .padding(.bottom, 12)
                 }
-
-                if let errorMessage {
-                    Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(Color.dsWarning)
-                    }
-                }
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
                     Button {
-                        isPickingFolder = true
+                        isPickingFiles = true
                     } label: {
-                        Text("Choose folders")
+                        Text("Add documents")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.capsule)
-                    Text("You can add or remove folders later in Settings.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Button("Choose from a folder") { isPickingFolder = true }
+                        .font(.headline)
+                        .padding(.vertical, 4)
                 }
                 .padding()
             }
-            .fileImporter(isPresented: $isPickingFolder, allowedContentTypes: [.folder], allowsMultipleSelection: true) { result in
-                switch result {
-                case .success(let urls):
-                    do {
-                        for url in urls { try FolderAccess.add(url) }
-                        if !urls.isEmpty { onFinish() }
-                    } catch {
-                        errorMessage = "That folder couldn’t be opened: \(error.localizedDescription)"
-                    }
-                case .failure(let error):
-                    errorMessage = error.localizedDescription
-                }
-            }
+            .addDocuments(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder, onAdded: onFinish)
         }
     }
 }

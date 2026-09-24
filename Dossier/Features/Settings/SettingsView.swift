@@ -1,6 +1,5 @@
 import SwiftData
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Binding var hasOnboarded: Bool
@@ -18,11 +17,6 @@ struct SettingsView: View {
                 Section {
                     Toggle(isOn: $usePrivateCloud) {
                         TileRow(symbol: "cloud", badge: nil, title: "Private Cloud Compute", subtitle: "More accurate. Pages aren’t kept.")
-                    }
-                    NavigationLink {
-                        FoldersView()
-                    } label: {
-                        TileRow(symbol: "folder", badge: nil, title: "Folders", subtitle: foldersSummary)
                     }
                 } header: {
                     Text("Reading")
@@ -51,18 +45,20 @@ struct SettingsView: View {
             .task { privateCloudStatus = DocumentExtractor.privateCloudStatus() }
             .confirmationDialog("Re-read all documents?", isPresented: $confirmReread, titleVisibility: .visible) {
                 Button("Re-read") {
-                    deleteDocuments()
+                    let documents = (try? modelContext.fetch(FetchDescriptor<SourceDocument>())) ?? []
+                    for document in documents where document.bookmark != nil { document.state = .queued }
+                    try? modelContext.save()
                     importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
                 }
             } message: {
-                Text("Facts you confirmed or edited will need review again.")
+                Text("Each document is read again from its file and its facts replaced. Facts you confirmed will need confirming again.")
             }
             .confirmationDialog("Delete all extracted data?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) {
                     importer.cancel()
                     deleteDocuments()
                     VaultKeys.shared.destroyAll()
-                    FolderAccess.forgetAll()
+                    FolderAccess.forgetLegacyFolders()
                     hasOnboarded = false
                 }
             } message: {
@@ -71,17 +67,10 @@ struct SettingsView: View {
         }
     }
 
-    private var foldersSummary: String {
-        let folders = FolderAccess.folders()
-        switch folders.count {
-        case 0: return "Add a folder to read your documents"
-        case 1: return folders[0].displayPath
-        default: return "\(folders.count) folders"
-        }
-    }
-
     private func deleteDocuments() {
         try? modelContext.delete(model: Fact.self)
+        try? modelContext.delete(model: TravelEvent.self)
+        try? modelContext.delete(model: ProfileOverride.self)
         try? modelContext.delete(model: SourceDocument.self)
         try? modelContext.save()
     }
