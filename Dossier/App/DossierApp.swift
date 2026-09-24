@@ -5,11 +5,13 @@ import SwiftUI
 struct DossierApp: App {
     private let container = VaultStore.container
     @State private var importer = ImportCoordinator()
+    @State private var appLock = AppLock()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(importer)
+                .environment(appLock)
                 .tint(.dsTint)
         }
         .modelContainer(container)

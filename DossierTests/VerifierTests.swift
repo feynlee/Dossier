@@ -101,3 +101,13 @@ struct SealerTests {
         #expect(SimpleDate(iso: "2029-13-01") == nil)
     }
 }
+
+struct AppLockPolicyTests {
+    @Test func locksOnlyAfterTheChosenTimeInTheBackground() {
+        #expect(!AppLockPolicy.shouldLock(afterBackground: .seconds(30), timeout: 60), "a quick switch to Safari")
+        #expect(AppLockPolicy.shouldLock(afterBackground: .seconds(61), timeout: 60))
+        #expect(AppLockPolicy.shouldLock(afterBackground: .milliseconds(1), timeout: 0), "Immediately")
+        #expect(AppLockPolicy.label(for: 300) == "After 5 minutes")
+        #expect(AppLockPolicy.timeoutChoices.contains(AppLockPolicy.defaultTimeout))
+    }
+}

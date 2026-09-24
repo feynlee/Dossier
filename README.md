@@ -19,13 +19,14 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | Timeline › Overview | Swimlanes for homes, status, documents and trips, days abroad per year, and an "on this date" crosshair |
 | Forms | Choose a fillable PDF, match its fields to your facts, fill with Face ID for numbers, save a copy |
 | Siri and Shortcuts | "What's my passport number in Dossier", expiry dates, "Where did I live", days abroad |
-| Settings | Private Cloud Compute on/off, re-read everything, delete all extracted data |
+| App lock | Face ID (passcode fallback) on launch, when the iPhone locks, and after 1 minute in the background (Immediately, 1, 5 or 15 minutes in Settings). The lock covers open sheets too |
+| Settings | App lock, Private Cloud Compute on/off, re-read everything, delete all extracted data |
 
 ## Layout
 
 | Folder | What |
 | --- | --- |
-| `Dossier/App` | Entry point, `VaultStore` (shared SwiftData container), tabs, app-switcher privacy cover |
+| `Dossier/App` | Entry point, `VaultStore` (shared SwiftData container), tabs, `AppLock` (whole-app lock and app-switcher cover) |
 | `Dossier/DesignSystem` | Indigo tint tokens, `BadgedTile`, `MaskedValueView` |
 | `Dossier/Models` | SwiftData `SourceDocument`, `Fact`, `TravelEvent`; `FactKey`, `DocumentKind` |
 | `Dossier/Security` | `VaultKeys` (Keychain AES key + Secure Enclave key), `Sealer`, Face ID, `VaultReader` |
@@ -48,6 +49,8 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
   needs Face ID; everything else uses a device-only Keychain AES key. Only non-birth dates are stored in the
   clear, for expiry badges.
 - Private Cloud Compute sees one document per request. Form matching sends only field labels.
+- The whole app locks behind Face ID. Turning the lock off or lengthening the timeout needs Face ID, so
+  someone holding your unlocked phone can't weaken it. Revealing a number still asks again.
 - Siri says only the last four characters of a number. Intents need the device unlocked.
 - MapKit geocoding receives address strings only; coordinates stay in memory.
 

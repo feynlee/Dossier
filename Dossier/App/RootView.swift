@@ -3,31 +3,51 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(AppLock.self) private var lock
     /// Set once you've added your first documents. Only "Delete all extracted data" returns to onboarding.
     @AppStorage("hasOnboarded") private var hasOnboarded = false
     @Query private var documents: [SourceDocument]
 
+    /// There's something to protect once you've added documents.
+    private var isSetUp: Bool { hasOnboarded || !documents.isEmpty || FolderAccess.hasLegacyFolders }
+
     var body: some View {
         Group {
             // A vault with documents (or folders from an earlier version) never shows onboarding again.
-            if hasOnboarded || !documents.isEmpty || FolderAccess.hasLegacyFolders {
+            if isSetUp {
                 MainTabView(hasOnboarded: $hasOnboarded)
             } else {
                 OnboardingView { hasOnboarded = true }
             }
         }
-        // Hide everything in the app switcher.
-        .overlay {
-            if scenePhase != .active {
-                ZStack {
-                    Rectangle().fill(.regularMaterial)
-                    BadgedTile(symbol: "checkmark.shield", badge: nil, size: 64)
-                }
-                .ignoresSafeArea()
-            }
-        }
         .onAppear {
             if !hasOnboarded, !documents.isEmpty || FolderAccess.hasLegacyFolders { hasOnboarded = true }
+            if !isSetUp { lock.release() }
+            updateCover()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background: lock.didEnterBackground()
+            case .active: if isSetUp { lock.didBecomeActive() }
+            default: break
+            }
+            updateCover()
+        }
+        .onChange(of: lock.isLocked) { updateCover() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in
+            // The iPhone is locking.
+            if isSetUp { lock.deviceDidLock() }
+        }
+    }
+
+    /// The lock screen, or in the app switcher a plain cover, in a window above everything including sheets.
+    private func updateCover() {
+        if lock.isLocked, isSetUp {
+            CoverWindow.shared.show(LockedView(lock: lock))
+        } else if scenePhase != .active {
+            CoverWindow.shared.show(PrivacyCover())
+        } else {
+            CoverWindow.shared.hide()
         }
     }
 }
