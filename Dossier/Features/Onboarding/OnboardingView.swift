@@ -5,8 +5,7 @@ import UniformTypeIdentifiers
 struct OnboardingView: View {
     let onFinish: () -> Void
 
-    @State private var isPickingFiles = false
-    @State private var isPickingFolder = false
+    @State private var isPicking = false
 
     var body: some View {
         NavigationStack {
@@ -30,24 +29,19 @@ struct OnboardingView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    Button {
-                        isPickingFiles = true
-                    } label: {
-                        Text("Add documents")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
-                    Button("Choose from a folder") { isPickingFolder = true }
+                Button {
+                    isPicking = true
+                } label: {
+                    Text("Add Documents")
                         .font(.headline)
-                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
                 }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
                 .padding()
             }
-            .addDocuments(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder, onAdded: onFinish)
+            .addDocuments(isPresented: $isPicking, onAdded: onFinish)
         }
     }
 }

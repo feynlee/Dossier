@@ -39,7 +39,9 @@ struct DocumentDetailView: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 if document.bookmark != nil {
-                    PreviewPane(document: document, highlight: highlight, isExpanded: $previewExpanded)
+                    PreviewPane(document: document, highlight: highlight, isExpanded: $previewExpanded, reveal: reveal) {
+                        reveal.reveal(facts, reason: "Show this document")
+                    }
                         .frame(height: geometry.size.height * (previewExpanded ? 0.72 : 0.42))
                     Divider()
                 }
@@ -48,12 +50,12 @@ struct DocumentDetailView: View {
         }
         .navigationTitle(document.title)
         .navigationBarTitleDisplayMode(.inline)
+        // One Face ID shows the file and every number on this screen. They're hidden again when you leave
+        // the screen or the app, not while you're here (the Face ID prompt itself doesn't count as leaving).
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { reveal.hide() }
+            if phase == .background { reveal.hide() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
-            reveal.hide()
-        }
+        .onDisappear { reveal.hide() }
         .alert("Couldn’t reveal", isPresented: Binding(get: { reveal.error != nil }, set: { if !$0 { reveal.error = nil } })) {
             Button("OK") { reveal.error = nil }
         } message: {

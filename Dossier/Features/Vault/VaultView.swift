@@ -9,8 +9,7 @@ struct VaultView: View {
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
-    @State private var isPickingFiles = false
-    @State private var isPickingFolder = false
+    @State private var isPicking = false
     @State private var profile = Profile(entries: [])
     /// Documents waiting for you to confirm removing them.
     @State private var removing: [SourceDocument] = []
@@ -61,7 +60,7 @@ struct VaultView: View {
 
                 if documents.isEmpty {
                     Section {
-                        EmptyVault(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder)
+                        EmptyVault(isPicking: $isPicking)
                     }
                     .listRowBackground(Color.clear)
                 } else {
@@ -130,12 +129,7 @@ struct VaultView: View {
                     }
                 } else {
                     ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            Button("Add Documents", systemImage: "doc.badge.plus") { isPickingFiles = true }
-                            Button("Choose from a Folder", systemImage: "folder") { isPickingFolder = true }
-                        } label: {
-                            Label("Add", systemImage: "plus")
-                        }
+                        Button("Add Documents", systemImage: "plus") { isPicking = true }
                     }
                     if !documents.isEmpty {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -145,7 +139,7 @@ struct VaultView: View {
                 }
             }
             .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
-            .addDocuments(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder)
+            .addDocuments(isPresented: $isPicking)
             .removeDocuments($removing) { endSelecting() }
             .onChange(of: documents.count) { _, count in
                 if count == 0 { endSelecting() }

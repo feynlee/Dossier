@@ -44,7 +44,7 @@ struct RootView: View {
     private func updateCover() {
         if lock.isLocked, isSetUp {
             CoverWindow.shared.show(LockedView(lock: lock))
-        } else if scenePhase != .active {
+        } else if scenePhase == .background || (scenePhase == .inactive && !Authenticator.isPrompting && !lock.isAuthenticating) {
             CoverWindow.shared.show(PrivacyCover())
         } else {
             CoverWindow.shared.hide()

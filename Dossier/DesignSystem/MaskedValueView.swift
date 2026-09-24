@@ -39,8 +39,10 @@ final class RevealState {
     private(set) var values: [PersistentIdentifier: String] = [:]
     /// Second readings of sensitive facts in the review queue, opened with the same Face ID check.
     private(set) var alternates: [PersistentIdentifier: String] = [:]
+    /// Whether Face ID was passed on this screen. Numbers and the file stay shown until you leave the screen
+    /// or the app.
+    private(set) var isUnlocked = false
     var error: String?
-    @ObservationIgnored private var hideTask: Task<Void, Never>?
 
     func reveal(_ facts: [Fact], reason: String, then: @escaping () -> Void = {}) {
         Task {
@@ -50,7 +52,7 @@ final class RevealState {
                     values[fact.persistentModelID] = try VaultReader.reveal(fact, context: context)
                     alternates[fact.persistentModelID] = VaultReader.alternate(of: fact, context: context)
                 }
-                scheduleHide()
+                isUnlocked = true
                 then()
             } catch {
                 self.error = error.localizedDescription
@@ -63,19 +65,9 @@ final class RevealState {
     func alternate(for fact: Fact) -> String? { alternates[fact.persistentModelID] }
 
     func hide() {
-        hideTask?.cancel()
         values = [:]
         alternates = [:]
-    }
-
-    private func scheduleHide() {
-        hideTask?.cancel()
-        hideTask = Task {
-            try? await Task.sleep(for: .seconds(30))
-            guard !Task.isCancelled else { return }
-            values = [:]
-            alternates = [:]
-        }
+        isUnlocked = false
     }
 }
 

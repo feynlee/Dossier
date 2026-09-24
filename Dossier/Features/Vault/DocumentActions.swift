@@ -98,18 +98,16 @@ private struct RereadDocumentsModifier: ViewModifier {
 
 /// The vault before anything is added, or after everything was removed.
 struct EmptyVault: View {
-    @Binding var isPickingFiles: Bool
-    @Binding var isPickingFolder: Bool
+    @Binding var isPicking: Bool
 
     var body: some View {
         ContentUnavailableView {
             Label("Add your documents", systemImage: "doc.badge.plus")
         } description: {
-            Text("Passport, green card, visa, lease or travel records. Dossier reads only the files you add and never changes them.")
+            Text("Passport, green card, visa, lease or travel records, from iCloud Drive or this iPhone. You can select several at once. Dossier reads only the files you add and never changes them.")
         } actions: {
-            Button("Add Documents") { isPickingFiles = true }
+            Button("Add Documents") { isPicking = true }
                 .buttonStyle(.borderedProminent)
-            Button("Choose from a Folder") { isPickingFolder = true }
         }
         .tint(.dsTint)
     }

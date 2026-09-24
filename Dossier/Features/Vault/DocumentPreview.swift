@@ -85,16 +85,19 @@ struct DocumentPreview: UIViewRepresentable {
 }
 
 /// The preview pane on a document's screen. A document with a document number shows its file only after
-/// Face ID, because the file shows the number in full.
+/// Face ID, because the file shows the number in full. The screen's Face ID unlock covers the file and the
+/// numbers together.
 struct PreviewPane: View {
     let document: SourceDocument
     let highlight: (page: Int, rect: CGRect)?
     @Binding var isExpanded: Bool
+    let reveal: RevealState
+    let onUnlock: () -> Void
 
-    @Environment(\.scenePhase) private var scenePhase
     @State private var pdf: PDFDocument?
     @State private var errorMessage: String?
-    @State private var isUnlocked = false
+
+    private var isUnlocked: Bool { reveal.isUnlocked }
 
     private var needsFaceID: Bool {
         document.facts.contains { $0.isSensitive || $0.cropRevealsNumber }
@@ -108,7 +111,7 @@ struct PreviewPane: View {
                     Image(systemName: "lock.doc").font(.largeTitle).foregroundStyle(Color.dsTint)
                     Text("This document shows a number that’s kept behind Face ID.")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Button("Show document", systemImage: "faceid") { unlock() }
+                    Button("Show document", systemImage: "faceid", action: onUnlock)
                         .buttonStyle(.borderedProminent)
                         .buttonBorderShape(.capsule)
                 }
@@ -140,16 +143,6 @@ struct PreviewPane: View {
                 errorMessage = "The file can’t be opened. It may have been moved or deleted."
             }
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active { isUnlocked = false }
-        }
-    }
-
-    private func unlock() {
-        Task {
-            if (try? await Authenticator.authenticate(reason: "Show this document")) != nil {
-                isUnlocked = true
-            }
-        }
+        .animation(.easeOut(duration: 0.2), value: isUnlocked)
     }
 }

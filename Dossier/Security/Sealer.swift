@@ -47,6 +47,9 @@ nonisolated struct Sealer: Sendable {
 
 /// Face ID for revealing sensitive values.
 enum Authenticator {
+    /// True while a Face ID prompt from inside the app is on screen. The prompt makes the app inactive for a
+    /// moment; that isn't leaving the app, so the privacy cover stays hidden and revealed values stay shown.
+    @MainActor private(set) static var isPrompting = false
     enum AuthError: LocalizedError {
         case unavailable(String)
         var errorDescription: String? {
@@ -68,6 +71,8 @@ enum Authenticator {
         guard context.canEvaluatePolicy(policy, error: &error) else {
             throw AuthError.unavailable(error?.localizedDescription ?? "Face ID isn’t set up on this iPhone.")
         }
+        isPrompting = true
+        defer { isPrompting = false }
         try await context.evaluatePolicy(policy, localizedReason: reason)
         return context
     }

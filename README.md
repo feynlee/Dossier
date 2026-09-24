@@ -10,10 +10,10 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | Tab or surface | What it does |
 | --- | --- |
 | Vault | Personal information, what needs review, and the documents you added, with reading status |
-| Adding documents | Add documents (pick several files, iCloud included) or Choose from a folder (tick files). Only added files are read; a changed file is read again and its result replaced |
+| Adding documents | + opens the Files picker: open any folder (iCloud Drive included) and select several files. Only added files are read; a changed file is read again and its result replaced |
 | Personal information | Name, birth date, sex, place of birth, nationality, A-Number, current passport and licence numbers, and current address, reconciled across documents. Agreeing values are accepted automatically; any value can be edited |
 | Checking fields | Each document's page. Fields Dossier wasn't sure about show Edit and Looks Right in the row; two readings that differ show both to pick from. Any field can be edited (a date picker for dates, with the line it was read from). Confirming a name, birth date, sex, place of birth, nationality or A-Number confirms the same reading on your other documents and on documents you add later. Documents that disagree are resolved in Personal information |
-| Document detail | Zoomable preview of the file (Face ID if it shows a number) above its fields; tap a field to zoom to where it was read and to edit or copy it |
+| Document detail | Zoomable preview of the file above its fields. One Face ID on the page shows the file and every number, in place, until you leave the page or the app; tap a field to zoom to where it was read and to edit or copy it |
 | Timeline › List | Year scrubber, homes, trips, statuses and address gaps (with "Add address") for the selected year |
 | Timeline › Map | Homes as numbered pins joined by moves; trips with a destination as arcs; the scrubber moves the camera |
 | Timeline › Overview | Swimlanes for homes, status, documents and trips, days abroad per year, and an "on this date" crosshair |

@@ -32,18 +32,6 @@ struct FolderAccessTests {
         return url
     }
 
-    @Test func listsPDFsAndPhotosInAFolderAndItsSubfolders() throws {
-        try withScratchStore { root in
-            let url = try makeFolder("Personal", in: root, files: ["Passport.pdf", "notes.txt", ".DS_Store"])
-            try makeFolder("Personal/Leases", in: root, files: ["Lease 2023.pdf"])
-            let listing = try FolderAccess.list(url)
-            #expect(listing.files.map(\.relativePath) == ["Leases/Lease 2023.pdf", "Passport.pdf"])
-            let allDownloaded = listing.files.allSatisfy(\.isDownloaded)
-            #expect(allDownloaded)
-            #expect(listing.unsupported == ["notes.txt"])
-        }
-    }
-
     @Test func bookmarksAFileSoItCanBeReadAgain() throws {
         try withScratchStore { root in
             let folder = try makeFolder("Personal", in: root, files: ["Passport.pdf"])

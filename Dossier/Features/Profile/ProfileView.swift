@@ -43,9 +43,11 @@ struct ProfileView: View {
         .task(id: documents.map { "\($0.persistentModelID.hashValue)\($0.stateRaw)" } + overrides.map { "\($0.keyRaw)\($0.editedAt)" }) {
             profile = Profile.build(documents: documents, overrides: overrides)
         }
+        // Numbers stay shown until you leave this screen or the app.
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { unlocked.lock() }
+            if phase == .background { unlocked.lock() }
         }
+        .onDisappear { unlocked.lock() }
         .sheet(item: $editing) { key in
             if let entry = profile.entry(key) {
                 ProfileEditSheet(entry: entry, profile: profile, unlocked: unlocked)
@@ -58,12 +60,11 @@ extension ProfileKey: Identifiable {
     var id: String { rawValue }
 }
 
-/// A Face ID context kept for 30 seconds, so several numbers can be shown after one look.
+/// A Face ID context kept while you're on the screen, so every number can be shown after one look.
 @Observable
 final class UnlockState {
     private(set) var context: LAContext?
     var error: String?
-    @ObservationIgnored private var lockTask: Task<Void, Never>?
 
     func unlock(then action: @escaping (LAContext) -> Void = { _ in }) {
         if let context {
@@ -75,12 +76,6 @@ final class UnlockState {
                 let context = try await Authenticator.authenticate(reason: "Reveal your document numbers")
                 self.context = context
                 action(context)
-                lockTask?.cancel()
-                lockTask = Task {
-                    try? await Task.sleep(for: .seconds(30))
-                    guard !Task.isCancelled else { return }
-                    lock()
-                }
             } catch {
                 self.error = error.localizedDescription
             }
@@ -88,7 +83,6 @@ final class UnlockState {
     }
 
     func lock() {
-        lockTask?.cancel()
         context = nil
     }
 }
