@@ -13,6 +13,10 @@ final class SourceDocument {
     /// Which of your folders the file is in (`FolderAccess.Folder.id`). Empty for documents you added by hand
     /// and for documents read before Dossier supported several folders.
     var folderID: String = ""
+    /// The file's size and modification date when it was read (0 and nil if unknown), so an unchanged file
+    /// can be recognised without downloading it again from iCloud.
+    var fileSize: Int = 0
+    var fileModifiedAt: Date?
     var kindRaw: String
     var title: String
     var ingestedAt: Date

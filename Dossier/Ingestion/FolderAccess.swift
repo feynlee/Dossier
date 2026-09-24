@@ -28,13 +28,21 @@ nonisolated struct FolderAccess: Sendable {
         /// Path inside its folder, such as "Immigration/I-797.pdf".
         var relativePath: String
         var folderID: UUID
+        /// False for a file that is in iCloud but not on this device yet.
+        var isDownloaded = true
+        /// Size and modification date, which iCloud reports even before a file is downloaded. Used to skip
+        /// files Dossier already read without downloading them again.
+        var size: Int?
+        var modified: Date?
+        /// Why iCloud couldn't download the file, if it tried and failed.
+        var downloadError: String?
     }
 
     struct Listing: Sendable {
+        /// PDFs and images, downloaded or not.
         var files: [FolderFile]
-        /// Files that are in iCloud but not downloaded yet. Dossier asks iCloud to download them and reads
-        /// them on the next scan.
-        var waitingForDownload: Int
+        /// Other files in the folder, which Dossier doesn't read (Word documents, spreadsheets…).
+        var unsupported: [String]
     }
 
     private struct SavedFolder: Codable {
@@ -129,41 +137,55 @@ nonisolated struct FolderAccess: Sendable {
 
     // MARK: Listing
 
-    /// Lists readable files in the folder and its subfolders, and starts downloads for iCloud placeholders.
+    /// Lists the PDFs and images in a folder and its subfolders, including iCloud files that aren't on this
+    /// device yet. Nothing is downloaded here: `requestDownload` does that, only for files Dossier needs.
     static func list(_ source: Folder) throws -> Listing {
         let folder = source.url
         let accessing = folder.startAccessingSecurityScopedResource()
         defer { if accessing { folder.stopAccessingSecurityScopedResource() } }
 
         var coordinationError: NSError?
-        var listing = Listing(files: [], waitingForDownload: 0)
+        var listing = Listing(files: [], unsupported: [])
         var enumerationError: Error?
         NSFileCoordinator().coordinate(readingItemAt: folder, options: .withoutChanges, error: &coordinationError) { url in
-            let keys: [URLResourceKey] = [.contentTypeKey, .isDirectoryKey, .ubiquitousItemDownloadingStatusKey]
+            let keys: [URLResourceKey] = [
+                .contentTypeKey, .isDirectoryKey, .fileSizeKey, .contentModificationDateKey,
+                .ubiquitousItemDownloadingStatusKey, .ubiquitousItemDownloadingErrorKey,
+            ]
             guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys, options: [.skipsPackageDescendants]) else {
                 return
             }
+            let root = url.standardizedFileURL.path
             for case let fileURL as URL in enumerator {
                 do {
                     let values = try fileURL.resourceValues(forKeys: Set(keys))
                     if values.isDirectory == true { continue }
 
-                    // iCloud placeholders look like ".Passport.pdf.icloud".
-                    if fileURL.pathExtension == "icloud" {
-                        try? FileManager.default.startDownloadingUbiquitousItem(at: fileURL)
-                        listing.waitingForDownload += 1
+                    // Older iCloud placeholders are hidden files named ".Passport.pdf.icloud".
+                    var name = fileURL.lastPathComponent
+                    let isLegacyPlaceholder = fileURL.pathExtension == "icloud" && name.hasPrefix(".")
+                    if isLegacyPlaceholder { name = String(name.dropFirst().dropLast(".icloud".count)) }
+                    if name.hasPrefix(".") { continue }
+
+                    let type = isLegacyPlaceholder ? UTType(filenameExtension: (name as NSString).pathExtension) : values.contentType
+                    guard let type, readableTypes.contains(where: { type.conforms(to: $0) }) else {
+                        listing.unsupported.append(name)
                         continue
                     }
-                    if let status = values.ubiquitousItemDownloadingStatus, status == .notDownloaded {
-                        try? FileManager.default.startDownloadingUbiquitousItem(at: fileURL)
-                        listing.waitingForDownload += 1
-                        continue
-                    }
-                    guard let type = values.contentType, readableTypes.contains(where: { type.conforms(to: $0) }) else { continue }
-                    let root = url.standardizedFileURL.path
-                    let path = fileURL.standardizedFileURL.path
-                    let relative = path.hasPrefix(root) ? String(path.dropFirst(root.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/")) : fileURL.lastPathComponent
-                    listing.files.append(FolderFile(url: fileURL, name: fileURL.lastPathComponent, relativePath: relative, folderID: source.id))
+
+                    let path = fileURL.deletingLastPathComponent().appending(path: name).standardizedFileURL.path
+                    let relative = path.hasPrefix(root) ? String(path.dropFirst(root.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/")) : name
+                    let status = values.ubiquitousItemDownloadingStatus
+                    listing.files.append(FolderFile(
+                        url: fileURL,
+                        name: name,
+                        relativePath: relative,
+                        folderID: source.id,
+                        isDownloaded: !isLegacyPlaceholder && status != .notDownloaded,
+                        size: values.fileSize,
+                        modified: values.contentModificationDate,
+                        downloadError: values.ubiquitousItemDownloadingError?.localizedDescription
+                    ))
                 } catch {
                     enumerationError = error
                 }
@@ -172,6 +194,13 @@ nonisolated struct FolderAccess: Sendable {
         if let error = coordinationError ?? (listing.files.isEmpty ? enumerationError as NSError? : nil) { throw error }
         listing.files.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         return listing
+    }
+
+    /// Asks iCloud to download a file. The download continues in the system even if Dossier is suspended.
+    static func requestDownload(_ file: FolderFile, in folder: URL) {
+        let accessing = folder.startAccessingSecurityScopedResource()
+        defer { if accessing { folder.stopAccessingSecurityScopedResource() } }
+        try? FileManager.default.startDownloadingUbiquitousItem(at: file.url)
     }
 
     /// Reads a file's bytes through file coordination, inside the folder's security scope.

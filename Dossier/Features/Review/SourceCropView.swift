@@ -37,9 +37,7 @@ struct SourceCropView: View {
     static func crop(relativePath: String, folderID: String, page: Int, rect: CGRect) async -> UIImage? {
         guard !relativePath.isEmpty,
               let data = try? FolderAccess.read(relativePath: relativePath, folderID: folderID),
-              let pages = try? PageReader.render(data, fileName: relativePath),
-              pages.indices.contains(page - 1) else { return nil }
-        let image = pages[page - 1]
+              let image = try? PageReader.renderPage(page - 1, of: data, fileName: relativePath) else { return nil }
         let width = CGFloat(image.width), height = CGFloat(image.height)
         // Pad around the line so the value is shown with a little of its surroundings.
         let padded = CGRect(

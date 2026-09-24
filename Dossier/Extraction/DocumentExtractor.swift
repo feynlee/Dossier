@@ -37,8 +37,10 @@ actor DocumentExtractor {
     private let onDevice = SystemLanguageModel.default
     private let logger = Logger(subsystem: "liziyue.Dossier", category: "Extraction")
 
-    /// The on-device model has an 8K context, so its OCR text is capped; PCC's 32K fits whole documents.
+    /// The on-device model has an 8K context, so its OCR text is capped. PCC's 32K tokens hold roughly 25 pages
+    /// of dense text, which covers leases and notices.
     private static let onDeviceTextLimit = 12_000
+    private static let privateCloudTextLimit = 90_000
 
     static let instructions = """
         You read personal documents for their owner: passports, US immigration cards and notices, driver's \
@@ -91,7 +93,7 @@ actor DocumentExtractor {
 
         let session = LanguageModelSession(model: pcc, instructions: Self.instructions)
         do {
-            return try await generate(in: session, pages: pages, attachImages: pcc.capabilities.contains(.vision), textLimit: nil)
+            return try await generate(in: session, pages: pages, attachImages: pcc.capabilities.contains(.vision), textLimit: Self.privateCloudTextLimit)
         } catch let error as PrivateCloudComputeLanguageModel.Error {
             logger.error("PCC error: \(String(describing: error), privacy: .public)")
             switch error {
@@ -129,7 +131,7 @@ actor DocumentExtractor {
         in session: LanguageModelSession,
         pages: [ReadPage],
         attachImages: Bool,
-        maxImages: Int = PageReader.maxPages,
+        maxImages: Int = PageReader.maxImagePages,
         textLimit: Int?
     ) async throws -> DocumentReading {
         var text = pages.enumerated()
@@ -141,9 +143,13 @@ actor DocumentExtractor {
             if attachImages {
                 "Read this document."
                 for (index, page) in pages.prefix(maxImages).enumerated() {
-                    Attachment(page.image, orientation: .up).label("page \(index + 1)")
+                    if let image = page.image {
+                        Attachment(image, orientation: .up).label("page \(index + 1)")
+                    }
                 }
-                "OCR text of the same pages:"
+                pages.count > maxImages
+                    ? "OCR text of all \(pages.count) pages (the images above show the first \(maxImages)):"
+                    : "OCR text of the same pages:"
             } else {
                 "Read this document from its OCR text:"
             }

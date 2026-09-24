@@ -6,7 +6,9 @@ import Vision
 
 /// One rendered page with what Vision read from it.
 nonisolated struct ReadPage: Sendable {
-    var image: CGImage
+    /// The rendered page, kept only for the first `PageReader.maxImagePages` pages (the ones sent to the model
+    /// as images). Later pages contribute their text only.
+    var image: CGImage?
     var lines: [String]
     /// Where each line sits on the page, normalized to 0–1 with a top-left origin. Parallel to `lines`.
     var boxes: [CGRect]
@@ -17,32 +19,49 @@ nonisolated struct ReadPage: Sendable {
 /// Renders a document's pages and reads them locally with Vision. The text is used to verify what Private
 /// Cloud Compute extracts, and is what gets sent to PCC if it can't take page images.
 nonisolated enum PageReader {
-    /// Enough for any ID card or passport scan and the first pages of a lease, while keeping requests small.
-    static let maxPages = 6
+    /// Pages whose text is read. Covers long leases and multi-page notices.
+    static let maxPages = 40
+    /// Pages also sent to the model as images: enough for any card, passport or notice's key pages, while
+    /// keeping requests small. Every page's text is sent.
+    static let maxImagePages = 6
     private static let maxPixelDimension: CGFloat = 2200
 
     @concurrent
     static func read(_ data: Data, fileName: String) async throws -> [ReadPage] {
         var pages: [ReadPage] = []
-        for image in try render(data, fileName: fileName) {
+        // One page at a time, so a 40-page lease never holds 40 full-size images in memory.
+        for index in 0..<(try pageCount(data, fileName: fileName)) {
+            guard let image = try renderPage(index, of: data, fileName: fileName) else { continue }
             async let text = recognizeText(in: image)
             async let barcodes = detectBarcodes(in: image)
             let (lines, boxes) = try await text
-            pages.append(ReadPage(image: image, lines: lines, boxes: boxes, barcodes: (try? await barcodes) ?? []))
+            pages.append(ReadPage(
+                image: index < maxImagePages ? image : nil,
+                lines: lines, boxes: boxes, barcodes: (try? await barcodes) ?? []
+            ))
         }
         return pages
     }
 
     // MARK: Rendering
 
-    static func render(_ data: Data, fileName: String) throws -> [CGImage] {
-        if fileName.lowercased().hasSuffix(".pdf") || data.starts(with: Data("%PDF".utf8)) {
+    private static func isPDF(_ data: Data, fileName: String) -> Bool {
+        fileName.lowercased().hasSuffix(".pdf") || data.starts(with: Data("%PDF".utf8))
+    }
+
+    static func pageCount(_ data: Data, fileName: String) throws -> Int {
+        guard isPDF(data, fileName: fileName) else { return 1 }
+        guard let document = PDFDocument(data: data) else { throw CocoaError(.fileReadCorruptFile) }
+        return min(document.pageCount, maxPages)
+    }
+
+    /// Renders one page (0-based). Images have a single page.
+    static func renderPage(_ index: Int, of data: Data, fileName: String) throws -> CGImage? {
+        if isPDF(data, fileName: fileName) {
             guard let document = PDFDocument(data: data) else { throw CocoaError(.fileReadCorruptFile) }
-            return (0..<min(document.pageCount, maxPages)).compactMap { index in
-                document.page(at: index).flatMap(renderPDFPage)
-            }
+            return document.page(at: index).flatMap(renderPDFPage)
         }
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { throw CocoaError(.fileReadCorruptFile) }
+        guard index == 0, let source = CGImageSourceCreateWithData(data as CFData, nil) else { throw CocoaError(.fileReadCorruptFile) }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -51,7 +70,7 @@ nonisolated enum PageReader {
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        return [image]
+        return image
     }
 
     private static func renderPDFPage(_ page: PDFPage) -> CGImage? {

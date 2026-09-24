@@ -16,6 +16,8 @@ final class ImportCoordinator {
 
     private(set) var phase = Phase.idle
     private(set) var waitingForDownload = 0
+    /// Files in your folders that aren't PDFs or images, from the last check.
+    private(set) var unsupportedFiles: [String] = []
     /// File name → why it couldn't be read, for the last run.
     private(set) var failures: [String: String] = [:]
     private(set) var lastEngine: ExtractionEngine?
@@ -33,9 +35,11 @@ final class ImportCoordinator {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let logger = Logger(subsystem: "liziyue.Dossier", category: "Import")
 
-    /// How often, and for how long, to look again while iCloud is still downloading files.
-    static let downloadRecheckInterval: Duration = .seconds(15)
-    static let downloadRechecks = 20
+    /// How often to look again while iCloud is still downloading files: every 15 seconds for the first five
+    /// minutes, then every minute until everything has arrived. Checks also run each time the app opens.
+    static func recheckDelay(after rechecks: Int) -> Duration {
+        rechecks < 20 ? .seconds(15) : .seconds(60)
+    }
 
     func start(context: ModelContext, preferPrivateCloud: Bool) {
         guard !isRunning else { return }
@@ -45,8 +49,8 @@ final class ImportCoordinator {
             // Files in an iCloud folder that weren't on the device were asked to download. Look again until
             // they arrive, so you don't have to tap "Check for new documents" yourself.
             var rechecks = 0
-            while waitingForDownload > 0, rechecks < Self.downloadRechecks, !Task.isCancelled {
-                try? await Task.sleep(for: Self.downloadRecheckInterval)
+            while waitingForDownload > 0, !Task.isCancelled {
+                try? await Task.sleep(for: Self.recheckDelay(after: rechecks))
                 guard !Task.isCancelled else { return }
                 rechecks += 1
                 await run(context: context, preferPrivateCloud: preferPrivateCloud)
@@ -74,34 +78,64 @@ final class ImportCoordinator {
 
         phase = .listing
         var files: [(folder: FolderAccess.Folder, file: FolderAccess.FolderFile)] = []
-        var waiting = 0
+        var unsupported: [String] = []
         for folder in folders {
             do {
                 let listing = try await Self.list(folder)
                 files += listing.files.map { (folder, $0) }
-                waiting += listing.waitingForDownload
+                unsupported += listing.unsupported
             } catch {
                 failures[folder.name] = "The folder couldn’t be opened: \(error.localizedDescription)"
             }
         }
+        unsupportedFiles = unsupported.sorted()
+
+        let documents = (try? context.fetch(FetchDescriptor<SourceDocument>())) ?? []
+        var byHash = Dictionary(documents.map { ($0.contentHash, $0) }, uniquingKeysWith: { first, _ in first })
+        var known: [String: KnownFile] = [:]
+        for document in documents where !document.relativePath.isEmpty {
+            known[ImportPlan.key(folderID: document.folderID, relativePath: document.relativePath)] =
+                KnownFile(size: document.fileSize > 0 ? document.fileSize : nil, modified: document.fileModifiedAt)
+        }
+
+        // Decide first, so downloads start right away and progress counts only files to read.
+        var toRead: [(folder: FolderAccess.Folder, file: FolderAccess.FolderFile)] = []
+        var waiting = 0
+        for entry in files {
+            switch ImportPlan.decide(entry.file, known: known) {
+            case .skip:
+                continue
+            case .download:
+                await Self.requestDownload(entry.file, in: entry.folder.url)
+                waiting += 1
+            case .downloadFailed(let reason):
+                failures[entry.file.name] = "iCloud couldn’t download it: \(reason)"
+            case .read:
+                toRead.append(entry)
+            }
+        }
         waitingForDownload = waiting
 
-        let known = Set((try? context.fetch(FetchDescriptor<SourceDocument>()))?.map(\.contentHash) ?? [])
-        var seen = Set<String>()
         var added = 0
-        for (index, entry) in files.enumerated() {
+        for (index, entry) in toRead.enumerated() {
             if Task.isCancelled { return }
             let file = entry.file
-            phase = .reading(done: index, total: files.count)
+            phase = .reading(done: index, total: toRead.count)
             do {
                 let loaded = try await Self.load(file, in: entry.folder.url)
-                // The same file in two folders (or a folder inside another) is read once.
-                guard !known.contains(loaded.hash), seen.insert(loaded.hash).inserted else { continue }
+                if let existing = byHash[loaded.hash] {
+                    // Already read (moved, renamed, or read by an earlier version): remember where it is now so
+                    // the next check can skip it without downloading.
+                    remember(file, on: existing)
+                    try? context.save()
+                    continue
+                }
                 let pages = try await PageReader.read(loaded.data, fileName: file.name)
                 guard !pages.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
                 let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud)
                 lastEngine = engine
-                try save(reading, engine: engine, pages: pages, file: file, hash: loaded.hash, in: context)
+                let document = try save(reading, engine: engine, pages: pages, file: file, hash: loaded.hash, in: context)
+                byHash[loaded.hash] = document
                 added += 1
             } catch {
                 logger.error("Couldn't read \(file.name, privacy: .private): \(error.localizedDescription, privacy: .public)")
@@ -113,7 +147,15 @@ final class ImportCoordinator {
 
     // MARK: Saving
 
-    private func save(_ reading: DocumentReading, engine: ExtractionEngine, pages: [ReadPage], file: FolderAccess.FolderFile, hash: String, in context: ModelContext) throws {
+    private func remember(_ file: FolderAccess.FolderFile, on document: SourceDocument) {
+        document.folderID = file.folderID.uuidString
+        document.relativePath = file.relativePath
+        document.fileSize = file.size ?? 0
+        document.fileModifiedAt = file.modified
+    }
+
+    @discardableResult
+    private func save(_ reading: DocumentReading, engine: ExtractionEngine, pages: [ReadPage], file: FolderAccess.FolderFile, hash: String, in context: ModelContext) throws -> SourceDocument {
         let pageLines = pages.map(\.lines)
         let mrz = MRZParser.find(in: pageLines.flatMap { $0 })
         let license = pages.flatMap(\.barcodes).lazy.compactMap(AAMVAParser.parse).first
@@ -130,6 +172,7 @@ final class ImportCoordinator {
             contentHash: hash, fileName: file.name, relativePath: file.relativePath, folderID: file.folderID.uuidString,
             kind: kind, title: title, engine: engine, pageCount: pages.count
         )
+        remember(file, on: document)
         context.insert(document)
 
         // Lines that show a sensitive number: their text isn't stored and their crop needs Face ID.
@@ -169,6 +212,7 @@ final class ImportCoordinator {
             context.insert(event)
         }
         try context.save()
+        return document
     }
 
     /// Documents read before Dossier supported several folders have no folder. With exactly one folder they
@@ -188,6 +232,11 @@ final class ImportCoordinator {
     @concurrent
     private static func list(_ folder: FolderAccess.Folder) async throws -> FolderAccess.Listing {
         try FolderAccess.list(folder)
+    }
+
+    @concurrent
+    private static func requestDownload(_ file: FolderAccess.FolderFile, in folder: URL) async {
+        FolderAccess.requestDownload(file, in: folder)
     }
 
     @concurrent

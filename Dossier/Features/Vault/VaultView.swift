@@ -145,7 +145,7 @@ private struct ImportStatusSection: View {
                 }
             }
         case .finished, .idle:
-            if importer.waitingForDownload > 0 || !importer.failures.isEmpty || importer.errorMessage != nil {
+            if importer.waitingForDownload > 0 || !importer.failures.isEmpty || importer.errorMessage != nil || !importer.unsupportedFiles.isEmpty {
                 Section {
                     if let message = importer.errorMessage {
                         Label(message, systemImage: "exclamationmark.triangle")
@@ -157,6 +157,15 @@ private struct ImportStatusSection: View {
                                 : "\(importer.waitingForDownload) files are downloading from iCloud. Dossier reads them when they arrive.",
                             systemImage: "icloud.and.arrow.down"
                         )
+                    }
+                    if !importer.unsupportedFiles.isEmpty {
+                        let count = importer.unsupportedFiles.count
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(count == 1 ? "1 file isn’t a PDF or image" : "\(count) files aren’t PDFs or images", systemImage: "doc.questionmark")
+                            Text("Dossier reads PDFs and photos. Skipped: \(importer.unsupportedFiles.prefix(3).joined(separator: ", "))\(count > 3 ? " and \(count - 3) more" : "").")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     ForEach(importer.failures.sorted(by: { $0.key < $1.key }), id: \.key) { name, reason in
                         VStack(alignment: .leading) {

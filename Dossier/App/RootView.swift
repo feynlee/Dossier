@@ -30,6 +30,7 @@ struct RootView: View {
 
 struct MainTabView: View {
     @Binding var hasOnboarded: Bool
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
@@ -49,8 +50,10 @@ struct MainTabView: View {
                 SettingsView(hasOnboarded: $hasOnboarded)
             }
         }
-        .task {
-            importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
+        // Check the folders each time the app opens, so iCloud files that finished downloading while it was
+        // in the background are read.
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud) }
         }
     }
 }
