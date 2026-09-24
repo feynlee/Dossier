@@ -1,19 +1,10 @@
-import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
-    /// Shows the (now empty) vault after everything was removed.
-    var showVault: () -> Void = {}
-
-    @Environment(ImportCoordinator.self) private var importer
-    @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
     @Environment(AppLock.self) private var appLock
     @State private var lockEnabled = true
     @State private var lockTimeout = AppLockPolicy.defaultTimeout
-    @State private var confirmReread = false
-    @State private var confirmDelete = false
-    @Query private var documents: [SourceDocument]
     @State private var privateCloudStatus: String?
 
     var body: some View {
@@ -50,41 +41,13 @@ struct SettingsView: View {
                         : "Anyone who can open your unlocked iPhone can open Dossier. Numbers still need \(AppLock.methodName) to reveal.")
                 }
 
-                Section("Privacy") {
+                Section {
                     TileRow(symbol: "faceid", badge: nil, title: "Face ID for numbers", subtitle: "Document numbers are encrypted to a key that only Face ID unlocks.")
                     TileRow(symbol: "lock", badge: nil, title: "Stays on this iPhone", subtitle: "Not included in iCloud or device backups.")
-                }
-
-                Section {
-                    Button("Re-read All Documents") { confirmReread = true }
-                        .disabled(importer.isRunning || documents.isEmpty)
-                        .confirmationDialog("Re-read all documents?", isPresented: $confirmReread, titleVisibility: .visible) {
-                            Button("Re-read") {
-                                let documents = (try? modelContext.fetch(FetchDescriptor<SourceDocument>())) ?? []
-                                for document in documents where document.bookmark != nil { document.state = .queued }
-                                try? modelContext.save()
-                                importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud)
-                            }
-                        } message: {
-                            Text("Each document is read again from its file and its facts replaced. Facts you confirmed will need confirming again.")
-                        }
-                    Button("Remove All Documents", role: .destructive) { confirmDelete = true }
-                        .disabled(documents.isEmpty)
-                        .confirmationDialog(
-                            documents.count == 1 ? "Remove your document?" : "Remove all \(documents.count) documents?",
-                            isPresented: $confirmDelete, titleVisibility: .visible
-                        ) {
-                            Button("Remove All Documents", role: .destructive) {
-                                importer.removeAll(context: modelContext)
-                                showVault()
-                            }
-                        } message: {
-                            Text("Dossier forgets everything it read, your edits and your timeline, and deletes its encryption keys. Your files aren’t deleted, so you can add them again.")
-                        }
                 } header: {
-                    Text("Documents")
+                    Text("Privacy")
                 } footer: {
-                    Text("To remove one document, swipe it in the Vault or use Select. Dossier has no analytics and doesn’t collect data. Your original files are never changed.")
+                    Text("Dossier has no analytics and doesn’t collect data. Your original files are never changed.")
                 }
             }
             .navigationTitle("Settings")

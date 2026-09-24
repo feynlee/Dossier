@@ -64,8 +64,16 @@ final class ImportCoordinator {
 
     /// Reads a document again from its file.
     func reread(_ document: SourceDocument, context: ModelContext, preferPrivateCloud: Bool) {
-        document.state = .queued
-        document.failureReason = nil
+        reread([document], context: context, preferPrivateCloud: preferPrivateCloud)
+    }
+
+    /// Reads documents again from their files, replacing what was read. Facts you confirmed need confirming
+    /// again.
+    func reread(_ documents: [SourceDocument], context: ModelContext, preferPrivateCloud: Bool) {
+        for document in documents where document.bookmark != nil {
+            document.state = .queued
+            document.failureReason = nil
+        }
         try? context.save()
         start(context: context, preferPrivateCloud: preferPrivateCloud)
     }

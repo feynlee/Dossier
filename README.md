@@ -20,8 +20,8 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | Forms | Choose a fillable PDF, match its fields to your facts, fill with Face ID for numbers, save a copy |
 | Siri and Shortcuts | "What's my passport number in Dossier", expiry dates, "Where did I live", days abroad |
 | App lock | Face ID (passcode fallback) on launch, when the iPhone locks, and after 1 minute in the background (Immediately, 1, 5 or 15 minutes in Settings). The lock covers open sheets too |
-| Removing documents | Swipe a document, touch and hold it, use Select (Select All) in the Vault, or Remove from Vault on its page. Removing forgets what was read; the file itself is never deleted. A file waiting on a removed document becomes a document of its own |
-| Settings | App lock, Private Cloud Compute on/off, re-read everything, Remove All Documents (documents, edits, timeline and keys), which opens the empty Vault to add files again |
+| Managing documents | All in the Vault. One document: swipe, touch and hold, or the ••• menu on its page (Read Again, Remove from Vault). Several: ••• › Select, then Read Again or Remove in the bottom bar. All: ••• › Read All Again or Remove All Documents (documents, edits, timeline and keys), which leaves the empty Vault ready to add files again. Removing never deletes the file itself |
+| Settings | Preferences only: Private Cloud Compute on/off, app lock and its timeout |
 
 ## Layout
 

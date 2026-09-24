@@ -14,6 +14,11 @@ struct VaultView: View {
     @State private var profile = Profile(entries: [])
     /// Documents waiting for you to confirm removing them.
     @State private var removing: [SourceDocument] = []
+    /// Set from the More menu: every document, to remove or read again.
+    @State private var removingAll: [SourceDocument] = []
+    @State private var removingSelected: [SourceDocument] = []
+    @State private var rereading: [SourceDocument] = []
+    @State private var rereadingSelected: [SourceDocument] = []
     @State private var editMode: EditMode = .inactive
     @State private var selection = Set<PersistentIdentifier>()
 
@@ -122,23 +127,29 @@ struct VaultView: View {
                         Button("Done") { endSelecting() }
                     }
                     ToolbarItem(placement: .bottomBar) {
-                        Button("Remove", systemImage: "trash", role: .destructive) {
-                            removing = documents.filter { selection.contains($0.persistentModelID) }
-                        }
-                        .disabled(selection.isEmpty)
+                        Button("Read Again", systemImage: "arrow.clockwise") { rereadingSelected = selected }
+                            .disabled(selection.isEmpty || importer.isRunning)
+                            .rereadDocuments($rereadingSelected) { endSelecting() }
+                    }
+                    ToolbarSpacer(.flexible, placement: .bottomBar)
+                    ToolbarItem(placement: .bottomBar) {
+                        Button("Remove", systemImage: "trash", role: .destructive) { removingSelected = selected }
+                            .tint(.red)
+                            .disabled(selection.isEmpty)
+                            .removeDocuments($removingSelected) { endSelecting() }
                     }
                 } else {
-                    if !documents.isEmpty {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Select") { withAnimation { editMode = .active } }
-                        }
-                    }
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
-                            Button("Add documents", systemImage: "doc.badge.plus") { isPickingFiles = true }
-                            Button("Choose from a folder", systemImage: "folder") { isPickingFolder = true }
+                            Button("Add Documents", systemImage: "doc.badge.plus") { isPickingFiles = true }
+                            Button("Choose from a Folder", systemImage: "folder") { isPickingFolder = true }
                         } label: {
                             Label("Add", systemImage: "plus")
+                        }
+                    }
+                    if !documents.isEmpty {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            moreMenu
                         }
                     }
                 }
@@ -153,6 +164,26 @@ struct VaultView: View {
                 profile = Profile.build(documents: documents, overrides: overrides)
             }
         }
+    }
+
+    private var selected: [SourceDocument] {
+        documents.filter { selection.contains($0.persistentModelID) }
+    }
+
+    /// Actions on documents as a group. One-document actions are on the row (swipe, or touch and hold) and on
+    /// the document's page.
+    private var moreMenu: some View {
+        Menu {
+            Button("Select", systemImage: "checkmark.circle") { withAnimation { editMode = .active } }
+            Button("Read All Again", systemImage: "arrow.clockwise") { rereading = documents }
+                .disabled(importer.isRunning)
+            Divider()
+            Button("Remove All Documents", systemImage: "trash", role: .destructive) { removingAll = documents }
+        } label: {
+            Label("More", systemImage: "ellipsis")
+        }
+        .rereadDocuments($rereading)
+        .removeDocuments($removingAll)
     }
 
     private var selectionTitle: String {

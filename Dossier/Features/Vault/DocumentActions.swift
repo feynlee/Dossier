@@ -2,6 +2,11 @@ import SwiftData
 import SwiftUI
 
 extension View {
+    /// Asks before reading documents again, then queues them.
+    func rereadDocuments(_ documents: Binding<[SourceDocument]>, onReread: @escaping () -> Void = {}) -> some View {
+        modifier(RereadDocumentsModifier(documents: documents, onReread: onReread))
+    }
+
     /// Asks before removing documents from the vault, then removes them. Removing every document also removes
     /// your edits and the encryption keys, like "Remove all documents" in Settings.
     /// Pass `leavingScreen` from a screen that shows the document, so it closes before the document goes.
@@ -24,7 +29,8 @@ private struct RemoveDocumentsModifier: ViewModifier {
     private var removesEverything: Bool { !all.isEmpty && documents.count >= all.count }
 
     private var title: String {
-        documents.count == 1 ? "Remove “\(documents[0].title)”?" : "Remove \(documents.count) documents?"
+        if documents.count == 1 { return "Remove “\(documents[0].title)”?" }
+        return removesEverything ? "Remove all \(documents.count) documents?" : "Remove \(documents.count) documents?"
     }
 
     func body(content: Content) -> some View {
@@ -62,6 +68,31 @@ private struct RemoveDocumentsModifier: ViewModifier {
             importer.remove(removed, context: modelContext, preferPrivateCloud: usePrivateCloud)
         }
         onRemove()
+    }
+}
+
+private struct RereadDocumentsModifier: ViewModifier {
+    @Binding var documents: [SourceDocument]
+    let onReread: () -> Void
+
+    @Environment(ImportCoordinator.self) private var importer
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            documents.count == 1 ? "Read “\(documents.first?.title ?? "")” again?" : "Read \(documents.count) documents again?",
+            isPresented: Binding(get: { !documents.isEmpty }, set: { if !$0 { documents = [] } }),
+            titleVisibility: .visible
+        ) {
+            Button("Read Again") {
+                importer.reread(documents, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                documents = []
+                onReread()
+            }
+        } message: {
+            Text("Each file is read again and what Dossier read before is replaced. Fields you confirmed will need confirming again. Your edits to personal information stay.")
+        }
     }
 }
 

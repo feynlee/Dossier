@@ -53,28 +53,24 @@ struct RootView: View {
 }
 
 struct MainTabView: View {
-    enum TabID { case vault, timeline, forms, settings }
-
-    @State private var tab = TabID.vault
     @Environment(\.scenePhase) private var scenePhase
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
 
     var body: some View {
-        TabView(selection: $tab) {
-            Tab("Vault", systemImage: "person.text.rectangle", value: .vault) {
+        TabView {
+            Tab("Vault", systemImage: "person.text.rectangle") {
                 VaultView()
             }
-            Tab("Timeline", systemImage: "clock", value: .timeline) {
+            Tab("Timeline", systemImage: "clock") {
                 TimelineView()
             }
-            Tab("Forms", systemImage: "doc.text", value: .forms) {
+            Tab("Forms", systemImage: "doc.text") {
                 FormsView()
             }
-            Tab("Settings", systemImage: "gearshape", value: .settings) {
-                // After removing everything, the empty vault is where you add files again.
-                SettingsView { tab = .vault }
+            Tab("Settings", systemImage: "gearshape") {
+                SettingsView()
             }
         }
         // Each time the app opens, read files that finished downloading from iCloud or changed since.
