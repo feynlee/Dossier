@@ -15,7 +15,7 @@ struct RootView: View {
         Group {
             // A vault with documents (or folders from an earlier version) never shows onboarding again.
             if isSetUp {
-                MainTabView(hasOnboarded: $hasOnboarded)
+                MainTabView()
             } else {
                 OnboardingView { hasOnboarded = true }
             }
@@ -53,25 +53,28 @@ struct RootView: View {
 }
 
 struct MainTabView: View {
-    @Binding var hasOnboarded: Bool
+    enum TabID { case vault, timeline, forms, settings }
+
+    @State private var tab = TabID.vault
     @Environment(\.scenePhase) private var scenePhase
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
 
     var body: some View {
-        TabView {
-            Tab("Vault", systemImage: "person.text.rectangle") {
+        TabView(selection: $tab) {
+            Tab("Vault", systemImage: "person.text.rectangle", value: .vault) {
                 VaultView()
             }
-            Tab("Timeline", systemImage: "clock") {
+            Tab("Timeline", systemImage: "clock", value: .timeline) {
                 TimelineView()
             }
-            Tab("Forms", systemImage: "doc.text") {
+            Tab("Forms", systemImage: "doc.text", value: .forms) {
                 FormsView()
             }
-            Tab("Settings", systemImage: "gearshape") {
-                SettingsView(hasOnboarded: $hasOnboarded)
+            Tab("Settings", systemImage: "gearshape", value: .settings) {
+                // After removing everything, the empty vault is where you add files again.
+                SettingsView { tab = .vault }
             }
         }
         // Each time the app opens, read files that finished downloading from iCloud or changed since.

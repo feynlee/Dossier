@@ -38,7 +38,9 @@ struct Profile {
     // MARK: Building
 
     static func build(documents: [SourceDocument], overrides: [ProfileOverride], timeline: LifeTimeline? = nil) -> Profile {
-        let ready = documents.filter(\.isReady)
+        // Built in a task, so a document may have been removed since: skip those.
+        let ready = documents.filter { !$0.isGone && $0.isReady }
+        let overrides = overrides.filter { !$0.isDeleted && $0.modelContext != nil }
         let overridesByKey = Dictionary(overrides.map { ($0.keyRaw, $0) }, uniquingKeysWith: { first, _ in first })
         var factsByID: [String: Fact] = [:]
         var entries: [Entry] = []

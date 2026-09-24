@@ -12,7 +12,12 @@ struct VaultView: View {
     @State private var isPickingFiles = false
     @State private var isPickingFolder = false
     @State private var profile = Profile(entries: [])
-    @State private var removing: SourceDocument?
+    /// Documents waiting for you to confirm removing them.
+    @State private var removing: [SourceDocument] = []
+    @State private var editMode: EditMode = .inactive
+    @State private var selection = Set<PersistentIdentifier>()
+
+    private var isSelecting: Bool { editMode.isEditing }
 
     private var reviewCount: Int {
         documents.filter(\.isReady).reduce(0) { $0 + $1.facts.filter { $0.status == .needsReview }.count } + profile.conflicts.count
@@ -29,8 +34,8 @@ struct VaultView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if searchText.isEmpty, documents.contains(where: \.isReady) {
+            List(selection: $selection) {
+                if searchText.isEmpty, !isSelecting, documents.contains(where: \.isReady) {
                     Section {
                         NavigationLink {
                             ProfileView()
@@ -40,11 +45,11 @@ struct VaultView: View {
                     }
                 }
 
-                if searchText.isEmpty {
+                if searchText.isEmpty, !isSelecting {
                     AttentionSection(documents: documents)
                 }
 
-                if reviewCount > 0, searchText.isEmpty {
+                if reviewCount > 0, searchText.isEmpty, !isSelecting {
                     Section {
                         NavigationLink {
                             ReviewView()
@@ -59,60 +64,105 @@ struct VaultView: View {
                     }
                 }
 
-                ImportStatusSection()
+                if !isSelecting {
+                    ImportStatusSection()
+                }
 
-                Section("Documents") {
-                    if documents.isEmpty {
-                        Button("Add documents", systemImage: "doc.badge.plus") { isPickingFiles = true }
-                        Button("Choose from a folder", systemImage: "folder") { isPickingFolder = true }
-                    } else if filtered.isEmpty {
-                        Text("No matches.").foregroundStyle(.secondary)
+                if documents.isEmpty {
+                    Section {
+                        EmptyVault(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder)
                     }
-                    ForEach(filtered) { document in
-                        NavigationLink(value: document) {
-                            DocumentRow(document: document)
+                    .listRowBackground(Color.clear)
+                } else {
+                    Section {
+                        if filtered.isEmpty {
+                            Text("No matches.").foregroundStyle(.secondary)
                         }
-                        .swipeActions {
-                            Button("Remove", systemImage: "trash", role: .destructive) { removing = document }
-                                .tint(.red)
-                            Button("Read again", systemImage: "arrow.clockwise") {
-                                importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                        ForEach(filtered) { document in
+                            NavigationLink(value: document) {
+                                DocumentRow(document: document)
                             }
-                            .tint(Color.dsTintFill)
+                            .tag(document.persistentModelID)
+                            .swipeActions {
+                                Button("Remove", systemImage: "trash", role: .destructive) { removing = [document] }
+                                    .tint(.red)
+                                Button("Read again", systemImage: "arrow.clockwise") {
+                                    importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                                }
+                                .tint(Color.dsTintFill)
+                            }
+                            .contextMenu {
+                                Button("Read again", systemImage: "arrow.clockwise") {
+                                    importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                                }
+                                Button("Remove from Vault", systemImage: "trash", role: .destructive) { removing = [document] }
+                            }
+                        }
+                    } header: {
+                        Text("Documents")
+                    } footer: {
+                        if isSelecting {
+                            Text("Removing a document deletes what Dossier read from it. The file stays where it is, so you can add it again.")
                         }
                     }
                 }
             }
-            .navigationTitle("Vault")
+            .environment(\.editMode, $editMode)
+            .navigationTitle(isSelecting ? selectionTitle : "Vault")
             .navigationDestination(for: SourceDocument.self) { DocumentDetailView(document: $0) }
             .searchable(text: $searchText, prompt: "Search")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button("Add documents", systemImage: "doc.badge.plus") { isPickingFiles = true }
-                        Button("Choose from a folder", systemImage: "folder") { isPickingFolder = true }
-                    } label: {
-                        Label("Add", systemImage: "plus")
+                if isSelecting {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(selection.count == filtered.count ? "Deselect All" : "Select All") {
+                            selection = selection.count == filtered.count ? [] : Set(filtered.map(\.persistentModelID))
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { endSelecting() }
+                    }
+                    ToolbarItem(placement: .bottomBar) {
+                        Button("Remove", systemImage: "trash", role: .destructive) {
+                            removing = documents.filter { selection.contains($0.persistentModelID) }
+                        }
+                        .disabled(selection.isEmpty)
+                    }
+                } else {
+                    if !documents.isEmpty {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Select") { withAnimation { editMode = .active } }
+                        }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Menu {
+                            Button("Add documents", systemImage: "doc.badge.plus") { isPickingFiles = true }
+                            Button("Choose from a folder", systemImage: "folder") { isPickingFolder = true }
+                        } label: {
+                            Label("Add", systemImage: "plus")
+                        }
                     }
                 }
             }
+            .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
             .addDocuments(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder)
-            .confirmationDialog(
-                "Remove “\(removing?.title ?? "")”?",
-                isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
-                titleVisibility: .visible,
-                presenting: removing
-            ) { document in
-                Button("Remove from vault", role: .destructive) {
-                    modelContext.delete(document)
-                    try? modelContext.save()
-                }
-            } message: { _ in
-                Text("Dossier forgets what it read from this document. The file itself isn’t changed.")
+            .removeDocuments($removing) { endSelecting() }
+            .onChange(of: documents.count) { _, count in
+                if count == 0 { endSelecting() }
             }
             .task(id: documents.map { "\($0.persistentModelID.hashValue)\($0.stateRaw)" } + overrides.map { "\($0.keyRaw)\($0.editedAt)" }) {
                 profile = Profile.build(documents: documents, overrides: overrides)
             }
+        }
+    }
+
+    private var selectionTitle: String {
+        selection.isEmpty ? "Select documents" : selection.count == 1 ? "1 selected" : "\(selection.count) selected"
+    }
+
+    private func endSelecting() {
+        withAnimation {
+            editMode = .inactive
+            selection = []
         }
     }
 

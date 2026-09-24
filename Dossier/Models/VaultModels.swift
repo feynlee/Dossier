@@ -76,6 +76,9 @@ final class SourceDocument {
 
     var isReady: Bool { state == .ready }
 
+    /// Removed from the vault (deleted, or deleted and saved).
+    var isGone: Bool { isDeleted || modelContext == nil }
+
     var decision: DocumentMatch? {
         switch decisionRaw {
         case "duplicate": .duplicate

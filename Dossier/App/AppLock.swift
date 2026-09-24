@@ -39,6 +39,7 @@ final class AppLock {
     @ObservationIgnored private var backgroundedAt: ContinuousClock.Instant?
     /// Set when you cancel the prompt, so it isn't shown again until you tap Unlock.
     @ObservationIgnored private var declined = false
+    @ObservationIgnored private var lockWatch: UIBackgroundTaskIdentifier = .invalid
 
     var isEnabled: Bool {
         get { UserDefaults.standard.object(forKey: AppLockPolicy.enabledKey) as? Bool ?? true }
@@ -59,6 +60,26 @@ final class AppLock {
 
     func didEnterBackground() {
         backgroundedAt = .now
+        watchForDeviceLock()
+    }
+
+    /// iOS reports that the iPhone locked about 10 seconds after it does, when file protection closes. Stay
+    /// awake a little longer than that, so pressing the side button with Dossier open still locks it.
+    private func watchForDeviceLock() {
+        guard isEnabled, lockWatch == .invalid else { return }
+        lockWatch = UIApplication.shared.beginBackgroundTask(withName: "Watch for iPhone lock") { [weak self] in
+            self?.endLockWatch()
+        }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            self?.endLockWatch()
+        }
+    }
+
+    private func endLockWatch() {
+        guard lockWatch != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(lockWatch)
+        lockWatch = .invalid
     }
 
     func didBecomeActive() {
@@ -67,6 +88,7 @@ final class AppLock {
             declined = false
         }
         backgroundedAt = nil
+        endLockWatch()
         if isLocked, !declined, !isAuthenticating {
             Task { await unlock() }
         }

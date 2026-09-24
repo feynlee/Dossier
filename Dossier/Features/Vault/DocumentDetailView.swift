@@ -19,6 +19,7 @@ struct DocumentDetailView: View {
     @State private var draft = ""
     @State private var showingMissing = false
     @State private var showingDecision = false
+    @State private var removing: [SourceDocument] = []
 
     private var facts: [Fact] {
         document.facts.filter { $0.status != .superseded }.sorted { $0.key.sortOrder < $1.key.sortOrder }
@@ -66,6 +67,20 @@ struct DocumentDetailView: View {
             if editing?.key.isDate == true { Text("Use the format YYYY-MM-DD.") }
         }
         .sensoryFeedback(.success, trigger: copied)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button("Read Again", systemImage: "arrow.clockwise") {
+                        importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                    }
+                    Divider()
+                    Button("Remove from Vault", systemImage: "trash", role: .destructive) { removing = [document] }
+                } label: {
+                    Label("More", systemImage: "ellipsis")
+                }
+            }
+        }
+        .removeDocuments($removing, leavingScreen: true)
         .sheet(isPresented: $showingMissing) { MissingSourceSheet(document: document) }
         .sheet(isPresented: $showingDecision) { DocumentDecisionSheet(document: document) }
     }
@@ -124,6 +139,13 @@ struct DocumentDetailView: View {
                 Button("Read again", systemImage: "arrow.clockwise") {
                     importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
                 }
+            }
+
+            Section {
+                Button("Remove from Vault", role: .destructive) { removing = [document] }
+                    .frame(maxWidth: .infinity)
+            } footer: {
+                Text("Dossier forgets what it read from this file. The file itself isn’t deleted.")
             }
         }
     }

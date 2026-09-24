@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 import UIKit
 @testable import Dossier
@@ -220,5 +221,55 @@ struct DocumentIdentityTests {
         let resolved = try #require(FileAccess.resolve(bookmark))
         #expect(resolved.url.lastPathComponent == "Passport renamed.pdf")
         #expect(FileAccess.exists(resolved.url))
+    }
+}
+
+@MainActor
+struct RemovingTests {
+    func context() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        return ModelContext(container)
+    }
+
+    func document(_ hash: String, state: DocumentState = .ready, in context: ModelContext) -> SourceDocument {
+        let document = SourceDocument(contentHash: hash, fileName: "\(hash).pdf", kind: .passport, title: hash, engine: .privateCloudCompute, pageCount: 1)
+        document.state = state
+        context.insert(document)
+        return document
+    }
+
+    @Test func removingTheOldVersionKeepsTheUpdateAsItsOwnDocument() throws {
+        let context = try context()
+        let old = document("old", in: context)
+        let update = document("new", state: .awaitingDecision, in: context)
+        update.decisionRaw = "update"
+        update.relatedHash = "old"
+        let other = document("other", in: context)
+        try context.save()
+
+        ImportCoordinator().remove([old], context: context, preferPrivateCloud: true)
+
+        let left = try context.fetch(FetchDescriptor<SourceDocument>()).map(\.contentHash).sorted()
+        #expect(left == ["new", "other"])
+        #expect(update.state == .ready)
+        #expect(update.relatedHash == nil)
+        #expect(other.state == .ready)
+    }
+
+    @Test func removingEverythingAlsoRemovesEdits() throws {
+        let context = try context()
+        _ = document("a", in: context)
+        _ = document("b", in: context)
+        context.insert(ProfileOverride(key: "surname", sealedValue: Data([1]), isSensitive: false))
+        try context.save()
+
+        // Not `removeAll`, which also destroys the app's Keychain keys.
+        ImportCoordinator.deleteAllRecords(context: context)
+
+        #expect(try context.fetchCount(FetchDescriptor<SourceDocument>()) == 0)
+        #expect(try context.fetchCount(FetchDescriptor<ProfileOverride>()) == 0)
     }
 }

@@ -110,6 +110,8 @@ final class ImportCoordinator {
 
         while !queue.isEmpty, !Task.isCancelled {
             let document = queue.removeFirst()
+            // Removed from the vault while waiting.
+            guard !document.isGone else { continue }
             guard let bookmark = document.bookmark, let resolved = FileAccess.resolve(bookmark) else {
                 fail(document, "The file can’t be found. It may have been moved or deleted.")
                 continue
@@ -133,7 +135,8 @@ final class ImportCoordinator {
             try? context.save()
             do {
                 let loaded = try await Self.load(resolved.url)
-                if let other = documents.first(where: { $0 !== document && $0.contentHash == loaded.hash && !$0.isDeleted }) {
+                guard !document.isGone else { continue }
+                if let other = documents.first(where: { $0 !== document && $0.contentHash == loaded.hash && !$0.isGone }) {
                     // An exact copy of a file already in the vault, in another place. Ask which file to keep
                     // as the source; there's nothing new to read.
                     document.state = .awaitingDecision
@@ -148,10 +151,13 @@ final class ImportCoordinator {
                 guard !pages.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
                 let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud)
                 lastEngine = engine
+                // Removed from the vault while it was being read: drop the result.
+                guard !document.isGone else { continue }
                 try save(reading, engine: engine, pages: pages, hash: loaded.hash, info: info, into: document, context: context)
                 classify(document, among: documents)
                 try? context.save()
             } catch {
+                guard !document.isGone else { continue }
                 logger.error("Couldn't read \(document.fileName, privacy: .private): \(error.localizedDescription, privacy: .public)")
                 fail(document, error.localizedDescription)
             }
@@ -270,7 +276,7 @@ final class ImportCoordinator {
     private func classify(_ document: SourceDocument, among documents: [SourceDocument]) {
         guard document.keys.identity != nil else { return }
         var found: (match: DocumentMatch, other: SourceDocument)?
-        for other in documents where other !== document && !other.isDeleted && other.isReady && other.kind == document.kind {
+        for other in documents where other !== document && !other.isGone && other.isReady && other.kind == document.kind {
             guard !document.keptAlongside.contains(other.contentHash), !other.keptAlongside.contains(document.contentHash) else { continue }
             let match = DocumentIdentity.match(document.keys, against: other.keys)
             if match == .duplicate { found = (match, other); break }
@@ -324,6 +330,52 @@ final class ImportCoordinator {
             if let other { document.keptAlongside.append(other.contentHash) }
             finishDecision(document)
         }
+        try? context.save()
+    }
+
+    // MARK: Removing
+
+    /// Removes documents and everything read from them. The files themselves aren't touched. A file that was
+    /// waiting for you to choose between it and a removed document becomes a document of its own.
+    func remove(_ removed: [SourceDocument], context: ModelContext, preferPrivateCloud: Bool) {
+        let hashes = Set(removed.map(\.contentHash))
+        let all = (try? context.fetch(FetchDescriptor<SourceDocument>())) ?? []
+        var requeued = false
+        for document in all where document.state == .awaitingDecision && !hashes.contains(document.contentHash) {
+            guard let related = document.relatedHash, hashes.contains(related) else { continue }
+            if document.decision == .duplicate {
+                // An exact copy isn't read until you choose, so read it now.
+                finishDecision(document)
+                document.state = .queued
+                requeued = true
+            } else {
+                finishDecision(document)
+            }
+        }
+        for document in removed { context.delete(document) }
+        try? context.save()
+        if requeued { start(context: context, preferPrivateCloud: preferPrivateCloud) }
+    }
+
+    /// Removes every document, everything read from them, your edits, and the encryption keys, so nothing
+    /// Dossier stored can be read again. The files themselves aren't touched.
+    func removeAll(context: ModelContext) {
+        cancel()
+        Self.deleteAllRecords(context: context)
+        VaultKeys.shared.destroyAll()
+        FolderAccess.forgetLegacyFolders()
+        unsupportedFiles = []
+        duplicates = []
+        lastEngine = nil
+    }
+
+    /// Deleted one by one, not with a batch delete, so screens showing these records update instead of
+    /// reading records that no longer exist.
+    static func deleteAllRecords(context: ModelContext) {
+        for document in (try? context.fetch(FetchDescriptor<SourceDocument>())) ?? [] { context.delete(document) }
+        for fact in (try? context.fetch(FetchDescriptor<Fact>())) ?? [] { context.delete(fact) }
+        for event in (try? context.fetch(FetchDescriptor<TravelEvent>())) ?? [] { context.delete(event) }
+        for override in (try? context.fetch(FetchDescriptor<ProfileOverride>())) ?? [] { context.delete(override) }
         try? context.save()
     }
 
