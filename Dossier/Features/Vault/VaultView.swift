@@ -24,8 +24,9 @@ struct VaultView: View {
 
     private var isSelecting: Bool { editMode.isEditing }
 
-    private var reviewCount: Int {
-        documents.filter(\.isReady).reduce(0) { $0 + $1.facts.filter { $0.status == .needsReview }.count } + profile.conflicts.count
+    /// Documents with fields Dossier wasn't sure about.
+    private var toCheck: Int {
+        documents.filter { $0.isReady && $0.facts.contains { $0.status == .needsReview } }.count
     }
 
     private var filtered: [SourceDocument] {
@@ -52,21 +53,6 @@ struct VaultView: View {
 
                 if searchText.isEmpty, !isSelecting {
                     AttentionSection(documents: documents)
-                }
-
-                if reviewCount > 0, searchText.isEmpty, !isSelecting {
-                    Section {
-                        NavigationLink {
-                            ReviewView()
-                        } label: {
-                            TileRow(
-                                symbol: "doc.text.magnifyingglass",
-                                badge: .review,
-                                title: reviewCount == 1 ? "1 item to review" : "\(reviewCount) items to review",
-                                subtitle: "Readings Dossier wasn’t sure about, and documents that disagree"
-                            )
-                        }
-                    }
                 }
 
                 if !isSelecting {
@@ -108,6 +94,10 @@ struct VaultView: View {
                     } footer: {
                         if isSelecting {
                             Text("Removing a document deletes what Dossier read from it. The file stays where it is, so you can add it again.")
+                        } else if toCheck > 0, searchText.isEmpty {
+                            Text(toCheck == 1
+                                ? "1 document has fields to check. Open it to compare them with the file and confirm or correct them."
+                                : "\(toCheck) documents have fields to check. Open one to compare them with the file and confirm or correct them.")
                         }
                     }
                 }

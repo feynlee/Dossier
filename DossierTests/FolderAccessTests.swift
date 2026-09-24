@@ -273,3 +273,68 @@ struct RemovingTests {
         #expect(try context.fetchCount(FetchDescriptor<ProfileOverride>()) == 0)
     }
 }
+
+@MainActor
+struct SharedConfirmationTests {
+    let context: ModelContext
+
+    init() throws {
+        let container = try ModelContainer(
+            for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        context = ModelContext(container)
+    }
+
+    @discardableResult
+    func fact(_ key: FactKey, _ value: String, on title: String, kind: DocumentKind = .passport, status: FactStatus = .needsReview) throws -> Fact {
+        let document = SourceDocument(contentHash: title, fileName: "\(title).pdf", kind: kind, title: title, engine: .privateCloudCompute, pageCount: 1)
+        document.state = .ready
+        context.insert(document)
+        let fact = Fact(key: key, sealedValue: try Sealer.shared.seal(value, sensitive: false), sealedHint: nil, status: status, check: .model, page: 1)
+        fact.document = document
+        context.insert(fact)
+        try context.save()
+        return fact
+    }
+
+    @Test func confirmingANameConfirmsTheSameNameElsewhere() throws {
+        let passport = try fact(.givenNames, "ANNA MARIA", on: "Passport")
+        let card = try fact(.givenNames, "Anna Maria", on: "Green card", kind: .greenCard)
+        let other = try fact(.givenNames, "ANNA", on: "Lease", kind: .lease)
+
+        let shared = FactEditor.confirm(passport, value: nil, context: context)
+
+        #expect(shared == ["Green card"])
+        #expect(card.status == .verified && card.check == .userConfirmed)
+        #expect(other.status == .needsReview)
+    }
+
+    @Test func documentSpecificFieldsAreNotShared() throws {
+        let first = try fact(.expiryDate, "2029-03-14", on: "Passport")
+        let second = try fact(.expiryDate, "2029-03-14", on: "Visa", kind: .visa)
+
+        FactEditor.confirm(first, value: nil, context: context)
+
+        #expect(second.status == .needsReview)
+    }
+
+    @Test func aCorrectionIsSharedToo() throws {
+        let passport = try fact(.placeOfBirth, "STOCKHOLN", on: "Passport")
+        let card = try fact(.placeOfBirth, "Stockholm", on: "Green card", kind: .greenCard)
+
+        FactEditor.confirm(passport, value: "STOCKHOLM", context: context)
+
+        #expect(card.status == .verified)
+    }
+
+    @Test func aNewDocumentUsesWhatYouAlreadyConfirmed() throws {
+        let passport = try fact(.dateOfBirth, "1990-08-12", on: "Passport")
+        FactEditor.confirm(passport, value: nil, context: context)
+        let licence = try fact(.dateOfBirth, "1990-08-12", on: "Licence", kind: .driversLicense)
+
+        SharedConfirmation.apply(to: try #require(licence.document), context: context)
+
+        #expect(licence.status == .verified)
+    }
+}

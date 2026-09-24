@@ -42,7 +42,7 @@ final class RevealState {
     var error: String?
     @ObservationIgnored private var hideTask: Task<Void, Never>?
 
-    func reveal(_ facts: [Fact], reason: String) {
+    func reveal(_ facts: [Fact], reason: String, then: @escaping () -> Void = {}) {
         Task {
             do {
                 let context = try await Authenticator.authenticate(reason: reason)
@@ -51,6 +51,7 @@ final class RevealState {
                     alternates[fact.persistentModelID] = VaultReader.alternate(of: fact, context: context)
                 }
                 scheduleHide()
+                then()
             } catch {
                 self.error = error.localizedDescription
             }

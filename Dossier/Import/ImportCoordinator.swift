@@ -163,6 +163,8 @@ final class ImportCoordinator {
                 guard !document.isGone else { continue }
                 try save(reading, engine: engine, pages: pages, hash: loaded.hash, info: info, into: document, context: context)
                 classify(document, among: documents)
+                // Readings you already confirmed on another document don't need confirming again.
+                SharedConfirmation.apply(to: document, context: context)
                 try? context.save()
             } catch {
                 guard !document.isGone else { continue }

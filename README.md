@@ -12,8 +12,8 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | Vault | Personal information, what needs review, and the documents you added, with reading status |
 | Adding documents | Add documents (pick several files, iCloud included) or Choose from a folder (tick files). Only added files are read; a changed file is read again and its result replaced |
 | Personal information | Name, birth date, sex, place of birth, nationality, A-Number, current passport and licence numbers, and current address, reconciled across documents. Agreeing values are accepted automatically; any value can be edited |
-| Review | Only readings the model wasn't sure about, checksum disagreements, and profile values where documents disagree |
-| Document detail | Zoomable preview of the file (Face ID if it shows a number) above its facts; tap a fact to zoom to where it was read; uncertain fields are marked and can be filtered |
+| Checking fields | Each document's page. Fields Dossier wasn't sure about show Edit and Looks Right in the row; two readings that differ show both to pick from. Any field can be edited (a date picker for dates, with the line it was read from). Confirming a name, birth date, sex, place of birth, nationality or A-Number confirms the same reading on your other documents and on documents you add later. Documents that disagree are resolved in Personal information |
+| Document detail | Zoomable preview of the file (Face ID if it shows a number) above its fields; tap a field to zoom to where it was read and to edit or copy it |
 | Timeline › List | Year scrubber, homes, trips, statuses and address gaps (with "Add address") for the selected year |
 | Timeline › Map | Homes as numbered pins joined by moves; trips with a destination as arcs; the scrubber moves the camera |
 | Timeline › Overview | Swimlanes for homes, status, documents and trips, days abroad per year, and an "on this date" crosshair |
@@ -35,7 +35,7 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | `Dossier/Parsing` | `MRZParser` (ICAO 9303 TD1/TD3 with check digits), `AAMVAParser`, `SimpleDate` |
 | `Dossier/Extraction` | `@Generable` schema, `DocumentExtractor` (PCC with on-device fallback), `Verifier` |
 | `Dossier/Import` | `ImportCoordinator`: a queue of added files → download → read → extract → verify → seal, one result per file |
-| `Dossier/Profile` | `Reconciler` (pure matching rules) and `Profile` (compiled personal information and your edits) |
+| `Dossier/Profile` | `Reconciler` (pure matching rules), `Profile` (compiled personal information and your edits), `SharedConfirmation` (a confirmation reaches every document with the same reading) |
 | `Dossier/Timeline` | `LifeTimeline` (pure interval logic), `TimelineLoader`, `Geocoder` |
 | `Dossier/Forms` | `FormFieldMatcher` rules, `AddressParts`, `FormFiller` (PDFKit), `FormFieldAssistant` (labels only to the model), `FactBook` |
 | `Dossier/Intents` | App Intents, entities and App Shortcuts |
