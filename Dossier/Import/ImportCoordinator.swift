@@ -33,9 +33,25 @@ final class ImportCoordinator {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let logger = Logger(subsystem: "liziyue.Dossier", category: "Import")
 
+    /// How often, and for how long, to look again while iCloud is still downloading files.
+    static let downloadRecheckInterval: Duration = .seconds(15)
+    static let downloadRechecks = 20
+
     func start(context: ModelContext, preferPrivateCloud: Bool) {
         guard !isRunning else { return }
-        task = Task { await run(context: context, preferPrivateCloud: preferPrivateCloud) }
+        task?.cancel()
+        task = Task {
+            await run(context: context, preferPrivateCloud: preferPrivateCloud)
+            // Files in an iCloud folder that weren't on the device were asked to download. Look again until
+            // they arrive, so you don't have to tap "Check for new documents" yourself.
+            var rechecks = 0
+            while waitingForDownload > 0, rechecks < Self.downloadRechecks, !Task.isCancelled {
+                try? await Task.sleep(for: Self.downloadRecheckInterval)
+                guard !Task.isCancelled else { return }
+                rechecks += 1
+                await run(context: context, preferPrivateCloud: preferPrivateCloud)
+            }
+        }
     }
 
     func cancel() {

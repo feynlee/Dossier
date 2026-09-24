@@ -151,7 +151,12 @@ private struct ImportStatusSection: View {
                         Label(message, systemImage: "exclamationmark.triangle")
                     }
                     if importer.waitingForDownload > 0 {
-                        Label("\(importer.waitingForDownload) files are still downloading from iCloud.", systemImage: "icloud.and.arrow.down")
+                        Label(
+                            importer.waitingForDownload == 1
+                                ? "1 file is downloading from iCloud. Dossier reads it when it arrives."
+                                : "\(importer.waitingForDownload) files are downloading from iCloud. Dossier reads them when they arrive.",
+                            systemImage: "icloud.and.arrow.down"
+                        )
                     }
                     ForEach(importer.failures.sorted(by: { $0.key < $1.key }), id: \.key) { name, reason in
                         VStack(alignment: .leading) {

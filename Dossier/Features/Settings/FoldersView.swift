@@ -35,7 +35,7 @@ struct FoldersView: View {
                 }
                 Button("Add folder", systemImage: "folder.badge.plus") { isAdding = true }
             } footer: {
-                Text("Dossier reads every folder here, including its subfolders. Files are read in place and never copied or changed.")
+                Text("Dossier reads every folder here, including its subfolders. Folders in iCloud Drive work too: files still in the cloud are downloaded first. Files are read in place and never copied or changed.")
             }
 
             if !folders.isEmpty {
