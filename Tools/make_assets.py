@@ -27,17 +27,22 @@ def d_keyhole(scale=2):
     def px(v):
         return int(round(v * scale))
 
-    left, top, right, bottom = 232, 196, 792, 828   # the letter's box, centered
-    rx = 300                                        # horizontal radius of the bowl
+    width, height, rx = 560, 632, 300               # the letter's box; horizontal radius of the bowl
+    r, stem = 78, 230                               # keyhole: circle radius, circle center to stem bottom
+    # Where the keyhole sits inside the letter (its circle's center, from the letter's center).
+    kx, ky = -20, -40
+    # Move the letter so the keyhole (circle and stem together) is centered on the icon.
+    left = 512 - kx - width / 2
+    top = 512 - ky - (stem - r) / 2 - height / 2
+    right, bottom = left + width, top + height
     mask = Image.new("L", (S, S), 0)
     d = ImageDraw.Draw(mask)
     d.rectangle((px(left), px(top), px(right - rx), px(bottom)), fill=255)
     d.pieslice((px(right - 2 * rx), px(top), px(right), px(bottom)), -90, 90, fill=255)
-    # The keyhole, centered in the letter's visual mass.
-    cx, cy, r = (left + right) / 2 - 20, (top + bottom) / 2 - 40, 78
+    cx, cy = (left + right) / 2 + kx, (top + bottom) / 2 + ky
     d.ellipse((px(cx - r), px(cy - r), px(cx + r), px(cy + r)), fill=0)
     d.polygon([(px(cx - 38), px(cy + 30)), (px(cx + 38), px(cy + 30)),
-               (px(cx + 62), px(cy + 230)), (px(cx - 62), px(cy + 230))], fill=0)
+               (px(cx + 62), px(cy + stem)), (px(cx - 62), px(cy + stem))], fill=0)
     mask = mask.resize((1024, 1024), Image.LANCZOS)
     glyph = Image.new("RGBA", (1024, 1024), (255, 255, 255, 0))
     glyph.putalpha(mask)
