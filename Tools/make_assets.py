@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerates the app icon and the specimen sample documents (all data is made up)."""
+"""Regenerates the app icon (Icon Composer `Dossier/AppIcon.icon`, plus a flat copy in the asset catalog) and the specimen sample documents (all data is made up)."""
 import os
 from PIL import Image, ImageDraw, ImageFont
 
@@ -14,22 +14,61 @@ def check_digit(value):
     return str(total % 10)
 
 
+TINT = (75, 69, 198)  # Theme.dsTintFill (#4B45C6)
+
+
+def d_keyhole(scale=2):
+    """The glyph: a heavy geometric D with a keyhole cut through it, white on transparent, 1024 px.
+
+    Same letter weight and size as BillSplit's B. Drawn at 2x and downsampled for smooth edges.
+    """
+    S = 1024 * scale
+
+    def px(v):
+        return int(round(v * scale))
+
+    left, top, right, bottom = 232, 196, 792, 828   # the letter's box, centered
+    rx = 300                                        # horizontal radius of the bowl
+    mask = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(mask)
+    d.rectangle((px(left), px(top), px(right - rx), px(bottom)), fill=255)
+    d.pieslice((px(right - 2 * rx), px(top), px(right), px(bottom)), -90, 90, fill=255)
+    # The keyhole, centered in the letter's visual mass.
+    cx, cy, r = (left + right) / 2 - 20, (top + bottom) / 2 - 40, 78
+    d.ellipse((px(cx - r), px(cy - r), px(cx + r), px(cy + r)), fill=0)
+    d.polygon([(px(cx - 38), px(cy + 30)), (px(cx + 38), px(cy + 30)),
+               (px(cx + 62), px(cy + 230)), (px(cx - 62), px(cy + 230))], fill=0)
+    mask = mask.resize((1024, 1024), Image.LANCZOS)
+    glyph = Image.new("RGBA", (1024, 1024), (255, 255, 255, 0))
+    glyph.putalpha(mask)
+    return glyph
+
+
 def app_icon():
-    size = 1024
-    im = Image.new("RGB", (size, size), (75, 69, 198))
-    d = ImageDraw.Draw(im)
-    # An ID card, like the app's badged tiles.
-    d.rounded_rectangle((170, 280, 854, 744), radius=70, fill=(255, 255, 255))
-    d.ellipse((250, 380, 430, 560), fill=(233, 233, 248))
-    d.rounded_rectangle((250, 590, 430, 650), radius=30, fill=(233, 233, 248))
-    for i, w in enumerate((330, 260, 300)):
-        d.rounded_rectangle((480, 400 + i * 90, 480 + w, 440 + i * 90), radius=20, fill=(233, 233, 248))
-    # The verified badge.
-    d.ellipse((650, 560, 900, 810), fill=(75, 69, 198))
-    d.ellipse((676, 586, 874, 784), fill=(94, 92, 230))
-    d.line((718, 690, 762, 734, 838, 640), fill=(255, 255, 255), width=34, joint="curve")
-    path = os.path.join(ROOT, "Dossier/Assets.xcassets/AppIcon.appiconset/AppIcon.png")
-    im.save(path)
+    """Writes the Icon Composer icon (Dossier/AppIcon.icon) and a flat copy for the asset catalog."""
+    import json
+    glyph = d_keyhole()
+
+    bundle = os.path.join(ROOT, "Dossier/AppIcon.icon")
+    os.makedirs(os.path.join(bundle, "Assets"), exist_ok=True)
+    glyph.save(os.path.join(bundle, "Assets", "D-Keyhole.png"))
+    r, g, b = (c / 255 for c in TINT)
+    icon = {
+        "fill": {"automatic-gradient": f"srgb:{r:.5f},{g:.5f},{b:.5f},1.00000"},
+        "groups": [{
+            "layers": [{"glass": True, "image-name": "D-Keyhole.png", "name": "D-Keyhole"}],
+            "shadow": {"kind": "neutral", "opacity": 0.5},
+            "translucency": {"enabled": True, "value": 0.4},
+        }],
+        "supported-platforms": {"circles": ["watchOS"], "squares": "shared"},
+    }
+    with open(os.path.join(bundle, "icon.json"), "w") as f:
+        json.dump(icon, f, indent=2, separators=(",", " : "))
+        f.write("\n")
+
+    flat = Image.new("RGBA", (1024, 1024), TINT + (255,))
+    flat.alpha_composite(glyph)
+    flat.convert("RGB").save(os.path.join(ROOT, "Dossier/Assets.xcassets/AppIcon.appiconset/AppIcon.png"))
 
 
 def samples():
@@ -159,6 +198,8 @@ def sample_form():
 
 
 if __name__ == "__main__":
+    import sys
     app_icon()
-    samples()
-    sample_form()
+    if "--icon-only" not in sys.argv:
+        samples()
+        sample_form()
