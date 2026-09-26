@@ -31,9 +31,10 @@ def d_keyhole(scale=2):
     r, stem = 78, 230                               # keyhole: circle radius, circle center to stem bottom
     # Where the keyhole sits inside the letter (its circle's center, from the letter's center).
     kx, ky = -20, -40
-    # Move the letter so the keyhole (circle and stem together) is centered on the icon.
+    # Move the letter sideways so the keyhole is centered across the icon; vertically the letter itself is
+    # centered.
     left = 512 - kx - width / 2
-    top = 512 - ky - (stem - r) / 2 - height / 2
+    top = 512 - height / 2
     right, bottom = left + width, top + height
     mask = Image.new("L", (S, S), 0)
     d = ImageDraw.Draw(mask)
