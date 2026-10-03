@@ -415,6 +415,9 @@ struct SavePDFSheet: View {
     /// Page images (JPEG or PNG) to show.
     let previews: [Data]
     let suggestedName: String
+    /// The file's extension: scans are always PDFs; a file sent from another app keeps its type.
+    var fileExtension = "pdf"
+    var footer = "Saved as a PDF in iCloud Drive, then read like any other file you add. Set a default folder in Settings; otherwise Dossier uses the folder you saved to last."
     let makePDF: () async -> Data?
     /// The saved file and its folder.
     let onSaved: (URL, URL) -> Void
@@ -470,7 +473,7 @@ struct SavePDFSheet: View {
                 } header: {
                     Text("Save to")
                 } footer: {
-                    Text("Saved as a PDF in iCloud Drive, then read like any other file you add. Set a default folder in Settings; otherwise Dossier uses the folder you saved to last.")
+                    Text(footer)
                 }
             }
             .navigationTitle(title)
@@ -514,7 +517,7 @@ struct SavePDFSheet: View {
                 return
             }
             do {
-                let file = try ScanFolders.save(pdf, named: name, in: folder)
+                let file = try ScanFolders.save(pdf, named: name, extension: fileExtension, in: folder)
                 onSaved(file, folder)
             } catch {
                 errorMessage = error.localizedDescription

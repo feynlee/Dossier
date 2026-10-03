@@ -425,3 +425,28 @@ struct PageEditingTests {
         #expect(!draft.isPDF && draft.pages.count == 1)
     }
 }
+
+struct IncomingFileTests {
+    @Test func aCopyHandedToDossierIsSavedToICloudFirst() throws {
+        let inbox = URL.documentsDirectory.appending(path: "Inbox")
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        let pdf = inbox.appending(path: "Lease.pdf"), notes = inbox.appending(path: "notes.txt")
+        try Data("%PDF-1.4".utf8).write(to: pdf)
+        try Data("hi".utf8).write(to: notes)
+        defer { try? FileManager.default.removeItem(at: inbox) }
+
+        #expect(IncomingFiles.isCopyInDossier(pdf))
+        #expect(IncomingFiles.route(for: pdf) == .chooseFolder)
+        #expect(IncomingFiles.route(for: notes) == .unsupported)
+
+        // Once handled, Dossier's own copy is deleted.
+        let files = IncomingFiles()
+        files.receive(pdf)
+        files.finish(pdf)
+        #expect(files.queue.isEmpty && !FileManager.default.fileExists(atPath: pdf.path))
+    }
+
+    @Test func savedCopiesKeepTheirType() {
+        #expect(ScanFolders.fileName(for: "Passport", existing: [], extension: "jpg") == "Passport.jpg")
+    }
+}

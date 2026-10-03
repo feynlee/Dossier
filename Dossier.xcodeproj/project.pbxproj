@@ -327,6 +327,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Dossier;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Dossier uses the camera to scan your documents.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Dossier uses Face ID to reveal document numbers.";
@@ -375,6 +376,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Dossier;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Dossier uses the camera to scan your documents.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Dossier uses Face ID to reveal document numbers.";

@@ -194,26 +194,27 @@ nonisolated enum ScanFolders {
     }
 
     /// A file name that's safe and not already taken in `folder`: "Passport", then "Passport 2"…
-    static func fileName(for name: String, existing: Set<String>) -> String {
+    static func fileName(for name: String, existing: Set<String>, extension ext: String = "pdf") -> String {
         let cleaned = name
             .components(separatedBy: CharacterSet(charactersIn: "/:\\?%*|\"<>").union(.newlines)).joined(separator: " ")
             .trimmingCharacters(in: .whitespaces)
         let base = cleaned.isEmpty ? suggestedName() : cleaned
-        var candidate = "\(base).pdf", number = 2
+        var candidate = "\(base).\(ext)", number = 2
         while existing.contains(candidate.lowercased()) {
-            candidate = "\(base) \(number).pdf"
+            candidate = "\(base) \(number).\(ext)"
             number += 1
         }
         return candidate
     }
 
-    /// Writes the PDF into the folder and remembers the folder as the last one used. Returns the file.
-    static func save(_ pdf: Data, named name: String, in folder: URL) throws -> URL {
+    /// Writes a file (a PDF unless another extension is given) into the folder and remembers the folder as
+    /// the last one used. Returns the file.
+    static func save(_ pdf: Data, named name: String, extension ext: String = "pdf", in folder: URL) throws -> URL {
         guard isInICloud(folder) else { throw SaveError.notInICloud }
         let accessing = folder.startAccessingSecurityScopedResource()
         defer { if accessing { folder.stopAccessingSecurityScopedResource() } }
         let existing = Set(((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []).map { $0.lowercased() })
-        let file = folder.appending(path: fileName(for: name, existing: existing))
+        let file = folder.appending(path: fileName(for: name, existing: existing, extension: ext))
         var coordinationError: NSError?
         var writeError: Error?
         NSFileCoordinator().coordinate(writingItemAt: file, options: .forReplacing, error: &coordinationError) { url in

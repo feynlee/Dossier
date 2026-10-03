@@ -7,6 +7,7 @@ struct RootView: View {
     /// Set once you've added your first documents. Only "Delete all extracted data" returns to onboarding.
     @AppStorage("hasOnboarded") private var hasOnboarded = false
     @Query private var documents: [SourceDocument]
+    @State private var incoming = IncomingFiles()
 
     /// There's something to protect once you've added documents.
     private var isSetUp: Bool { hasOnboarded || !documents.isEmpty || FolderAccess.hasLegacyFolders }
@@ -20,6 +21,8 @@ struct RootView: View {
                 OnboardingView { hasOnboarded = true }
             }
         }
+        // Files sent from other apps are handled once Dossier is unlocked.
+        .modifier(IncomingFilesModifier(incoming: incoming, isLocked: lock.isLocked && isSetUp))
         .onAppear {
             if !hasOnboarded, !documents.isEmpty || FolderAccess.hasLegacyFolders { hasOnboarded = true }
             if !isSetUp { lock.release() }
