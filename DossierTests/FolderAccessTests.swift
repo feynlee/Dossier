@@ -1,4 +1,5 @@
 import Foundation
+import PDFKit
 import SwiftData
 import Testing
 import UIKit
@@ -359,5 +360,68 @@ struct ScanTests {
         let pdf = try #require(ScanPDF.make([page, page]))
         let document = try #require(CGPDFDocument(CGDataProvider(data: pdf as CFData)!))
         #expect(document.numberOfPages == 2)
+    }
+}
+
+@MainActor
+struct PageEditingTests {
+    /// A PDF whose pages have different heights (100, 200, 300 pt), so their order can be checked.
+    func makePDF() throws -> URL {
+        let data = NSMutableData()
+        let consumer = try #require(CGDataConsumer(data: data as CFMutableData))
+        let context = try #require(CGContext(consumer: consumer, mediaBox: nil, nil))
+        for height in [100, 200, 300] {
+            var box = CGRect(x: 0, y: 0, width: 400, height: height)
+            context.beginPage(mediaBox: &box)
+            context.endPage()
+        }
+        context.closePDF()
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).pdf")
+        try (data as Data).write(to: url)
+        return url
+    }
+
+    func document(for url: URL) throws -> SourceDocument {
+        let document = SourceDocument.pending(fileName: url.lastPathComponent, bookmark: try FileAccess.bookmark(for: url))
+        return document
+    }
+
+    func heights(_ data: Data) throws -> [Int] {
+        let pdf = try #require(PDFDocument(data: data))
+        return (0..<pdf.pageCount).map { Int(pdf.page(at: $0)!.bounds(for: .mediaBox).height) }
+    }
+
+    @Test func reordersDeletesAndRotatesPages() async throws {
+        let url = try makePDF()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let draft = PageDraft()
+        await draft.load(try document(for: url))
+        #expect(draft.isPDF && draft.pages.count == 3 && !draft.hasChanges)
+
+        let ids = draft.pages.map(\.id)
+        draft.move(ids[2], before: ids[0])          // 300, 100, 200
+        draft.delete([ids[1]])                      // 300, 100
+        draft.rotate([ids[0]])
+        #expect(draft.hasChanges)
+        let data = try #require(draft.pdfData())
+        #expect(try heights(data) == [300, 100])
+        #expect(PDFDocument(data: data)?.page(at: 1)?.rotation == 90)
+
+        // Saving writes the file in place.
+        try FileAccess.write(data, to: url)
+        #expect(try heights(Data(contentsOf: url)) == [300, 100])
+    }
+
+    @Test func aPhotoBecomesAOnePagePDF() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).jpg")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 400)).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 300, height: 400))
+        }
+        try #require(image.jpegData(compressionQuality: 0.8)).write(to: url)
+        let draft = PageDraft()
+        await draft.load(try document(for: url))
+        #expect(!draft.isPDF && draft.pages.count == 1)
     }
 }

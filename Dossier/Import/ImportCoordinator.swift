@@ -413,8 +413,8 @@ final class ImportCoordinator {
     }
 
     /// Gives a document a new source file (after its file was removed) and reads it again.
-    func attach(_ url: URL, to document: SourceDocument, context: ModelContext, preferPrivateCloud: Bool) throws {
-        document.bookmark = try FileAccess.bookmark(for: url)
+    func attach(_ url: URL, within folder: URL? = nil, to document: SourceDocument, context: ModelContext, preferPrivateCloud: Bool) throws {
+        document.bookmark = try FileAccess.bookmark(for: url, within: folder)
         document.fileName = url.lastPathComponent
         document.sourceMissing = false
         document.missingAcknowledged = false

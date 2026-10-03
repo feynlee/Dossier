@@ -96,11 +96,30 @@ nonisolated enum ScanPDF {
     /// A PDF with one page per scanned page, each the width of US Letter (8.5 in) with the page's own
     /// proportions. The JPEGs are embedded as they are, so the file stays small.
     static func make(_ pages: [ScannedPage]) -> Data? {
+        make(jpegs: pages.map(\.page))
+    }
+
+    /// A photo as a one-page PDF, upright and the same width as scanned pages.
+    static func make(photo data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let longest = max(image.size.width, image.size.height)
+        let scale = min(1, ScannedPage.maxPhotoSide / max(longest, 1))
+        let size = CGSize(width: (image.size.width * scale).rounded(), height: (image.size.height * scale).rounded())
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        guard let upright = UIGraphicsImageRenderer(size: size, format: format).image(actions: { _ in image.draw(in: CGRect(origin: .zero, size: size)) }).cgImage,
+              let jpeg = ScannedPage.jpeg(upright, quality: 0.85) else { return nil }
+        return make(jpegs: [jpeg])
+    }
+
+    static func make(jpegs: [Data]) -> Data? {
+        let pages = jpegs
         let data = NSMutableData()
         guard let consumer = CGDataConsumer(data: data as CFMutableData),
               let context = CGContext(consumer: consumer, mediaBox: nil, [kCGPDFContextCreator: "Dossier"] as CFDictionary) else { return nil }
         for page in pages {
-            guard let provider = CGDataProvider(data: page.page as CFData),
+            guard let provider = CGDataProvider(data: page as CFData),
                   let image = CGImage(jpegDataProviderSource: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { continue }
             let width: CGFloat = 612
             var box = CGRect(x: 0, y: 0, width: width, height: width * CGFloat(image.height) / CGFloat(max(image.width, 1)))

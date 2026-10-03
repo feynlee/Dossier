@@ -8,6 +8,10 @@ import UniformTypeIdentifiers
 struct DocumentScanner: View {
     /// Called after the scan was saved and added to the vault.
     var onSaved: () -> Void = {}
+    /// When set, the pages are handed back here instead of being saved ("Insert", "Replace"), with this title
+    /// on the button that finishes.
+    var onPages: (([ScannedPage]) -> Void)?
+    var finishTitle = "Save"
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -161,9 +165,15 @@ struct DocumentScanner: View {
             .accessibilityLabel("Take photo")
 
             Button {
-                isSaving = true
+                if let onPages {
+                    session.stop()
+                    onPages(session.pages)
+                    dismiss()
+                } else {
+                    isSaving = true
+                }
             } label: {
-                Text(session.pages.isEmpty ? "Save" : "Save (\(session.pages.count))")
+                Text(session.pages.isEmpty ? finishTitle : "\(finishTitle) (\(session.pages.count))")
                     .font(.headline)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
@@ -371,16 +381,46 @@ struct CropEditor: View {
 
 // MARK: Saving
 
-/// Naming the scan and choosing its folder in iCloud Drive, then adding it to the vault.
+/// Saving a new scan: added to the vault once it's in iCloud Drive.
 struct SaveScanSheet: View {
     let pages: [ScannedPage]
     let onSaved: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
-    @State private var name = ScanFolders.suggestedName()
+
+    var body: some View {
+        SavePDFSheet(
+            title: pages.count == 1 ? "Save 1 Page" : "Save \(pages.count) Pages",
+            previews: pages.map(\.page),
+            suggestedName: ScanFolders.suggestedName(),
+            makePDF: { [pages] in await Self.makePDF(pages) }
+        ) { file, folder in
+            importer.add([file], within: folder, context: modelContext, preferPrivateCloud: usePrivateCloud)
+            onSaved()
+        }
+    }
+
+    @concurrent
+    static func makePDF(_ pages: [ScannedPage]) async -> Data? {
+        ScanPDF.make(pages)
+    }
+}
+
+/// Naming a new PDF and choosing its folder in iCloud Drive: the default from Settings, else the folder
+/// used last, changeable here.
+struct SavePDFSheet: View {
+    let title: String
+    /// Page images (JPEG or PNG) to show.
+    let previews: [Data]
+    let suggestedName: String
+    let makePDF: () async -> Data?
+    /// The saved file and its folder.
+    let onSaved: (URL, URL) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
     @State private var folder = ScanFolders.preferredFolder
     @State private var isChoosingFolder = false
     @State private var isWorking = false
@@ -392,8 +432,8 @@ struct SaveScanSheet: View {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
-                            ForEach(pages) { page in
-                                if let image = page.pageImage {
+                            ForEach(previews.indices, id: \.self) { index in
+                                if let image = UIImage(data: previews[index]) {
                                     Image(uiImage: image)
                                         .resizable()
                                         .scaledToFit()
@@ -433,7 +473,7 @@ struct SaveScanSheet: View {
                     Text("Saved as a PDF in iCloud Drive, then read like any other file you add. Set a default folder in Settings; otherwise Dossier uses the folder you saved to last.")
                 }
             }
-            .navigationTitle(pages.count == 1 ? "Save 1 Page" : "Save \(pages.count) Pages")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -454,11 +494,12 @@ struct SaveScanSheet: View {
                     errorMessage = error.localizedDescription
                 }
             }
-            .alert("Couldn’t save the scan", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            .alert("Couldn’t save", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
                 Button("OK") { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")
             }
+            .onAppear { if name.isEmpty { name = suggestedName } }
         }
         .interactiveDismissDisabled(isWorking)
     }
@@ -466,25 +507,18 @@ struct SaveScanSheet: View {
     private func save() {
         guard let folder else { return }
         isWorking = true
-        let pages = pages, name = name
         Task {
             defer { isWorking = false }
-            guard let pdf = await Self.makePDF(pages) else {
+            guard let pdf = await makePDF() else {
                 errorMessage = ScanFolders.SaveError.couldNotWrite.localizedDescription
                 return
             }
             do {
                 let file = try ScanFolders.save(pdf, named: name, in: folder)
-                importer.add([file], within: folder, context: modelContext, preferPrivateCloud: usePrivateCloud)
-                onSaved()
+                onSaved(file, folder)
             } catch {
                 errorMessage = error.localizedDescription
             }
         }
-    }
-
-    @concurrent
-    private static func makePDF(_ pages: [ScannedPage]) async -> Data? {
-        ScanPDF.make(pages)
     }
 }

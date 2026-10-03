@@ -88,6 +88,31 @@ nonisolated enum FileAccess {
         return try result.get()
     }
 
+    /// Replaces a file's contents in place, through file coordination and inside its security scope. Written
+    /// in place (not via a temporary file) because access may cover only the file, not its folder.
+    static func write(_ data: Data, to url: URL) throws {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        var coordinationError: NSError?
+        var writeError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { url in
+            do {
+                let handle = try FileHandle(forWritingTo: url)
+                defer { try? handle.close() }
+                try handle.truncate(atOffset: 0)
+                try handle.write(contentsOf: data)
+            } catch {
+                writeError = error
+            }
+        }
+        if let error = coordinationError ?? writeError { throw error }
+    }
+
+    static func isPDF(_ url: URL) -> Bool {
+        let type = (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType) ?? UTType(filenameExtension: url.pathExtension)
+        return type?.conforms(to: .pdf) == true
+    }
+
     static func contentHash(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }

@@ -23,6 +23,12 @@ struct DocumentDetailView: View {
     @State private var showingMissing = false
     @State private var showingDecision = false
     @State private var removing: [SourceDocument] = []
+    @State private var isEditingPages = false
+    @State private var isScanningReplacement = false
+    @State private var isChoosingReplacement = false
+    /// A scan waiting for you to confirm it replaces the file, or (for a photo) to choose where it's saved.
+    @State private var replacementScan: [ScannedPage]?
+    @State private var fileError: String?
 
     private var facts: [Fact] {
         document.facts.filter { $0.status != .superseded }.sorted { $0.key.sortOrder < $1.key.sortOrder }
@@ -91,6 +97,10 @@ struct DocumentDetailView: View {
                     Button("Read Again", systemImage: "arrow.clockwise") {
                         importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
                     }
+                    if canEditFile {
+                        Button("Edit Pages", systemImage: "square.grid.2x2") { withUnlock { isEditingPages = true } }
+                    }
+                    replaceMenu
                     Divider()
                     Button("Remove from Vault", systemImage: "trash", role: .destructive) { removing = [document] }
                 } label: {
@@ -99,6 +109,51 @@ struct DocumentDetailView: View {
             }
         }
         .removeDocuments($removing, leavingScreen: true)
+        .fullScreenCover(isPresented: $isEditingPages) { PageEditor(document: document) }
+        .fullScreenCover(isPresented: $isScanningReplacement) {
+            DocumentScanner(onPages: { replacementScan = $0 }, finishTitle: "Use")
+        }
+        .fileImporter(isPresented: $isChoosingReplacement, allowedContentTypes: FileAccess.readableTypes) { result in
+            do {
+                try importer.attach(try result.get(), to: document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+            } catch {
+                fileError = error.localizedDescription
+            }
+        }
+        .confirmationDialog(
+            "Replace \(document.fileName)?",
+            isPresented: Binding(get: { replacementScan != nil && sourceIsPDF }, set: { if !$0 { replacementScan = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(replacementScan?.count == 1 ? "Replace with 1 Page" : "Replace with \(replacementScan?.count ?? 0) Pages", role: .destructive) {
+                if let pages = replacementScan { replaceFile(with: pages) }
+                replacementScan = nil
+            }
+        } message: {
+            Text("The file in iCloud Drive gets the scanned pages instead of its current ones, and Dossier reads it again.")
+        }
+        .sheet(isPresented: Binding(get: { replacementScan != nil && !sourceIsPDF }, set: { if !$0 { replacementScan = nil } })) {
+            if let pages = replacementScan {
+                SavePDFSheet(
+                    title: "Save Scan",
+                    previews: pages.map(\.page),
+                    suggestedName: (document.fileName as NSString).deletingPathExtension,
+                    makePDF: { await SaveScanSheet.makePDF(pages) }
+                ) { file, folder in
+                    replacementScan = nil
+                    do {
+                        try importer.attach(file, within: folder, to: document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                    } catch {
+                        fileError = error.localizedDescription
+                    }
+                }
+            }
+        }
+        .alert("Couldn’t change the file", isPresented: Binding(get: { fileError != nil }, set: { if !$0 { fileError = nil } })) {
+            Button("OK") { fileError = nil }
+        } message: {
+            Text(fileError ?? "")
+        }
         .sheet(isPresented: $showingMissing) { MissingSourceSheet(document: document) }
         .sheet(isPresented: $showingDecision) { DocumentDecisionSheet(document: document) }
     }
@@ -156,14 +211,24 @@ struct DocumentDetailView: View {
                 }
             }
 
-            Section("Source") {
+            Section {
                 LabeledContent("File", value: document.fileName)
                 LabeledContent("Location", value: document.sourceMissing ? "Removed" : (document.locationDescription ?? "Unknown"))
                 LabeledContent("Pages read", value: "\(document.pageCount)")
                 LabeledContent("Read by", value: document.engine.displayName)
+                if canEditFile {
+                    Button("Edit Pages", systemImage: "square.grid.2x2") { withUnlock { isEditingPages = true } }
+                }
+                replaceMenu
                 Button("Read again", systemImage: "arrow.clockwise") {
                     importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
                 }
+            } header: {
+                Text("Source")
+            } footer: {
+                Text(sourceIsPDF || !canEditFile
+                    ? "Edit Pages saves your changes to the file. Replacing with a file you choose leaves the current file where it is."
+                    : "This file is a photo. Editing or scanning saves a new PDF to iCloud Drive; the photo isn’t changed.")
             }
 
             Section {
@@ -187,6 +252,51 @@ struct DocumentDetailView: View {
     }
 
     // MARK: Actions
+
+    /// The file is there to edit.
+    private var canEditFile: Bool {
+        document.bookmark != nil && !document.sourceMissing && [.ready, .failed].contains(document.state)
+    }
+
+    private var sourceIsPDF: Bool {
+        document.bookmark.flatMap(FileAccess.resolve).map { FileAccess.isPDF($0.url) } ?? true
+    }
+
+    private var replaceMenu: some View {
+        Menu {
+            Button("Scan New Pages", systemImage: "doc.viewfinder") { isScanningReplacement = true }
+            Button("Choose Another File", systemImage: "folder") { isChoosingReplacement = true }
+        } label: {
+            Label("Replace File", systemImage: "arrow.triangle.2.circlepath")
+        }
+    }
+
+    /// The pages of a file that shows a number appear only after Face ID, like its preview.
+    private func withUnlock(_ action: @escaping () -> Void) {
+        let needsFaceID = document.facts.contains { $0.isSensitive || $0.cropRevealsNumber }
+        if !needsFaceID || reveal.isUnlocked {
+            action()
+        } else {
+            reveal.reveal(facts, reason: "Show this document", then: action)
+        }
+    }
+
+    /// Writes a scan over the PDF in place, then reads it again.
+    private func replaceFile(with pages: [ScannedPage]) {
+        guard let url = document.bookmark.flatMap(FileAccess.resolve)?.url else { return }
+        Task {
+            guard let pdf = await SaveScanSheet.makePDF(pages) else {
+                fileError = "The scan couldn’t be saved."
+                return
+            }
+            do {
+                try FileAccess.write(pdf, to: url)
+                importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+            } catch {
+                fileError = error.localizedDescription
+            }
+        }
+    }
 
     private func confirm(_ fact: Fact, value: String?) {
         let others = FactEditor.confirm(fact, value: value, context: modelContext)
