@@ -58,6 +58,10 @@ struct DocumentScanner: View {
         .safeAreaInset(edge: .top) { topBar(session) }
         .safeAreaInset(edge: .bottom) { bottomBar(session) }
         .sensoryFeedback(.impact(weight: .medium), trigger: session.captureCount)
+        // Only take photos while the camera is what you're looking at.
+        .onChange(of: reviewing != nil || isSaving || confirmDiscard, initial: true) { _, covered in
+            session.isPaused = covered
+        }
         .onChange(of: session.captureCount) {
             flash = true
             withAnimation(.easeOut(duration: 0.35)) { flash = false }

@@ -332,7 +332,9 @@ nonisolated extension CGImagePropertyOrientation {
 
 // MARK: Preview
 
-/// The live camera. Keeps the preview and every capture level with the horizon however the phone is held.
+/// The live camera. Frames, photos and the preview all follow the screen's orientation: what you see is
+/// what's analyzed and taken. (The device's motion-based orientation is no use here, because a phone held
+/// flat over a page on a table can't tell portrait from landscape.)
 struct ScanCameraPreview: UIViewRepresentable {
     let camera: ScanCamera
 
@@ -361,11 +363,9 @@ final class ScanPreviewView: UIView {
         let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
         self.coordinator = coordinator
         observations = [
-            coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]) { [weak self] _, _ in
+            coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]) { [weak self, weak camera] coordinator, _ in
+                camera?.captureAngle = coordinator.videoRotationAngleForHorizonLevelPreview
                 DispatchQueue.main.async { self?.applyRotation() }
-            },
-            coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.initial, .new]) { [weak camera] coordinator, _ in
-                camera?.captureAngle = coordinator.videoRotationAngleForHorizonLevelCapture
             },
         ]
         NotificationCenter.default.addObserver(self, selector: #selector(sessionStarted), name: AVCaptureSession.didStartRunningNotification, object: camera.session)

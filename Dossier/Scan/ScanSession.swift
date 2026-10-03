@@ -21,6 +21,13 @@ final class ScanSession {
     var retaking: Int?
     /// Changes on every capture, for the flash and haptic.
     private(set) var captureCount = 0
+    /// Set while the camera is covered (reviewing pages, cropping, saving): nothing is taken automatically.
+    var isPaused = false {
+        didSet {
+            recent = []
+            if isPaused { outline = nil }
+        }
+    }
 
     // Auto-capture: the last few outlines, and whether the page in view was already taken.
     @ObservationIgnored private var recent: [PageOutline] = []
@@ -67,6 +74,7 @@ final class ScanSession {
     // MARK: Capturing
 
     private func update(_ outline: PageOutline?) {
+        guard !isPaused else { return }
         self.outline = outline
         guard let outline else {
             // The page left the frame: the next one in view is a new page.
@@ -78,7 +86,7 @@ final class ScanSession {
         if recent.count > Self.steadyFrames { recent.removeFirst(recent.count - Self.steadyFrames) }
         if let lastCaptured, outline.distance(to: lastCaptured) >= Self.newPageDistance { self.lastCaptured = nil }
 
-        guard autoCapture, !isCapturing, lastCaptured == nil, !outline.isTooFar, recent.count == Self.steadyFrames,
+        guard autoCapture, !isPaused, !isCapturing, lastCaptured == nil, !outline.isTooFar, recent.count == Self.steadyFrames,
               recent.allSatisfy({ $0.distance(to: outline) < Self.steadyTolerance }) else { return }
         Task { await capture() }
     }
