@@ -40,6 +40,9 @@ final class AppLock {
     /// Set when you cancel the prompt, so it isn't shown again until you tap Unlock.
     @ObservationIgnored private var declined = false
     @ObservationIgnored private var lockWatch: UIBackgroundTaskIdentifier = .invalid
+    /// The Face ID check that just unlocked the app, so the screen behind the lock can use it instead of
+    /// asking again.
+    @ObservationIgnored private var lastUnlock: (context: LAContext, at: ContinuousClock.Instant)?
 
     var isEnabled: Bool {
         get { UserDefaults.standard.object(forKey: AppLockPolicy.enabledKey) as? Bool ?? true }
@@ -85,6 +88,7 @@ final class AppLock {
     func didBecomeActive() {
         if isEnabled, let backgroundedAt, AppLockPolicy.shouldLock(afterBackground: .now - backgroundedAt, timeout: timeout) {
             isLocked = true
+            lastUnlock = nil
             declined = false
         }
         backgroundedAt = nil
@@ -92,6 +96,12 @@ final class AppLock {
         if isLocked, !declined, !isAuthenticating {
             Task { await unlock() }
         }
+    }
+
+    /// The check that unlocked the app, if it was in the last few seconds.
+    func recentUnlock(within window: Duration = .seconds(10)) -> LAContext? {
+        guard let lastUnlock, ContinuousClock.now - lastUnlock.at < window else { return nil }
+        return lastUnlock.context
     }
 
     /// The iPhone locked: always lock.
@@ -123,6 +133,7 @@ final class AppLock {
         }
         do {
             try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Dossier")
+            lastUnlock = (context, .now)
             isLocked = false
             errorMessage = nil
         } catch let error as LAError where [.userCancel, .appCancel, .systemCancel].contains(error.code) {

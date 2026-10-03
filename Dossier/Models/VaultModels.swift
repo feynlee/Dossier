@@ -95,6 +95,9 @@ final class SourceDocument {
         facts.first { $0.key == key && $0.status != .superseded }
     }
 
+    /// Read, and past its expiry date.
+    var isExpired: Bool { isReady && (expiryDate.map { $0 < .now } ?? false) }
+
     var expiryDate: Date? {
         facts.first { $0.key == .expiryDate && $0.status != .superseded }?.plainDate
     }

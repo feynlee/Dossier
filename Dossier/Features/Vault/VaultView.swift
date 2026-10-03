@@ -68,27 +68,10 @@ struct VaultView: View {
                     Section {
                         if filtered.isEmpty {
                             Text("No matches.").foregroundStyle(.secondary)
+                        } else if current.isEmpty {
+                            Text("Every document here has expired.").foregroundStyle(.secondary)
                         }
-                        ForEach(filtered) { document in
-                            NavigationLink(value: document) {
-                                DocumentRow(document: document)
-                            }
-                            .tag(document.persistentModelID)
-                            .swipeActions {
-                                Button("Remove", systemImage: "trash", role: .destructive) { removing = [document] }
-                                    .tint(.red)
-                                Button("Read again", systemImage: "arrow.clockwise") {
-                                    importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
-                                }
-                                .tint(Color.dsTintFill)
-                            }
-                            .contextMenu {
-                                Button("Read again", systemImage: "arrow.clockwise") {
-                                    importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
-                                }
-                                Button("Remove from Vault", systemImage: "trash", role: .destructive) { removing = [document] }
-                            }
-                        }
+                        ForEach(current) { row($0) }
                     } header: {
                         Text("Documents")
                     } footer: {
@@ -98,6 +81,16 @@ struct VaultView: View {
                             Text(toCheck == 1
                                 ? "1 document has fields to check. Open it to compare them with the file and confirm or correct them."
                                 : "\(toCheck) documents have fields to check. Open one to compare them with the file and confirm or correct them.")
+                        }
+                    }
+
+                    if !expired.isEmpty {
+                        Section {
+                            ForEach(expired) { row($0) }
+                        } header: {
+                            Text("Expired")
+                        } footer: {
+                            Text("Kept for your records. They still count for your timeline, like past addresses and trips.")
                         }
                     }
                 }
@@ -175,6 +168,31 @@ struct VaultView: View {
         }
         .rereadDocuments($rereading)
         .removeDocuments($removingAll)
+    }
+
+    /// Expired documents get their own section, below the current ones.
+    private var expired: [SourceDocument] { filtered.filter(\.isExpired) }
+    private var current: [SourceDocument] { filtered.filter { !$0.isExpired } }
+
+    private func row(_ document: SourceDocument) -> some View {
+        NavigationLink(value: document) {
+            DocumentRow(document: document)
+        }
+        .tag(document.persistentModelID)
+        .swipeActions {
+            Button("Remove", systemImage: "trash", role: .destructive) { removing = [document] }
+                .tint(.red)
+            Button("Read again", systemImage: "arrow.clockwise") {
+                importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+            }
+            .tint(Color.dsTintFill)
+        }
+        .contextMenu {
+            Button("Read again", systemImage: "arrow.clockwise") {
+                importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+            }
+            Button("Remove from Vault", systemImage: "trash", role: .destructive) { removing = [document] }
+        }
     }
 
     private var selectionTitle: String {

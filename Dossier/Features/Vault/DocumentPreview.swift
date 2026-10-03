@@ -109,9 +109,9 @@ struct PreviewPane: View {
             if needsFaceID, !isUnlocked {
                 VStack(spacing: 10) {
                     Image(systemName: "lock.doc").font(.largeTitle).foregroundStyle(Color.dsTint)
-                    Text("This document shows a number that’s kept behind Face ID.")
+                    Text("Locked. Unlock to see this document and its numbers.")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Button("Show document", systemImage: "faceid", action: onUnlock)
+                    Button("Unlock", systemImage: "faceid", action: onUnlock)
                         .buttonStyle(.borderedProminent)
                         .buttonBorderShape(.capsule)
                 }

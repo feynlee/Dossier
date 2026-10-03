@@ -7,9 +7,9 @@ import SwiftUI
 struct DocumentDetailView: View {
     let document: SourceDocument
 
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var modelContext
     @Environment(ImportCoordinator.self) private var importer
+    @Environment(AppLock.self) private var appLock
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
     @State private var reveal = RevealState()
     @State private var copied = false
@@ -29,6 +29,8 @@ struct DocumentDetailView: View {
     /// A scan waiting for you to confirm it replaces the file, or (for a photo) to choose where it's saved.
     @State private var replacementScan: [ScannedPage]?
     @State private var fileError: String?
+    /// Face ID was asked for on this visit (and maybe cancelled): don't ask again until you tap Unlock.
+    @State private var askedToUnlock = false
 
     private var facts: [Fact] {
         document.facts.filter { $0.status != .superseded }.sorted { $0.key.sortOrder < $1.key.sortOrder }
@@ -46,7 +48,7 @@ struct DocumentDetailView: View {
             VStack(spacing: 0) {
                 if document.bookmark != nil {
                     PreviewPane(document: document, highlight: highlight, isExpanded: $previewExpanded, reveal: reveal) {
-                        reveal.reveal(facts, reason: "Show this document")
+                        reveal.reveal(facts, reason: "Unlock \(document.title)")
                     }
                         .frame(height: geometry.size.height * (previewExpanded ? 0.72 : 0.42))
                     Divider()
@@ -56,12 +58,23 @@ struct DocumentDetailView: View {
         }
         .navigationTitle(document.title)
         .navigationBarTitleDisplayMode(.inline)
-        // One Face ID shows the file and every number on this screen. They're hidden again when you leave
-        // the screen or the app, not while you're here (the Face ID prompt itself doesn't count as leaving).
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .background { reveal.hide() }
+        // Opening a document asks for Face ID once, which shows the file and every number together. They stay
+        // shown until you leave the page or Dossier locks; editing or scanning from here isn't leaving.
+        .task { unlockAutomatically() }
+        .onChange(of: appLock.isLocked) { _, locked in
+            if locked {
+                reveal.hide()
+                askedToUnlock = false
+            } else {
+                // Just unlocked the app: that check opens the document too, without asking again.
+                unlockAutomatically()
+            }
         }
-        .onDisappear { reveal.hide() }
+        .onDisappear {
+            guard !isPresentingOnTop else { return }
+            reveal.hide()
+            askedToUnlock = false
+        }
         .alert("Couldn’t reveal", isPresented: Binding(get: { reveal.error != nil }, set: { if !$0 { reveal.error = nil } })) {
             Button("OK") { reveal.error = nil }
         } message: {
@@ -182,7 +195,7 @@ struct DocumentDetailView: View {
                 ForEach(onlyUncertain ? uncertain : facts) { fact in
                     FactRow(
                         fact: fact, reveal: reveal, isSelected: selected == fact,
-                        onReveal: { reveal.reveal(facts, reason: "Reveal \(fact.key.label.lowercased())") },
+                        onReveal: { reveal.reveal(facts, reason: "Unlock \(document.title)") },
                         onConfirm: { confirm(fact, value: $0) },
                         onEdit: { edit(fact) },
                         onCopy: { copy(fact) }
@@ -253,6 +266,22 @@ struct DocumentDetailView: View {
 
     // MARK: Actions
 
+    private var needsFaceID: Bool {
+        document.facts.contains { $0.isSensitive || $0.cropRevealsNumber }
+    }
+
+    /// Something from this page is covering it (an editor, the scanner, a sheet), so it hasn't been left.
+    private var isPresentingOnTop: Bool {
+        isEditingPages || isScanningReplacement || isChoosingReplacement || replacementScan != nil
+            || editing != nil || showingMissing || showingDecision || !removing.isEmpty
+    }
+
+    private func unlockAutomatically() {
+        guard needsFaceID, !reveal.isUnlocked, !askedToUnlock, !appLock.isLocked else { return }
+        askedToUnlock = true
+        reveal.reveal(facts, reason: "Unlock \(document.title)", reusing: appLock.recentUnlock())
+    }
+
     /// The file is there to edit.
     private var canEditFile: Bool {
         document.bookmark != nil && !document.sourceMissing && [.ready, .failed].contains(document.state)
@@ -277,7 +306,7 @@ struct DocumentDetailView: View {
         if !needsFaceID || reveal.isUnlocked {
             action()
         } else {
-            reveal.reveal(facts, reason: "Show this document", then: action)
+            reveal.reveal(facts, reason: "Unlock \(document.title)", then: action)
         }
     }
 
@@ -313,7 +342,7 @@ struct DocumentDetailView: View {
         } else if let value = reveal.value(for: fact) {
             editing = (fact, value)
         } else {
-            reveal.reveal(facts, reason: "Edit \(fact.key.label.lowercased())") {
+            reveal.reveal(facts, reason: "Unlock \(document.title)") {
                 if let value = reveal.value(for: fact) { editing = (fact, value) }
             }
         }

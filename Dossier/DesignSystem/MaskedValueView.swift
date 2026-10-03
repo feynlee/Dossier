@@ -1,3 +1,4 @@
+import LocalAuthentication
 import SwiftData
 import SwiftUI
 
@@ -44,8 +45,18 @@ final class RevealState {
     private(set) var isUnlocked = false
     var error: String?
 
-    func reveal(_ facts: [Fact], reason: String, then: @escaping () -> Void = {}) {
+    /// Opens every number on the screen with one Face ID. `reusing` is a check that just passed (unlocking
+    /// the app): it's tried first without showing anything, and Face ID is asked for only if it doesn't work.
+    func reveal(_ facts: [Fact], reason: String, reusing recent: LAContext? = nil, then: @escaping () -> Void = {}) {
         Task {
+            if let recent {
+                recent.interactionNotAllowed = true
+                if open(facts, with: recent) {
+                    isUnlocked = true
+                    then()
+                    return
+                }
+            }
             do {
                 let context = try await Authenticator.authenticate(reason: reason)
                 for fact in facts where fact.isSensitive {
@@ -54,10 +65,26 @@ final class RevealState {
                 }
                 isUnlocked = true
                 then()
+            } catch let error as LAError where [.userCancel, .appCancel, .systemCancel].contains(error.code) {
+                // You chose not to unlock: the screen stays locked, with its Unlock button.
             } catch {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    /// Opens the numbers with a check that already passed. False if the check can't open them.
+    private func open(_ facts: [Fact], with context: LAContext) -> Bool {
+        var opened: [PersistentIdentifier: String] = [:]
+        for fact in facts where fact.isSensitive {
+            guard let value = try? VaultReader.reveal(fact, context: context) else { return false }
+            opened[fact.persistentModelID] = value
+        }
+        values.merge(opened) { $1 }
+        for fact in facts where fact.isSensitive {
+            alternates[fact.persistentModelID] = VaultReader.alternate(of: fact, context: context)
+        }
+        return true
     }
 
     func value(for fact: Fact) -> String? { values[fact.persistentModelID] }
