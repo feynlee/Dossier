@@ -10,6 +10,7 @@ struct VaultView: View {
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
     @State private var isPicking = false
+    @State private var isScanning = false
     @State private var profile = Profile(entries: [])
     /// Documents waiting for you to confirm removing them.
     @State private var removing: [SourceDocument] = []
@@ -60,7 +61,7 @@ struct VaultView: View {
 
                 if documents.isEmpty {
                     Section {
-                        EmptyVault(isPicking: $isPicking)
+                        EmptyVault(isPicking: $isPicking, isScanning: $isScanning)
                     }
                     .listRowBackground(Color.clear)
                 } else {
@@ -129,7 +130,12 @@ struct VaultView: View {
                     }
                 } else {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Add Documents", systemImage: "plus") { isPicking = true }
+                        Menu {
+                            Button("Scan Documents", systemImage: "doc.viewfinder") { isScanning = true }
+                            Button("Choose Files", systemImage: "folder") { isPicking = true }
+                        } label: {
+                            Label("Add Documents", systemImage: "plus")
+                        }
                     }
                     if !documents.isEmpty {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -140,6 +146,7 @@ struct VaultView: View {
             }
             .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
             .addDocuments(isPresented: $isPicking)
+            .fullScreenCover(isPresented: $isScanning) { DocumentScanner() }
             .removeDocuments($removing) { endSelecting() }
             .onChange(of: documents.count) { _, count in
                 if count == 0 { endSelecting() }

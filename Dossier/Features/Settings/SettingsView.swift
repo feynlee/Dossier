@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
@@ -6,6 +7,11 @@ struct SettingsView: View {
     @State private var lockEnabled = true
     @State private var lockTimeout = AppLockPolicy.defaultTimeout
     @State private var privateCloudStatus: String?
+    @AppStorage(ScanFolders.autoCaptureKey) private var autoCapture = true
+    @State private var scanFolder: URL?
+    @State private var lastScanFolder: URL?
+    @State private var isChoosingScanFolder = false
+    @State private var scanFolderError: String?
 
     var body: some View {
         NavigationStack {
@@ -21,6 +27,36 @@ struct SettingsView: View {
                         Text("\(privateCloudStatus) Dossier reads on this iPhone until it’s available.")
                     } else if !usePrivateCloud {
                         Text("Reading on this iPhone is slower, and more facts will need review.")
+                    }
+                }
+
+                Section {
+                    Toggle(isOn: $autoCapture) {
+                        TileRow(symbol: "camera.viewfinder", badge: nil, title: "Capture automatically", subtitle: "Takes the photo once the page is steady")
+                    }
+                    Menu {
+                        Button("Choose Folder…", systemImage: "folder") { isChoosingScanFolder = true }
+                        if scanFolder != nil {
+                            Button("Use Last Folder", systemImage: "clock.arrow.circlepath") {
+                                try? ScanFolders.setDefaultFolder(nil)
+                                scanFolder = nil
+                            }
+                        }
+                    } label: {
+                        LabeledContent("Save scans to") {
+                            Text(scanFolder.map { FolderAccess.displayPath(for: $0) } ?? "Last folder used")
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                } header: {
+                    Text("Scanning")
+                } footer: {
+                    if scanFolder == nil {
+                        Text(lastScanFolder.map { "Scans go to the folder you saved to last (\(FolderAccess.displayPath(for: $0))). You can change the folder for each scan." }
+                            ?? "Scans go to the folder you saved to last. You can change the folder for each scan; it must be in iCloud Drive.")
+                    } else {
+                        Text("You can still change the folder for each scan. Scan folders must be in iCloud Drive.")
                     }
                 }
 
@@ -51,7 +87,27 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .fileImporter(isPresented: $isChoosingScanFolder, allowedContentTypes: [.folder]) { result in
+                switch result {
+                case .success(let url):
+                    do {
+                        try ScanFolders.setDefaultFolder(url)
+                        scanFolder = url
+                    } catch {
+                        scanFolderError = error.localizedDescription
+                    }
+                case .failure(let error):
+                    scanFolderError = error.localizedDescription
+                }
+            }
+            .alert("Couldn’t use that folder", isPresented: Binding(get: { scanFolderError != nil }, set: { if !$0 { scanFolderError = nil } })) {
+                Button("OK") { scanFolderError = nil }
+            } message: {
+                Text(scanFolderError ?? "")
+            }
             .task {
+                scanFolder = ScanFolders.defaultFolder
+                lastScanFolder = ScanFolders.lastFolder
                 privateCloudStatus = DocumentExtractor.privateCloudStatus()
                 lockEnabled = appLock.isEnabled
                 lockTimeout = appLock.timeout

@@ -6,6 +6,7 @@ struct OnboardingView: View {
     let onFinish: () -> Void
 
     @State private var isPicking = false
+    @State private var isScanning = false
 
     var body: some View {
         NavigationStack {
@@ -29,19 +30,25 @@ struct OnboardingView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                Button {
-                    isPicking = true
-                } label: {
-                    Text("Add Documents")
+                VStack(spacing: 8) {
+                    Button {
+                        isScanning = true
+                    } label: {
+                        Label("Scan Documents", systemImage: "doc.viewfinder")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
+                    Button("Choose Files") { isPicking = true }
                         .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 4)
                 }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
                 .padding()
             }
             .addDocuments(isPresented: $isPicking, onAdded: onFinish)
+            .fullScreenCover(isPresented: $isScanning) { DocumentScanner(onSaved: onFinish) }
         }
     }
 }

@@ -328,6 +328,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Dossier;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Dossier uses the camera to scan your documents.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Dossier uses Face ID to reveal document numbers.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -375,6 +376,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Dossier;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Dossier uses the camera to scan your documents.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Dossier uses Face ID to reveal document numbers.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;

@@ -11,6 +11,7 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | --- | --- |
 | Vault | Personal information, what needs review, and the documents you added, with reading status |
 | Adding documents | + opens the Files picker: open any folder (iCloud Drive included) and select several files. Only added files are read; a changed file is read again and its result replaced |
+| Scanning | + › Scan Documents: the page is outlined live and taken automatically once steady (Auto, the default, set in Settings) or with the shutter (Manual). Keep taking pages; review to retake, crop, rotate or delete any page. Saved as one PDF to a folder in iCloud Drive (the default from Settings, else the last folder used, changeable for each scan), then read like any added file |
 | Personal information | Name, birth date, sex, place of birth, nationality, A-Number, current passport and licence numbers, and current address, reconciled across documents. Agreeing values are accepted automatically; any value can be edited |
 | Checking fields | Each document's page. Fields Dossier wasn't sure about show Edit and Looks Right in the row; two readings that differ show both to pick from. Any field can be edited (a date picker for dates, with the line it was read from). Confirming a name, birth date, sex, place of birth, nationality or A-Number confirms the same reading on your other documents and on documents you add later. Documents that disagree are resolved in Personal information |
 | Document detail | Zoomable preview of the file above its fields. One Face ID on the page shows the file and every number, in place, until you leave the page or the app; tap a field to zoom to where it was read and to edit or copy it |
@@ -21,7 +22,7 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | Siri and Shortcuts | "What's my passport number in Dossier", expiry dates, "Where did I live", days abroad |
 | App lock | Face ID (passcode fallback) on launch, when the iPhone locks, and after 1 minute in the background (Immediately, 1, 5 or 15 minutes in Settings). The lock covers open sheets too |
 | Managing documents | All in the Vault. One document: swipe, touch and hold, or the ••• menu on its page (Read Again, Remove from Vault). Several: ••• › Select, then Read Again or Remove in the bottom bar. All: ••• › Read All Again or Remove All Documents (documents, edits, timeline and keys), which leaves the empty Vault ready to add files again. Removing never deletes the file itself |
-| Settings | Preferences only: Private Cloud Compute on/off, app lock and its timeout |
+| Settings | Preferences only: Private Cloud Compute on/off, scanning (auto-capture, default scan folder), app lock and its timeout |
 
 ## Layout
 
@@ -31,6 +32,7 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | `Dossier/DesignSystem` | Indigo tint tokens, `BadgedTile`, `MaskedValueView` |
 | `Dossier/Models` | SwiftData `SourceDocument`, `Fact`, `TravelEvent`; `FactKey`, `DocumentKind` |
 | `Dossier/Security` | `VaultKeys` (Keychain AES key + Secure Enclave key), `Sealer`, Face ID, `VaultReader` |
+| `Dossier/Scan` | Camera and live page detection (`ScanCamera`, adapted from BillSplit), `ScannedPage` (perspective-corrected pages, PDF), `ScanSession` (auto-capture, retake), `ScanFolders` (iCloud Drive folders), `DocumentScanner` screens |
 | `Dossier/Ingestion` | `FileAccess` (a bookmark per added file), folder browsing for the checklist, page rendering, Vision text (with line positions) and PDF417 |
 | `Dossier/Parsing` | `MRZParser` (ICAO 9303 TD1/TD3 with check digits), `AAMVAParser`, `SimpleDate` |
 | `Dossier/Extraction` | `@Generable` schema, `DocumentExtractor` (PCC with on-device fallback), `Verifier` |

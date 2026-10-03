@@ -326,3 +326,38 @@ struct SharedConfirmationTests {
         #expect(licence.status == .verified)
     }
 }
+
+struct ScanTests {
+    @Test func scanNamesAreSafeAndDontOverwrite() {
+        #expect(ScanFolders.fileName(for: "Passport", existing: []) == "Passport.pdf")
+        #expect(ScanFolders.fileName(for: "Passport", existing: ["passport.pdf", "passport 2.pdf"]) == "Passport 3.pdf")
+        #expect(ScanFolders.fileName(for: "Lease 1/2", existing: []) == "Lease 1 2.pdf")
+        #expect(ScanFolders.fileName(for: "  ", existing: []).hasPrefix("Scan "))
+    }
+
+    /// A dark photo with a white page in it: the page is found, cut out and flattened, then saved as a PDF.
+    @Test func findsThePageInAPhotoAndMakesAPDF() throws {
+        let size = CGSize(width: 1200, height: 1600)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let photo = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.darkGray.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 250, y: 300, width: 700, height: 950))
+        }
+        var page = try #require(ScannedPage.make(from: photo, fallback: nil))
+        let flat = try #require(page.pageImage)
+        // The page, not the whole photo: about 700 x 950.
+        #expect(abs(flat.size.width - 700) < 40 && abs(flat.size.height - 950) < 40)
+
+        page.turns = 1
+        page.rerender()
+        let turned = try #require(page.pageImage)
+        #expect(turned.size.width > turned.size.height)
+
+        let pdf = try #require(ScanPDF.make([page, page]))
+        let document = try #require(CGPDFDocument(CGDataProvider(data: pdf as CFData)!))
+        #expect(document.numberOfPages == 2)
+    }
+}
