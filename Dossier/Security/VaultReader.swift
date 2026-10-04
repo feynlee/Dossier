@@ -36,7 +36,7 @@ enum VaultReader {
 
     /// A display string for a value: dates as "14 Mar 2029".
     static func display(_ value: String, for key: FactKey) -> String {
-        if key.isDate, let date = SimpleDate(iso: value) { return date.display }
+        if key.isDate || key == .detail, let date = SimpleDate(iso: value) { return date.display }
         return value
     }
 

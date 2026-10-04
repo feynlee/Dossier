@@ -42,7 +42,7 @@ actor DocumentExtractor {
     private static let onDeviceTextLimit = 12_000
     private static let privateCloudTextLimit = 90_000
 
-    static let instructions = """
+    static let baseInstructions = """
         You read personal documents for their owner: passports, US immigration cards and notices, driver's \
         licences, leases and travel records. You receive page images and the OCR text of the same pages. \
         The images are the source of truth; the OCR text helps with hard-to-read characters but can contain \
@@ -69,15 +69,34 @@ actor DocumentExtractor {
         - One field per fact. If a fact appears on several pages, report it once.
         """
 
-    func extract(pages: [ReadPage], preferPrivateCloud: Bool) async throws -> (DocumentReading, ExtractionEngine) {
+    /// The base instructions plus what to put in `details`: other useful details, and the ones you asked for.
+    static func instructions(for request: DetailRequest) -> String {
+        guard !request.isEmpty else { return baseInstructions + "\nLeave details empty." }
+        var lines = ["", "Details, besides the important facts above:"]
+        if request.findsUsefulDetails {
+            lines += [
+                "- Other details about the holder that are useful for filling in forms, such as height, eye colour, hair colour, phone, email, occupation, employer, marital status, or other names used. Don't repeat the important facts.",
+                "- Family members of the holder named on the document (parents, spouse, children, siblings). Give each person's full name in personName, report their name as a detail labelled Name, and report each other detail printed about them separately, such as Date of birth, Place of birth or Nationality. Not landlords, agents, officers, employers, attorneys or anyone else who isn't family.",
+            ]
+        }
+        if !request.requested.isEmpty {
+            let list = request.requested.map { "\"\($0)\"" }.joined(separator: ", ")
+            lines.append("- Always look for these, for the holder unless they clearly belong to a family member, and use exactly these names as labels: \(list).")
+        }
+        lines.append("- Only details printed on the document; never guess. At most 30 details.")
+        return baseInstructions + lines.joined(separator: "\n")
+    }
+
+    func extract(pages: [ReadPage], preferPrivateCloud: Bool, request: DetailRequest = DetailRequest()) async throws -> (DocumentReading, ExtractionEngine) {
+        let instructions = Self.instructions(for: request)
         if preferPrivateCloud {
             do {
-                return (try await extractWithPrivateCloud(pages), .privateCloudCompute)
+                return (try await extractWithPrivateCloud(pages, instructions: instructions), .privateCloudCompute)
             } catch let error as ExtractorError where error.allowsFallback {
                 logger.notice("PCC unavailable, using on-device model: \(error.localizedDescription, privacy: .public)")
             }
         }
-        return (try await extractOnDevice(pages), .onDevice)
+        return (try await extractOnDevice(pages, instructions: instructions), .onDevice)
     }
 
     /// Tells the UI whether PCC can be used right now, and why not.
@@ -94,7 +113,7 @@ actor DocumentExtractor {
 
     // MARK: Engines
 
-    private func extractWithPrivateCloud(_ pages: [ReadPage]) async throws -> DocumentReading {
+    private func extractWithPrivateCloud(_ pages: [ReadPage], instructions: String) async throws -> DocumentReading {
         switch pcc.availability {
         case .available: break
         case .unavailable(.deviceNotEligible): throw ExtractorError.unavailable("This iPhone doesn’t support Private Cloud Compute.")
@@ -103,7 +122,7 @@ actor DocumentExtractor {
         }
         if pcc.quotaUsage.isLimitReached { throw ExtractorError.quotaReached(resetDate: pcc.quotaUsage.resetDate) }
 
-        let session = LanguageModelSession(model: pcc, instructions: Self.instructions)
+        let session = LanguageModelSession(model: pcc, instructions: instructions)
         do {
             return try await generate(in: session, pages: pages, attachImages: pcc.capabilities.contains(.vision), textLimit: Self.privateCloudTextLimit)
         } catch let error as PrivateCloudComputeLanguageModel.Error {
@@ -120,9 +139,9 @@ actor DocumentExtractor {
         }
     }
 
-    private func extractOnDevice(_ pages: [ReadPage]) async throws -> DocumentReading {
+    private func extractOnDevice(_ pages: [ReadPage], instructions: String) async throws -> DocumentReading {
         guard onDevice.isAvailable else { throw ExtractorError.unavailable("Apple Intelligence isn’t available on this iPhone.") }
-        let session = LanguageModelSession(model: onDevice, instructions: Self.instructions)
+        let session = LanguageModelSession(model: onDevice, instructions: instructions)
         do {
             // Only the first page image fits alongside the text in the on-device context.
             return try await generate(

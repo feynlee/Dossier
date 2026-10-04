@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var lockTimeout = AppLockPolicy.defaultTimeout
     @State private var privateCloudStatus: String?
     @AppStorage(ScanFolders.autoCaptureKey) private var autoCapture = true
+    @AppStorage(DetailRequest.findsUsefulDetailsKey) private var findsUsefulDetails = true
+    @State private var requestedSummary = ""
     @State private var scanFolder: URL?
     @State private var lastScanFolder: URL?
     @State private var isChoosingScanFolder = false
@@ -20,6 +22,15 @@ struct SettingsView: View {
                     Toggle(isOn: $usePrivateCloud) {
                         TileRow(symbol: "cloud", badge: nil, title: "Private Cloud Compute", subtitle: "More accurate. Pages aren’t kept.")
                     }
+                    Toggle(isOn: $findsUsefulDetails) {
+                        TileRow(symbol: "person.2", badge: nil, title: "Family and other details", subtitle: "Parents, spouse, children, height, employer…")
+                    }
+                    NavigationLink {
+                        RequestedDetailsView()
+                    } label: {
+                        LabeledContent("Also look for", value: requestedSummary)
+                    }
+                    .onAppear { requestedSummary = Self.summary(DetailRequest.current.requested) }
                 } header: {
                     Text("Reading")
                 } footer: {
@@ -112,6 +123,14 @@ struct SettingsView: View {
                 lockEnabled = appLock.isEnabled
                 lockTimeout = appLock.timeout
             }
+        }
+    }
+
+    static func summary(_ requested: [String]) -> String {
+        switch requested.count {
+        case 0: return "None"
+        case 1, 2: return requested.joined(separator: ", ")
+        default: return "\(requested.count) details"
         }
     }
 

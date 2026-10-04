@@ -450,3 +450,80 @@ struct IncomingFileTests {
         #expect(ScanFolders.fileName(for: "Passport", existing: [], extension: "jpg") == "Passport.jpg")
     }
 }
+
+struct DetailExtractionTests {
+    @Test func instructionsAskForFamilyAndYourOwnList() {
+        let text = DocumentExtractor.instructions(for: DetailRequest(findsUsefulDetails: true, requested: ["Height", "Employer"]))
+        #expect(text.contains("Family members of the holder"))
+        #expect(text.contains("\"Height\", \"Employer\""))
+        let none = DocumentExtractor.instructions(for: DetailRequest(findsUsefulDetails: false, requested: []))
+        #expect(none.hasSuffix("Leave details empty."))
+    }
+
+    @Test func detailsAreCheckedAgainstThePageText() {
+        let pages = [["FATHER ERIK ERIKSSON", "BORN 03 MAR 1961", "HEIGHT 170 CM"]]
+        let date = Verifier.verifyDetail("1961-03-03", isConfident: true, page: 1, pages: pages)
+        #expect(date?.status == .verified && date?.check == .pageText)
+        let height = Verifier.verifyDetail("170 cm", isConfident: true, page: 1, pages: pages)
+        #expect(height?.status == .verified)
+        // A number that isn't on the page needs a look.
+        let phone = Verifier.verifyDetail("555 0100", isConfident: true, page: 1, pages: pages)
+        #expect(phone?.status == .needsReview)
+        // So does anything the model wasn't sure of.
+        #expect(Verifier.verifyDetail("Engineer", isConfident: false, page: 1, pages: pages)?.status == .needsReview)
+    }
+}
+
+@MainActor
+struct ProfileDetailsTests {
+    let context: ModelContext
+
+    init() throws {
+        let container = try ModelContainer(
+            for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        context = ModelContext(container)
+    }
+
+    func document(_ title: String) -> SourceDocument {
+        let document = SourceDocument(contentHash: title, fileName: "\(title).pdf", kind: .other, title: title, engine: .privateCloudCompute, pageCount: 1)
+        document.state = .ready
+        context.insert(document)
+        return document
+    }
+
+    func detail(_ label: String, _ value: String, on document: SourceDocument, relation: Relation? = nil, person: String? = nil) throws {
+        let fact = Fact(key: .detail, sealedValue: try Sealer.shared.seal(value, sensitive: false), sealedHint: nil, status: .verified, check: .pageText, page: 1)
+        fact.label = label
+        fact.relationRaw = relation?.rawValue
+        fact.sealedPersonName = try person.map { try Sealer.shared.seal($0, sensitive: false) }
+        fact.document = document
+        context.insert(fact)
+    }
+
+    @Test func mergesTheSameDetailAndGroupsFamily() throws {
+        let passport = document("Passport"), certificate = document("Birth certificate")
+        try detail("Height", "170 cm", on: passport)
+        try detail("HEIGHT", "170 cm", on: certificate)
+        try detail("Name", "ERIK ERIKSSON", on: certificate, relation: .father, person: "ERIK ERIKSSON")
+        try detail("Date of birth", "1961-03-03", on: certificate, relation: .father, person: "Erik Eriksson")
+        try detail("Name", "ANNA LIND", on: certificate, relation: .mother, person: "ANNA LIND")
+        try context.save()
+
+        let details = ProfileDetails.build(documents: [passport, certificate])
+        #expect(details.you.count == 1)
+        #expect(details.you[0].sources == ["Birth certificate", "Passport"])
+        #expect(!details.you[0].differs)
+        #expect(details.family.map(\.relation) == [.father, .mother])
+        #expect(details.family[0].details.map(\.label) == ["Name", "Date of birth"])
+    }
+
+    @Test func aDeletedFieldIsRememberedByItsID() throws {
+        let doc = document("Passport")
+        try detail("Height", "170 cm", on: doc)
+        let fact = try #require(doc.facts.first)
+        #expect(fact.fieldID == Fact.detailID(label: "Height", relation: nil, personName: nil))
+        #expect(fact.displayLabel == "Height")
+    }
+}

@@ -99,6 +99,9 @@ nonisolated enum FactKey: String, CaseIterable, Codable, Sendable {
     case i94Number
     case validFrom
     case validUntil
+    /// Anything else useful for forms, named by the fact's own `label`: about the holder (height, phone,
+    /// employer…) or a family member named on the document (a parent's name, a child's date of birth…).
+    case detail
 
     var label: String {
         switch self {
@@ -127,6 +130,7 @@ nonisolated enum FactKey: String, CaseIterable, Codable, Sendable {
         case .i94Number: "I-94 number"
         case .validFrom: "Valid from"
         case .validUntil: "Valid until"
+        case .detail: "Detail"
         }
     }
 

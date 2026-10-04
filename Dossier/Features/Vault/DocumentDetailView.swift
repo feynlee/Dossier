@@ -36,6 +36,64 @@ struct DocumentDetailView: View {
         document.facts.filter { $0.status != .superseded }.sorted { $0.key.sortOrder < $1.key.sortOrder }
     }
 
+    /// The document's own fields, then other details about its holder, then each family member's.
+    private var mainFacts: [Fact] { facts.filter { $0.key != .detail } }
+    private var holderDetails: [Fact] {
+        facts.filter { $0.key == .detail && $0.relation == nil }.sorted { ($0.label ?? "") < ($1.label ?? "") }
+    }
+
+    private struct FamilyGroup {
+        var id: String
+        var title: String
+        var facts: [Fact]
+    }
+
+    private var familyGroups: [FamilyGroup] {
+        let details = facts.filter { $0.key == .detail && $0.relation != nil }
+        let grouped = Dictionary(grouping: details) { "\($0.relationRaw ?? "")|\(($0.personName ?? "").uppercased())" }
+        return grouped.map { id, facts in
+            let first = facts[0]
+            let name = first.personName.flatMap { $0.isEmpty ? nil : $0 }
+            let title = [first.relation?.label, name].compactMap { $0 }.joined(separator: " · ")
+            // Name first, then the rest alphabetically.
+            let sorted = facts.sorted { a, b in
+                let an = a.label?.lowercased() == "name", bn = b.label?.lowercased() == "name"
+                return an != bn ? an : (a.label ?? "") < (b.label ?? "")
+            }
+            return FamilyGroup(id: id, title: title, facts: sorted)
+        }
+        .sorted { ($0.facts[0].relation?.order ?? 0, $0.title) < ($1.facts[0].relation?.order ?? 0, $1.title) }
+    }
+
+    private func shown(_ facts: [Fact]) -> [Fact] {
+        onlyUncertain ? facts.filter { $0.status == .needsReview } : facts
+    }
+
+    private func factRow(_ fact: Fact) -> some View {
+        FactRow(
+            fact: fact, reveal: reveal, isSelected: selected == fact,
+            onReveal: { reveal.reveal(facts, reason: "Unlock \(document.title)") },
+            onConfirm: { confirm(fact, value: $0) },
+            onEdit: { edit(fact) },
+            onCopy: { copy(fact) }
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { withAnimation(.snappy) { selected = fact } }
+        .accessibilityAddTraits(.isButton)
+        .listRowBackground(selected == fact ? Color.dsTintSoft : nil)
+        .swipeActions(edge: .leading) {
+            if fact.status == .needsReview, fact.check != .conflict {
+                Button("Looks Right", systemImage: "checkmark") { confirm(fact, value: nil) }
+                    .tint(Color.dsTintFill)
+            }
+        }
+        .swipeActions(edge: .trailing) {
+            Button("Delete", systemImage: "trash", role: .destructive) { deleteField(fact) }
+            Button("Edit", systemImage: "pencil") { edit(fact) }
+        }
+        .contextMenu { menu(for: fact) }
+    }
+
     private var uncertain: [Fact] { facts.filter { $0.status == .needsReview } }
 
     private var highlight: (page: Int, rect: CGRect)? {
@@ -114,6 +172,12 @@ struct DocumentDetailView: View {
                         Button("Edit Pages", systemImage: "square.grid.2x2") { withUnlock { isEditingPages = true } }
                     }
                     replaceMenu
+                    if !document.dismissedFields.isEmpty {
+                        Button("Restore Deleted Fields", systemImage: "arrow.uturn.backward") {
+                            document.dismissedFields = []
+                            importer.reread(document, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                        }
+                    }
                     Divider()
                     Button("Remove from Vault", systemImage: "trash", role: .destructive) { removing = [document] }
                 } label: {
@@ -192,35 +256,27 @@ struct DocumentDetailView: View {
             }
 
             Section {
-                ForEach(onlyUncertain ? uncertain : facts) { fact in
-                    FactRow(
-                        fact: fact, reveal: reveal, isSelected: selected == fact,
-                        onReveal: { reveal.reveal(facts, reason: "Unlock \(document.title)") },
-                        onConfirm: { confirm(fact, value: $0) },
-                        onEdit: { edit(fact) },
-                        onCopy: { copy(fact) }
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture { withAnimation(.snappy) { selected = fact } }
-                    .accessibilityAddTraits(.isButton)
-                    .listRowBackground(selected == fact ? Color.dsTintSoft : nil)
-                    .swipeActions(edge: .leading) {
-                        if fact.status == .needsReview, fact.check != .conflict {
-                            Button("Looks Right", systemImage: "checkmark") { confirm(fact, value: nil) }
-                                .tint(Color.dsTintFill)
-                        }
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button("Edit", systemImage: "pencil") { edit(fact) }
-                    }
-                    .contextMenu { menu(for: fact) }
-                }
+                ForEach(shown(mainFacts)) { factRow($0) }
             } header: {
                 StatusLine(document: document, uncertainCount: uncertain.count, onlyUncertain: $onlyUncertain)
                     .textCase(nil)
             } footer: {
                 if !facts.isEmpty {
                     Text("Tap a field to see where it was read. Confirming a name, birth date or place of birth also confirms it on your other documents.")
+                }
+            }
+
+            if !shown(holderDetails).isEmpty {
+                Section("More details") {
+                    ForEach(shown(holderDetails)) { factRow($0) }
+                }
+            }
+
+            ForEach(familyGroups, id: \.id) { group in
+                if !shown(group.facts).isEmpty {
+                    Section(group.title) {
+                        ForEach(shown(group.facts)) { factRow($0) }
+                    }
                 }
             }
 
@@ -262,6 +318,17 @@ struct DocumentDetailView: View {
         if !fact.isSensitive || reveal.value(for: fact) != nil {
             Button("Copy for 60 Seconds", systemImage: "doc.on.doc") { copy(fact) }
         }
+        Divider()
+        Button("Delete Field", systemImage: "trash", role: .destructive) { deleteField(fact) }
+    }
+
+    /// Deletes a field and remembers it, so reading the document again doesn't bring it back.
+    private func deleteField(_ fact: Fact) {
+        if selected == fact { selected = nil }
+        let id = fact.fieldID
+        if !document.dismissedFields.contains(id) { document.dismissedFields.append(id) }
+        withAnimation { modelContext.delete(fact) }
+        try? modelContext.save()
     }
 
     // MARK: Actions
@@ -402,7 +469,7 @@ struct FactRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(fact.key.label)
+                    Text(fact.displayLabel)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -507,7 +574,9 @@ struct FactEditSheet: View {
     @State private var text = ""
     @State private var date = Date.now
 
-    private var usesDatePicker: Bool { fact.key.isDate && (value.isEmpty || SimpleDate(iso: value) != nil) }
+    private var usesDatePicker: Bool {
+        (fact.key.isDate && (value.isEmpty || SimpleDate(iso: value) != nil)) || (fact.key == .detail && SimpleDate(iso: value) != nil)
+    }
 
     var body: some View {
         NavigationStack {
@@ -519,19 +588,19 @@ struct FactEditSheet: View {
                 }
                 Section {
                     if usesDatePicker {
-                        DatePicker(fact.key.label, selection: $date, displayedComponents: .date)
+                        DatePicker(fact.displayLabel, selection: $date, displayedComponents: .date)
                             .datePickerStyle(.wheel)
                             .labelsHidden()
                             // Dates are stored as calendar days at midnight UTC.
                             .environment(\.timeZone, .gmt)
                             .frame(maxWidth: .infinity)
                     } else {
-                        TextField(fact.key.label, text: $text, axis: .vertical)
+                        TextField(fact.displayLabel, text: $text, axis: .vertical)
                             .font(fact.key.isMonospaced ? .dsFieldValue : .body)
                             .autocorrectionDisabled()
                     }
                 } header: {
-                    Text(fact.key.label)
+                    Text(fact.displayLabel)
                 } footer: {
                     if SharedConfirmation.sharedKey(for: fact.key) != nil {
                         Text("Saving confirms it. The same value on your other documents is confirmed too.")
@@ -540,7 +609,7 @@ struct FactEditSheet: View {
                     }
                 }
             }
-            .navigationTitle("Edit \(fact.key.label)")
+            .navigationTitle("Edit \(fact.displayLabel)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

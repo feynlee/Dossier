@@ -41,6 +41,8 @@ final class SourceDocument {
     var engineRaw: String
     var pageCount: Int
     @Relationship(deleteRule: .cascade, inverse: \Fact.document) var facts: [Fact] = []
+    /// Fields you deleted (`Fact.fieldID`), left out when the document is read again.
+    var dismissedFields: [String] = []
     @Relationship(deleteRule: .cascade, inverse: \TravelEvent.document) var travel: [TravelEvent] = []
 
     init(contentHash: String, fileName: String, relativePath: String = "", folderID: String = "", kind: DocumentKind, title: String, engine: ExtractionEngine, pageCount: Int) {
@@ -146,7 +148,38 @@ final class Fact {
     var cropHeight: Double?
     /// The line this value was read from also shows a sensitive number, so its crop needs Face ID.
     var cropRevealsNumber = false
+    /// For a detail: its name, such as "Height" or "Date of birth".
+    var label: String?
+    /// For a detail: whose it is. Nil for the document's holder.
+    var relationRaw: String?
+    /// For a family member's detail: their name, sealed under the vault key.
+    var sealedPersonName: Data?
     var document: SourceDocument?
+
+    var relation: Relation? { relationRaw.flatMap(Relation.init(rawValue:)) }
+    var personName: String? { sealedPersonName.flatMap { try? Sealer.shared.open($0) } }
+
+    /// "Height", "Mother · Date of birth", "Child (EMMA) · Place of birth", or the fact's standard label.
+    var displayLabel: String {
+        guard key == .detail else { return key.label }
+        let name = label ?? "Detail"
+        guard let relation else { return name }
+        if name.caseInsensitiveCompare("Name") == .orderedSame { return "\(relation.label)’s name" }
+        if let person = personName, !person.isEmpty { return "\(relation.label) (\(person.split(separator: " ").first ?? "")) · \(name)" }
+        return "\(relation.label) · \(name)"
+    }
+
+    /// Identifies the field on its document, so a field you deleted isn't read back in. Names in it are
+    /// fingerprints, not text.
+    var fieldID: String {
+        guard key == .detail else { return keyRaw }
+        return Self.detailID(label: label ?? "", relation: relationRaw, personName: personName)
+    }
+
+    static func detailID(label: String, relation: String?, personName: String?) -> String {
+        let person = personName.flatMap { $0.isEmpty ? nil : try? Sealer.shared.fingerprint($0.uppercased()).base64EncodedString() } ?? ""
+        return "detail|\(relation ?? "holder")|\(person)|\(label.lowercased())"
+    }
 
     /// Whether the source crop can be shown without Face ID.
     var cropNeedsFaceID: Bool { isSensitive || cropRevealsNumber }
@@ -230,6 +263,24 @@ final class ProfileOverride {
         self.isSensitive = isSensitive
         self.editedAt = .now
     }
+}
+
+/// A family member's relationship to a document's holder.
+nonisolated enum Relation: String, CaseIterable, Codable, Sendable {
+    case father, mother, spouse, child, sibling, other
+
+    var label: String {
+        switch self {
+        case .father: "Father"
+        case .mother: "Mother"
+        case .spouse: "Spouse"
+        case .child: "Child"
+        case .sibling: "Sibling"
+        case .other: "Family member"
+        }
+    }
+
+    var order: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 }
 
 nonisolated enum FactStatus: String, Codable, Sendable {

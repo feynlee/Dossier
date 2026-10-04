@@ -157,7 +157,7 @@ final class ImportCoordinator {
                 }
                 let pages = try await PageReader.read(loaded.data, fileName: document.fileName)
                 guard !pages.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
-                let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud)
+                let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud, request: .current)
                 lastEngine = engine
                 // Removed from the vault while it was being read: drop the result.
                 guard !document.isGone else { continue }
@@ -174,6 +174,52 @@ final class ImportCoordinator {
         }
         try? context.save()
         return waiting
+    }
+
+    /// Saves the other useful details: the holder's (height, phone…) and their family's. Each is checked
+    /// against the page text like a fact; identification numbers are sealed behind Face ID.
+    private func saveDetails(
+        _ details: [ReadDetail], pages: [ReadPage], dismissed: Set<String>, showsNumber: (String) -> Bool,
+        into document: SourceDocument, context: ModelContext
+    ) throws {
+        let pageLines = pages.map(\.lines)
+        // The holder's standard facts are already read; don't repeat them as details.
+        let standard = Set(FactKey.allCases.map { $0.label.lowercased() } + ["name", "full name", "date of birth", "place of birth", "nationality", "sex", "gender"])
+        var seen = Set<String>()
+        for detail in details.prefix(40) {
+            let label = detail.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !label.isEmpty else { continue }
+            let relation = Relation(rawValue: detail.person)
+            let personName = relation == nil ? nil : detail.personName.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            if relation == nil, standard.contains(label.lowercased()) { continue }
+            let id = Fact.detailID(label: label, relation: relation?.rawValue, personName: personName)
+            guard !dismissed.contains(id), seen.insert(id).inserted,
+                  let item = Verifier.verifyDetail(detail.value, isConfident: detail.confidence != "low", page: max(1, detail.page), pages: pageLines)
+            else { continue }
+
+            let sensitive = detail.isNumber == "yes"
+            let fact = Fact(
+                key: .detail,
+                sealedValue: try sealer.seal(item.value, sensitive: sensitive),
+                sealedHint: sensitive ? try sealer.seal(String(item.value.suffix(4)), sensitive: false) : nil,
+                status: item.status,
+                check: item.check,
+                page: item.page
+            )
+            fact.isSensitive = sensitive
+            fact.label = label
+            fact.relationRaw = relation?.rawValue
+            fact.sealedPersonName = try personName.map { try sealer.seal($0, sensitive: false) }
+            if let line = item.context, !sensitive, !showsNumber(line) {
+                fact.sealedContext = try sealer.seal(line, sensitive: false)
+            }
+            fact.cropRevealsNumber = item.context.map(showsNumber) ?? false
+            if let location = item.location, pages.indices.contains(location.page), pages[location.page].boxes.indices.contains(location.line) {
+                fact.setCrop(page: location.page + 1, rect: pages[location.page].boxes[location.line])
+            }
+            fact.document = document
+            context.insert(fact)
+        }
     }
 
     private func fail(_ document: SourceDocument, _ reason: String) {
@@ -228,7 +274,8 @@ final class ImportCoordinator {
         // Lines that show a sensitive number: their text isn't stored and their crop needs Face ID.
         let showsNumber = { (line: String) in Verifier.line(line, showsAnyOf: verified) }
 
-        for item in verified {
+        let dismissed = Set(document.dismissedFields)
+        for item in verified where !dismissed.contains(item.key.rawValue) {
             let fact = Fact(
                 key: item.key,
                 sealedValue: try sealer.seal(item.value, sensitive: item.key.isSensitive),
@@ -253,6 +300,8 @@ final class ImportCoordinator {
             fact.document = document
             context.insert(fact)
         }
+
+        try saveDetails(reading.details, pages: pages, dismissed: dismissed, showsNumber: showsNumber, into: document, context: context)
 
         // Fingerprints for spotting another file of the same document later, taken while the values are in
         // the clear. Only fingerprints are stored.

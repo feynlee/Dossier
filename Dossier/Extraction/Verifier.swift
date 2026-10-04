@@ -76,6 +76,27 @@ nonisolated enum Verifier {
         return results.sorted { $0.key.sortOrder < $1.key.sortOrder }
     }
 
+    // MARK: Details
+
+    /// Checks a detail (height, a parent's name…) like a fact: it needs a look when the model wasn't sure, or
+    /// when it's a number or date the page text doesn't show.
+    static func verifyDetail(_ value: String, isConfident: Bool, page: Int, pages: [[String]]) -> VerifiedFact? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let date = SimpleDate(iso: trimmed)
+        let key: FactKey = date != nil ? .issueDate : .detail
+        let normalized = date?.iso ?? trimmed
+        let location = locate(normalized, key: key, in: pages)
+        let context = location.map { pages[$0.page][$0.line] }
+        let hasDigits = normalized.contains(where: \.isNumber)
+        let isUncertain = !isConfident || ((date != nil || hasDigits) && context == nil)
+        let check: FactCheck = context != nil ? .pageText : (isUncertain ? .unchecked : .model)
+        return VerifiedFact(
+            key: .detail, value: normalized, page: page, status: isUncertain ? .needsReview : .verified,
+            check: check, context: context, location: location
+        )
+    }
+
     // MARK: References
 
     private struct Reference {

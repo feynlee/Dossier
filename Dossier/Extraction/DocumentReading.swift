@@ -22,6 +22,9 @@ nonisolated struct DocumentReading {
     @Guide(description: "The important facts printed on the document, as listed for its kind in the instructions. Omit facts that are not printed; never guess.")
     var fields: [ReadField]
 
+    @Guide(description: "Other details useful for filling in forms, about the holder and their family members, as described in the instructions. Empty if there are none.")
+    var details: [ReadDetail]
+
     @Guide(description: "For an I-94 travel history only: every arrival and departure row. Empty for every other document.")
     var travel: [ReadTravelEvent]
 }
@@ -48,7 +51,7 @@ nonisolated struct ReadField {
             validUntil are the dates a status, notice or card is valid between; uscisCategory is a visa \
             class, EAD category or green card category such as H-1B, C09 or IR1.
             """,
-        .anyOf(FactKey.allCases.map(\.rawValue))
+        .anyOf(FactKey.allCases.filter { $0 != .detail }.map(\.rawValue))
     )
     var key: String
 
@@ -67,4 +70,52 @@ nonisolated struct ReadField {
         .anyOf(["high", "low"])
     )
     var confidence: String
+}
+
+@Generable(description: "A detail useful for filling in forms, about the holder or a family member of theirs")
+nonisolated struct ReadDetail {
+    @Guide(
+        description: "Whose detail: holder for the document's holder, otherwise the family member's relationship to the holder.",
+        .anyOf(["holder"] + Relation.allCases.map(\.rawValue))
+    )
+    var person: String
+
+    @Guide(description: "The family member's full name as printed. Empty for the holder.")
+    var personName: String
+
+    @Guide(description: "A short name for the detail in sentence case, such as Height, Eye colour, Phone, Email, Occupation, Employer, Marital status, Name, Date of birth or Place of birth.")
+    var label: String
+
+    @Guide(description: "The value as printed. Dates as YYYY-MM-DD.")
+    var value: String
+
+    @Guide(description: "The 1-based page the value is printed on.")
+    var page: Int
+
+    @Guide(description: "high when it is clearly printed and certainly this detail; low otherwise.", .anyOf(["high", "low"]))
+    var confidence: String
+
+    @Guide(description: "yes for an identification number such as a Social Security, tax, national ID, account or case number; no otherwise.", .anyOf(["yes", "no"]))
+    var isNumber: String
+}
+
+/// What to look for besides each kind's important facts. Set in Settings › Reading.
+nonisolated struct DetailRequest: Sendable, Equatable {
+    /// Other details about the holder and their family that are useful for forms.
+    var findsUsefulDetails = true
+    /// Details you asked for by name, such as "Height" or "Employer".
+    var requested: [String] = []
+
+    static let findsUsefulDetailsKey = "extractUsefulDetails"
+    static let requestedKey = "extractRequestedDetails"
+
+    static var current: DetailRequest {
+        let defaults = UserDefaults.standard
+        return DetailRequest(
+            findsUsefulDetails: defaults.object(forKey: findsUsefulDetailsKey) as? Bool ?? true,
+            requested: defaults.stringArray(forKey: requestedKey) ?? []
+        )
+    }
+
+    var isEmpty: Bool { !findsUsefulDetails && requested.isEmpty }
 }
