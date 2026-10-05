@@ -15,10 +15,8 @@ struct DocumentDetailView: View {
     @State private var copied = false
     @State private var selected: Fact?
     @State private var onlyUncertain = false
-    /// How much of the screen the file takes: you choose with the handle, and it's remembered.
+    /// How much of the screen the file takes: you choose with the buttons on it, and it's remembered.
     @AppStorage("documentPreviewSize") private var previewSize = PreviewSize.medium
-    /// How far the handle is being dragged, while it is.
-    @State private var dragTranslation: CGFloat?
     /// The fact being edited and its current value.
     @State private var editing: (fact: Fact, value: String)?
     /// "Also confirmed on …", shown for a moment after a confirmation reaches other documents.
@@ -112,7 +110,7 @@ struct DocumentDetailView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let height = previewHeight(in: geometry.size.height)
+            let height = previewSize.height(in: geometry.size.height)
             VStack(spacing: 0) {
                 if document.bookmark != nil {
                     Group {
@@ -124,12 +122,12 @@ struct DocumentDetailView: View {
                             PreviewPane(document: document, highlight: highlight, reveal: reveal) {
                                 reveal.reveal(facts, reason: "Unlock \(document.title)")
                             }
+                            .overlay(alignment: .topTrailing) { PreviewControls(size: $previewSize) }
                         }
                     }
                     .frame(height: height)
                     .clipped()
-                    PreviewHandle(size: $previewSize)
-                        .gesture(resizeGesture(total: geometry.size.height))
+                    Divider()
                 }
                 factList
             }
@@ -349,29 +347,6 @@ struct DocumentDetailView: View {
         if !document.dismissedFields.contains(id) { document.dismissedFields.append(id) }
         withAnimation { modelContext.delete(fact) }
         try? modelContext.save()
-    }
-
-    // MARK: Preview size
-
-    private func previewHeight(in total: CGFloat) -> CGFloat {
-        let base = previewSize.height(in: total)
-        guard let dragTranslation else { return base }
-        return min(max(base + dragTranslation, PreviewSize.barHeight), total * PreviewSize.maxFraction)
-    }
-
-    /// Drag the handle: the preview follows your finger and settles on the nearest size, taking the
-    /// flick's speed into account.
-    private func resizeGesture(total: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 2, coordinateSpace: .global)
-            .onChanged { dragTranslation = $0.translation.height }
-            .onEnded { value in
-                let projected = previewSize.height(in: total) + value.predictedEndTranslation.height
-                let nearest = PreviewSize.allCases.min { abs($0.height(in: total) - projected) < abs($1.height(in: total) - projected) } ?? .medium
-                withAnimation(.snappy) {
-                    previewSize = nearest
-                    dragTranslation = nil
-                }
-            }
     }
 
     // MARK: Actions
@@ -700,12 +675,11 @@ enum FactEditor {
     }
 }
 
-/// The sizes the document preview settles on. The fields always keep at least a quarter of the screen.
+/// The sizes of the document preview. The fields always keep at least a quarter of the screen.
 enum PreviewSize: String, CaseIterable {
     case collapsed, medium, large
 
     static let barHeight: CGFloat = 60
-    static let maxFraction: CGFloat = 0.75
 
     func height(in total: CGFloat) -> CGFloat {
         switch self {
@@ -716,36 +690,23 @@ enum PreviewSize: String, CaseIterable {
     }
 }
 
-/// The grabber between the file and its fields. Drag it to resize; double-tap to hide or show the file.
-struct PreviewHandle: View {
+/// The buttons on the document preview: hide it, and switch between half and large.
+struct PreviewControls: View {
     @Binding var size: PreviewSize
 
     var body: some View {
-        Capsule()
-            .fill(Color(uiColor: .tertiaryLabel))
-            .frame(width: 36, height: 5)
-            .frame(maxWidth: .infinity)
-            .frame(height: 20)
-            .background(Color(uiColor: .systemGroupedBackground))
-            .overlay(alignment: .top) { Divider() }
-            .contentShape(Rectangle())
-            .onTapGesture(count: 2) {
-                withAnimation(.snappy) { size = size == .collapsed ? .medium : .collapsed }
+        HStack(spacing: 8) {
+            Button("Hide Preview", systemImage: "chevron.up") {
+                withAnimation(.snappy) { size = .collapsed }
             }
-            .accessibilityElement()
-            .accessibilityLabel("Document preview size")
-            .accessibilityValue(size == .collapsed ? "Hidden" : size == .medium ? "Half" : "Large")
-            .accessibilityHint("Swipe up or down to change it.")
-            .accessibilityAdjustableAction { direction in
-                let all = PreviewSize.allCases, index = all.firstIndex(of: size) ?? 1
-                withAnimation(.snappy) {
-                    switch direction {
-                    case .increment: size = all[min(index + 1, all.count - 1)]
-                    case .decrement: size = all[max(index - 1, 0)]
-                    @unknown default: break
-                    }
-                }
+            Button(size == .large ? "Show Less" : "Show More", systemImage: size == .large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
+                withAnimation(.snappy) { size = size == .large ? .medium : .large }
             }
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.circle)
+        .padding(8)
     }
 }
 
