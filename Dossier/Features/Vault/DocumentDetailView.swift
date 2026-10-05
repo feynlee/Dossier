@@ -769,7 +769,7 @@ struct CollapsedPreviewBar: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                Label("Show", systemImage: "chevron.down")
+                Label("Show", systemImage: "eye")
                     .labelStyle(.iconOnly)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.dsTint)
