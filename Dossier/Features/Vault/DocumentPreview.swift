@@ -106,15 +106,21 @@ struct PreviewPane: View {
         ZStack {
             Color(uiColor: .secondarySystemGroupedBackground)
             if needsFaceID, !isUnlocked {
-                VStack(spacing: 10) {
-                    Image(systemName: "lock.doc").font(.largeTitle).foregroundStyle(Color.dsTint)
-                    Text("Locked. Unlock to see this document and its numbers.")
-                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Button("Unlock", systemImage: "faceid", action: onUnlock)
-                        .buttonStyle(.borderedProminent)
-                        .buttonBorderShape(.capsule)
+                // The document page asks for Face ID once when it opens; the file appears when that passes.
+                // There's no separate lock here: if you cancelled, tapping runs the page's check again.
+                VStack(spacing: 6) {
+                    Image(systemName: "doc.text").font(.title2).foregroundStyle(.tertiary)
+                    if !reveal.isAuthenticating {
+                        Text("Locked · tap to unlock").font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
-                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onUnlock)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Locked")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Unlocks this document with Face ID.")
             } else if let pdf {
                 DocumentPreview(pdf: pdf, highlight: highlight)
             } else if let errorMessage {

@@ -43,6 +43,8 @@ final class RevealState {
     /// Whether Face ID was passed on this screen. Numbers and the file stay shown until you leave the screen
     /// or the app.
     private(set) var isUnlocked = false
+    /// Face ID is being asked for.
+    private(set) var isAuthenticating = false
     var error: String?
 
     /// Opens every number on the screen with one Face ID. `reusing` is a check that just passed (unlocking
@@ -57,6 +59,8 @@ final class RevealState {
                     return
                 }
             }
+            isAuthenticating = true
+            defer { isAuthenticating = false }
             do {
                 let context = try await Authenticator.authenticate(reason: reason)
                 for fact in facts where fact.isSensitive {
