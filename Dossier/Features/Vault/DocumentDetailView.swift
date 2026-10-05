@@ -122,7 +122,8 @@ struct DocumentDetailView: View {
                             PreviewPane(document: document, highlight: highlight, reveal: reveal) {
                                 reveal.reveal(facts, reason: "Unlock \(document.title)")
                             }
-                            .overlay(alignment: .topTrailing) { PreviewControls(size: $previewSize) }
+                            .overlay(alignment: .topTrailing) { PreviewControls(size: $previewSize, control: .hide) }
+                            .overlay(alignment: .bottomTrailing) { PreviewControls(size: $previewSize, control: .resize) }
                         }
                     }
                     .frame(height: height)
@@ -690,17 +691,25 @@ enum PreviewSize: String, CaseIterable {
     }
 }
 
-/// The buttons on the document preview: hide it, and switch between half and large.
+/// The buttons on the document preview: hide it (top corner), and switch between half and large (bottom
+/// corner, so it moves with the preview's edge).
 struct PreviewControls: View {
+    enum Control { case hide, resize }
+
     @Binding var size: PreviewSize
+    let control: Control
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button(size == .large ? "Show Less" : "Show More", systemImage: size == .large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
-                withAnimation(.snappy) { size = size == .large ? .medium : .large }
-            }
-            Button("Hide Preview", systemImage: "chevron.up") {
-                withAnimation(.snappy) { size = .collapsed }
+        Group {
+            switch control {
+            case .hide:
+                Button("Hide Preview", systemImage: "chevron.up") {
+                    withAnimation(.snappy) { size = .collapsed }
+                }
+            case .resize:
+                Button(size == .large ? "Show Less" : "Show More", systemImage: size == .large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
+                    withAnimation(.snappy) { size = size == .large ? .medium : .large }
+                }
             }
         }
         .labelStyle(.iconOnly)
