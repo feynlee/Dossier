@@ -124,12 +124,26 @@ struct DocumentDetailView: View {
                             PreviewPane(document: document, highlight: highlight, reveal: reveal) {
                                 reveal.reveal(facts, reason: "Unlock \(document.title)")
                             }
+                            .overlay(alignment: .topTrailing) {
+                                Button("Hide Document", systemImage: "eye.slash") {
+                                    withAnimation(.snappy) { previewSize = .collapsed }
+                                }
+                                .labelStyle(.iconOnly)
+                                .buttonStyle(.bordered)
+                                .buttonBorderShape(.circle)
+                                .padding(8)
+                            }
                         }
                     }
                     .frame(height: height)
                     .clipped()
-                    PreviewHandle(size: $previewSize)
-                        .gesture(resizeGesture(total: geometry.size.height))
+                    // The handle resizes the document while it's shown; hiding it is the eye button's job.
+                    if previewSize != .collapsed {
+                        PreviewHandle(size: $previewSize)
+                            .gesture(resizeGesture(total: geometry.size.height))
+                    } else {
+                        Divider()
+                    }
                 }
                 factList
             }
@@ -355,8 +369,8 @@ struct DocumentDetailView: View {
 
     private func previewHeight(in total: CGFloat) -> CGFloat {
         let base = previewSize.height(in: total)
-        guard let dragTranslation else { return base }
-        return min(max(base + dragTranslation, PreviewSize.barHeight), total * PreviewSize.maxFraction)
+        guard let dragTranslation, previewSize != .collapsed else { return base }
+        return min(max(base + dragTranslation, PreviewSize.medium.height(in: total)), total * PreviewSize.maxFraction)
     }
 
     /// Drag the handle: the preview follows your finger and settles on the nearest size, taking the
@@ -366,7 +380,7 @@ struct DocumentDetailView: View {
             .onChanged { dragTranslation = $0.translation.height }
             .onEnded { value in
                 let projected = previewSize.height(in: total) + value.predictedEndTranslation.height
-                let nearest = PreviewSize.allCases.min { abs($0.height(in: total) - projected) < abs($1.height(in: total) - projected) } ?? .medium
+                let nearest = PreviewSize.resizable.min { abs($0.height(in: total) - projected) < abs($1.height(in: total) - projected) } ?? .medium
                 withAnimation(.snappy) {
                     previewSize = nearest
                     dragTranslation = nil
@@ -706,6 +720,8 @@ enum PreviewSize: String, CaseIterable {
 
     static let barHeight: CGFloat = 60
     static let maxFraction: CGFloat = 0.75
+    /// The sizes the handle moves between. Hiding is done with the eye button.
+    static let resizable: [PreviewSize] = [.medium, .large]
 
     func height(in total: CGFloat) -> CGFloat {
         switch self {
@@ -716,7 +732,8 @@ enum PreviewSize: String, CaseIterable {
     }
 }
 
-/// The grabber between the file and its fields. Drag it to resize; double-tap to hide or show the file.
+/// The grabber between the file and its fields, while the file is shown. Drag it, or double-tap it, to make
+/// the file half or large.
 struct PreviewHandle: View {
     @Binding var size: PreviewSize
 
@@ -730,14 +747,14 @@ struct PreviewHandle: View {
             .overlay(alignment: .top) { Divider() }
             .contentShape(Rectangle())
             .onTapGesture(count: 2) {
-                withAnimation(.snappy) { size = size == .collapsed ? .medium : .collapsed }
+                withAnimation(.snappy) { size = size == .large ? .medium : .large }
             }
             .accessibilityElement()
             .accessibilityLabel("Document preview size")
-            .accessibilityValue(size == .collapsed ? "Hidden" : size == .medium ? "Half" : "Large")
+            .accessibilityValue(size == .large ? "Large" : "Half")
             .accessibilityHint("Swipe up or down to change it.")
             .accessibilityAdjustableAction { direction in
-                let all = PreviewSize.allCases, index = all.firstIndex(of: size) ?? 1
+                let all = PreviewSize.resizable, index = all.firstIndex(of: size) ?? 0
                 withAnimation(.snappy) {
                     switch direction {
                     case .increment: size = all[min(index + 1, all.count - 1)]
