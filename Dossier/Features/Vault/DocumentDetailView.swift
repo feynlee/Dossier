@@ -696,11 +696,11 @@ struct PreviewControls: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Button("Hide Preview", systemImage: "chevron.up") {
-                withAnimation(.snappy) { size = .collapsed }
-            }
             Button(size == .large ? "Show Less" : "Show More", systemImage: size == .large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
                 withAnimation(.snappy) { size = size == .large ? .medium : .large }
+            }
+            Button("Hide Preview", systemImage: "chevron.up") {
+                withAnimation(.snappy) { size = .collapsed }
             }
         }
         .labelStyle(.iconOnly)
