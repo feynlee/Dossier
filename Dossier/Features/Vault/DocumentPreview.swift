@@ -90,7 +90,6 @@ struct DocumentPreview: UIViewRepresentable {
 struct PreviewPane: View {
     let document: SourceDocument
     let highlight: (page: Int, rect: CGRect)?
-    @Binding var isExpanded: Bool
     let reveal: RevealState
     let onUnlock: () -> Void
 
@@ -123,17 +122,6 @@ struct PreviewPane: View {
                     .font(.footnote).foregroundStyle(.secondary).padding()
             } else {
                 ProgressView("Opening the file…").font(.footnote)
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if pdf != nil, !needsFaceID || isUnlocked {
-                Button(isExpanded ? "Show less" : "Show more", systemImage: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
-                    withAnimation(.snappy) { isExpanded.toggle() }
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.circle)
-                .padding(8)
             }
         }
         .task(id: document.bookmark) {

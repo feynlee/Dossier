@@ -15,7 +15,10 @@ struct DocumentDetailView: View {
     @State private var copied = false
     @State private var selected: Fact?
     @State private var onlyUncertain = false
-    @State private var previewExpanded = false
+    /// How much of the screen the file takes: you choose with the handle, and it's remembered.
+    @AppStorage("documentPreviewSize") private var previewSize = PreviewSize.medium
+    /// How far the handle is being dragged, while it is.
+    @State private var dragTranslation: CGFloat?
     /// The fact being edited and its current value.
     @State private var editing: (fact: Fact, value: String)?
     /// "Also confirmed on …", shown for a moment after a confirmation reaches other documents.
@@ -78,7 +81,13 @@ struct DocumentDetailView: View {
             onCopy: { copy(fact) }
         )
         .contentShape(Rectangle())
-        .onTapGesture { withAnimation(.snappy) { selected = fact } }
+        .onTapGesture {
+            withAnimation(.snappy) {
+                selected = fact
+                // Show where it was read: open the preview if you'd collapsed it.
+                if previewSize == .collapsed, fact.cropRect != nil { previewSize = .medium }
+            }
+        }
         .accessibilityAddTraits(.isButton)
         .listRowBackground(selected == fact ? Color.dsTintSoft : nil)
         .swipeActions(edge: .leading) {
@@ -103,13 +112,24 @@ struct DocumentDetailView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let height = previewHeight(in: geometry.size.height)
             VStack(spacing: 0) {
                 if document.bookmark != nil {
-                    PreviewPane(document: document, highlight: highlight, isExpanded: $previewExpanded, reveal: reveal) {
-                        reveal.reveal(facts, reason: "Unlock \(document.title)")
+                    Group {
+                        if height < PreviewSize.barHeight + 30 {
+                            CollapsedPreviewBar(document: document, isLocked: needsFaceID && !reveal.isUnlocked) {
+                                withAnimation(.snappy) { previewSize = .medium }
+                            }
+                        } else {
+                            PreviewPane(document: document, highlight: highlight, reveal: reveal) {
+                                reveal.reveal(facts, reason: "Unlock \(document.title)")
+                            }
+                        }
                     }
-                        .frame(height: geometry.size.height * (previewExpanded ? 0.72 : 0.42))
-                    Divider()
+                    .frame(height: height)
+                    .clipped()
+                    PreviewHandle(size: $previewSize)
+                        .gesture(resizeGesture(total: geometry.size.height))
                 }
                 factList
             }
@@ -329,6 +349,29 @@ struct DocumentDetailView: View {
         if !document.dismissedFields.contains(id) { document.dismissedFields.append(id) }
         withAnimation { modelContext.delete(fact) }
         try? modelContext.save()
+    }
+
+    // MARK: Preview size
+
+    private func previewHeight(in total: CGFloat) -> CGFloat {
+        let base = previewSize.height(in: total)
+        guard let dragTranslation else { return base }
+        return min(max(base + dragTranslation, PreviewSize.barHeight), total * PreviewSize.maxFraction)
+    }
+
+    /// Drag the handle: the preview follows your finger and settles on the nearest size, taking the
+    /// flick's speed into account.
+    private func resizeGesture(total: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+            .onChanged { dragTranslation = $0.translation.height }
+            .onEnded { value in
+                let projected = previewSize.height(in: total) + value.predictedEndTranslation.height
+                let nearest = PreviewSize.allCases.min { abs($0.height(in: total) - projected) < abs($1.height(in: total) - projected) } ?? .medium
+                withAnimation(.snappy) {
+                    previewSize = nearest
+                    dragTranslation = nil
+                }
+            }
     }
 
     // MARK: Actions
@@ -654,5 +697,89 @@ enum FactEditor {
         fact.sealedAlternate = nil
         fact.status = .verified
         fact.check = .userConfirmed
+    }
+}
+
+/// The sizes the document preview settles on. The fields always keep at least a quarter of the screen.
+enum PreviewSize: String, CaseIterable {
+    case collapsed, medium, large
+
+    static let barHeight: CGFloat = 60
+    static let maxFraction: CGFloat = 0.75
+
+    func height(in total: CGFloat) -> CGFloat {
+        switch self {
+        case .collapsed: Self.barHeight
+        case .medium: total * 0.42
+        case .large: total * 0.72
+        }
+    }
+}
+
+/// The grabber between the file and its fields. Drag it to resize; double-tap to hide or show the file.
+struct PreviewHandle: View {
+    @Binding var size: PreviewSize
+
+    var body: some View {
+        Capsule()
+            .fill(Color(uiColor: .tertiaryLabel))
+            .frame(width: 36, height: 5)
+            .frame(maxWidth: .infinity)
+            .frame(height: 20)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .overlay(alignment: .top) { Divider() }
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                withAnimation(.snappy) { size = size == .collapsed ? .medium : .collapsed }
+            }
+            .accessibilityElement()
+            .accessibilityLabel("Document preview size")
+            .accessibilityValue(size == .collapsed ? "Hidden" : size == .medium ? "Half" : "Large")
+            .accessibilityHint("Swipe up or down to change it.")
+            .accessibilityAdjustableAction { direction in
+                let all = PreviewSize.allCases, index = all.firstIndex(of: size) ?? 1
+                withAnimation(.snappy) {
+                    switch direction {
+                    case .increment: size = all[min(index + 1, all.count - 1)]
+                    case .decrement: size = all[max(index - 1, 0)]
+                    @unknown default: break
+                    }
+                }
+            }
+    }
+}
+
+/// The file folded into one line. Tap it to show the file again.
+struct CollapsedPreviewBar: View {
+    let document: SourceDocument
+    let isLocked: Bool
+    let onExpand: () -> Void
+
+    var body: some View {
+        Button(action: onExpand) {
+            HStack(spacing: 12) {
+                Image(systemName: isLocked ? "lock.doc" : "doc.text")
+                    .font(.title3)
+                    .foregroundStyle(Color.dsTint)
+                    .frame(width: 32, height: 36)
+                    .background(Color.dsTintSoft, in: RoundedRectangle(cornerRadius: 6))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(document.fileName).font(.subheadline).lineLimit(1).foregroundStyle(.primary)
+                    Text(isLocked ? "Locked" : (document.pageCount == 1 ? "1 page" : "\(document.pageCount) pages"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Label("Show", systemImage: "chevron.down")
+                    .labelStyle(.iconOnly)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.dsTint)
+            }
+            .padding(.horizontal, 16)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .accessibilityLabel("Show \(document.fileName)")
     }
 }
