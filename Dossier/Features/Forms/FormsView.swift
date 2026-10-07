@@ -13,13 +13,21 @@ struct FormsView: View {
         NavigationStack {
             List {
                 Section {
-                    Button("Choose a PDF form", systemImage: "doc.badge.plus") { isPicking = true }
+                    NavigationLink {
+                        WebFillStart()
+                    } label: {
+                        TileRow(symbol: "globe", badge: nil, title: "Fill a website", subtitle: "Visa, passport, travel and ID applications")
+                    }
+                    Button { isPicking = true } label: {
+                        TileRow(symbol: "doc.badge.plus", badge: nil, title: "Fill a PDF form", subtitle: "USCIS forms, rental applications…")
+                    }
+                    .foregroundStyle(.primary)
                 } header: {
                     VStack(alignment: .leading, spacing: 12) {
                         BadgedTile(symbol: "doc.text", badge: nil, size: 56)
-                        Text("Fill a PDF form")
+                        Text("Fill in forms")
                             .font(.title2.bold())
-                        Text("Choose a fillable PDF, such as a USCIS form or a rental application. Dossier fills what it knows from your verified facts and saves a copy. The original isn’t changed.")
+                        Text("Dossier fills what it knows from your documents: you, your family, where you’ve lived and your trips. You check everything before it’s entered, and you submit it yourself.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                     }

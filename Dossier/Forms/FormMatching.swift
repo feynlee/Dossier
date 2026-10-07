@@ -144,7 +144,7 @@ nonisolated enum FormMatcher {
         ("destination", ["destination"], []), ("destination", ["countries", "travel"], []),
         ("fullName", ["full name"], []),
         ("familyName", ["family name"], ["other"]), ("familyName", ["last name"], ["other"]), ("familyName", ["surname"], ["other"]),
-        ("givenName", ["given name"], ["other"]), ("givenName", ["first name"], ["other"]),
+        ("givenNames", ["given names"], ["other"]), ("givenName", ["given name"], ["other"]), ("givenName", ["first name"], ["other"]),
         ("middleName", ["middle name"], ["other"]),
         ("from", ["date from"], []), ("from", ["from date"], []), ("from", ["moved in"], []), ("from", ["since"], []),
         ("to", ["date to"], []), ("to", ["to date"], []), ("to", ["moved out"], []),
@@ -173,7 +173,7 @@ nonisolated enum FormMatcher {
         let kind = kind(of: field)
         if let relation = relation(of: field) {
             let prefix = "family.\(relation.rawValue)"
-            let personal = ["familyName": "familyName", "givenName": "givenName", "middleName": "givenName", "fullName": "fullName",
+            let personal = ["familyName": "familyName", "givenName": "givenName", "givenNames": "givenName", "middleName": "givenName", "fullName": "fullName",
                             "dateOfBirth": "dateOfBirth", "placeOfBirth": "placeOfBirth", "cityOfBirth": "placeOfBirth",
                             "countryOfBirth": "placeOfBirth", "nationality": "nationality"]
             if let kind, let name = personal[kind] { return "\(prefix).\(name)" }
@@ -292,6 +292,19 @@ nonisolated enum FormMatcher {
 
     // MARK: Values
 
+    /// What will actually be entered: for a dropdown or radio group, the choice that matches.
+    static func shown(_ candidates: [String], in field: FieldDescriptor) -> String? {
+        guard !field.options.isEmpty else { return candidates.first }
+        func norm(_ s: String) -> String { String(s.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }) }
+        for candidate in candidates {
+            if let option = field.options.first(where: { norm($0) == norm(candidate) }) { return option }
+        }
+        for candidate in candidates where norm(candidate).count >= 3 {
+            if let option = field.options.first(where: { norm($0).count >= 3 && (norm($0).hasPrefix(norm(candidate)) || norm(candidate).hasPrefix(norm($0))) }) { return option }
+        }
+        return candidates.first
+    }
+
     /// The ways a value can be written into a field, best first: a dropdown takes whichever option matches.
     static func candidates(for value: String, kind: FormValueKind, part: DatePart?, field: FieldDescriptor) -> [String] {
         switch kind {
@@ -342,6 +355,12 @@ nonisolated enum FormMemory {
         var matches = (all[site] as? [String: String]) ?? [:]
         matches[field.memoryKey] = slot ?? ""
         all[site] = matches
+        UserDefaults.standard.set(all, forKey: key)
+    }
+
+    static func forget(site: String) {
+        var all = UserDefaults.standard.dictionary(forKey: key) ?? [:]
+        all[site] = nil
         UserDefaults.standard.set(all, forKey: key)
     }
 

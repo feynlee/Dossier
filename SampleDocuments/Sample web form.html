@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sample visa application</title>
+<style>
+  body { font: 16px -apple-system, sans-serif; margin: 16px; }
+  fieldset { border: 1px solid #ccc; border-radius: 8px; margin: 16px 0; padding: 8px 12px; }
+  label { display: block; margin-top: 10px; font-size: 14px; color: #444; }
+  input, select { font-size: 16px; padding: 6px; width: 100%; box-sizing: border-box; }
+  .row { display: flex; gap: 8px; } .row > * { flex: 1; }
+  .radio label { display: inline; }
+</style>
+</head>
+<body>
+<h1>Sample visa application</h1>
+<p>A made-up form for trying Dossier's website filling. Nothing is sent anywhere.</p>
+<form onsubmit="alert('This sample doesn’t submit.'); return false;">
+  <fieldset>
+    <legend>Personal information</legend>
+    <label for="surname">Surnames</label><input id="surname" name="ctl00$Surname">
+    <label for="given">Given names</label><input id="given" name="ctl00$GivenName">
+    <label>Date of birth</label>
+    <div class="row">
+      <select id="dobDay" name="ddlDOBDay" aria-label="Date of birth day"><option></option></select>
+      <select id="dobMonth" name="ddlDOBMonth" aria-label="Date of birth month"><option></option>
+        <option>JAN</option><option>FEB</option><option>MAR</option><option>APR</option><option>MAY</option><option>JUN</option>
+        <option>JUL</option><option>AUG</option><option>SEP</option><option>OCT</option><option>NOV</option><option>DEC</option></select>
+      <input id="dobYear" name="tbxDOBYear" maxlength="4" aria-label="Date of birth year">
+    </div>
+    <div class="radio">Sex
+      <input type="radio" id="sexM" name="sex" value="M"><label for="sexM">Male</label>
+      <input type="radio" id="sexF" name="sex" value="F"><label for="sexF">Female</label>
+    </div>
+    <label for="pobCity">City of birth</label><input id="pobCity" name="tbxPOBCity">
+    <label for="nat">Country/region of origin (nationality)</label>
+    <select id="nat" name="ddlNationality"><option></option><option>SWEDEN</option><option>UTOPIA</option><option>UNITED STATES OF AMERICA</option></select>
+  </fieldset>
+  <fieldset>
+    <legend>Passport</legend>
+    <label for="ppn">Passport number</label><input id="ppn" name="tbxPPT_NUM">
+    <label for="ppx">Passport expiration date (mm/dd/yyyy)</label><input id="ppx" name="tbxPPT_EXPIRE">
+  </fieldset>
+  <fieldset>
+    <legend>Home address</legend>
+    <label for="street">Street address (line 1)</label><input id="street" name="tbxAPP_ADDR_LN1" autocomplete="address-line1">
+    <label for="city">City</label><input id="city" name="tbxAPP_ADDR_CITY">
+    <label for="zip">ZIP code</label><input id="zip" name="tbxAPP_ADDR_POSTAL_CD">
+  </fieldset>
+  <fieldset>
+    <legend>Previous addresses</legend>
+    <label for="prev0">Street address</label><input id="prev0" name="dtlPrevAddr$ctl00$tbxStreet">
+    <label for="prev0city">City</label><input id="prev0city" name="dtlPrevAddr$ctl00$tbxCity">
+    <label for="prev1">Street address</label><input id="prev1" name="dtlPrevAddr$ctl01$tbxStreet">
+    <label for="prev1city">City</label><input id="prev1city" name="dtlPrevAddr$ctl01$tbxCity">
+  </fieldset>
+  <fieldset>
+    <legend>Spouse information</legend>
+    <label for="spouseSurname">Spouse's surnames</label><input id="spouseSurname" name="tbxSpouseSurname">
+    <label for="spouseDob">Spouse's date of birth (mm/dd/yyyy)</label><input id="spouseDob" name="tbxSpouseDOB">
+  </fieldset>
+  <fieldset>
+    <legend>Family information: relatives</legend>
+    <label for="father">Father's full name</label><input id="father" name="tbxFatherName">
+  </fieldset>
+  <fieldset>
+    <legend>Contact</legend>
+    <label for="email">Email address</label><input id="email" type="email" name="tbxEmail">
+  </fieldset>
+  <label for="photo">Passport bio page (upload)</label><input id="photo" type="file" name="fileUpload">
+  <label for="ineligible">Have you ever been refused a US visa?</label>
+  <select id="ineligible" name="ddlRefused"><option></option><option>Yes</option><option>No</option></select>
+  <p><button type="submit">Next</button></p>
+</form>
+<script>
+  const day = document.getElementById('dobDay');
+  for (let d = 1; d <= 31; d++) { const o = document.createElement('option'); o.text = String(d).padStart(2, '0'); day.add(o); }
+</script>
+</body>
+</html>
