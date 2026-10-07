@@ -48,7 +48,7 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | `Dossier/WebFill` | `WebFillSession` (browser, scan, fill, attach) and `WebFillScript` (the page scripts) |
 | `Dossier/Shared` | Shared with the AutoFill extension: `FormEntry`, `AutoFillStore` |
 | `DossierAutoFill` | The AutoFill extension (text insertion) |
-| `Dossier/Forms` | `FormFieldMatcher` rules, `AddressParts`, `FormFiller` (PDFKit), `FormFieldAssistant` (labels only to the model), `FactBook` |
+| `Dossier/Forms` | `FormCatalog` (everything fillable), `FormMatcher` and `FieldAssistant` (matching; labels only to the model), `FormFiller` (PDFKit), `AddressParts` |
 | `Dossier/Intents` | App Intents, entities and App Shortcuts |
 | `Dossier/Features` | SwiftUI screens |
 | `SampleDocuments` | Specimen passport, two leases, an I-94 history and a fillable form, all made up |
