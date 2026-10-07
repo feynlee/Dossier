@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -10,6 +11,7 @@ struct SettingsView: View {
     @AppStorage(ScanFolders.autoCaptureKey) private var autoCapture = true
     @AppStorage(DetailRequest.findsUsefulDetailsKey) private var findsUsefulDetails = true
     @State private var requestedSummary = ""
+    @State private var autoFillEnabled = false
     @State private var scanFolder: URL?
     @State private var lastScanFolder: URL?
     @State private var isChoosingScanFolder = false
@@ -89,6 +91,21 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    LabeledContent {
+                        Text(autoFillEnabled ? "On" : "Off")
+                    } label: {
+                        TileRow(symbol: "character.cursor.ibeam", badge: nil, title: "AutoFill in other apps", subtitle: "Touch and hold a field › AutoFill › Dossier")
+                    }
+                    if !autoFillEnabled {
+                        Button("Turn On in Settings", systemImage: "gear") { ASSettingsHelper.openCredentialProviderAppSettings() }
+                    }
+                } header: {
+                    Text("AutoFill")
+                } footer: {
+                    Text("Fill a field in Safari, Chrome or any app with one of your values, after Face ID. Turn on Dossier in Settings › General › AutoFill & Passwords.")
+                }
+
+                Section {
                     TileRow(symbol: "faceid", badge: nil, title: "Face ID for numbers", subtitle: "Document numbers are encrypted to a key that only Face ID unlocks.")
                     TileRow(symbol: "lock", badge: nil, title: "Stays on this iPhone", subtitle: "Not included in iCloud or device backups.")
                 } header: {
@@ -115,6 +132,11 @@ struct SettingsView: View {
                 Button("OK") { scanFolderError = nil }
             } message: {
                 Text(scanFolderError ?? "")
+            }
+            .onAppear {
+                ASCredentialIdentityStore.shared.getState { state in
+                    Task { @MainActor in autoFillEnabled = state.isEnabled }
+                }
             }
             .task {
                 scanFolder = ScanFolders.defaultFolder

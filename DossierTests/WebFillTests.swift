@@ -115,3 +115,16 @@ struct WebFillTests {
         #expect(try await value("prev2", in: session) == "9 Elm St")
     }
 }
+
+struct AutoFillStoreTests {
+    /// The list AutoFill reads keeps values sealed, and opens to the same values with the vault key.
+    @Test func keepsSealedValuesForTheExtension() throws {
+        let entry = FormEntry(slot: "you.familyName", label: "Family name", group: "You", kind: .text, isSensitive: false, sealed: try Sealer.shared.seal("ERIKSSON", sensitive: false))
+        AutoFillStore.save([entry])
+        defer { AutoFillStore.clear() }
+        let snapshot = try #require(AutoFillStore.load())
+        #expect(snapshot.entries.count == 1)
+        #expect(snapshot.entries[0].sealed != Data("ERIKSSON".utf8))
+        #expect(try Sealer.shared.open(snapshot.entries[0].sealed) == "ERIKSSON")
+    }
+}

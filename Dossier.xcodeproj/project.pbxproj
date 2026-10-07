@@ -6,7 +6,18 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		000000000000000000000330 /* DossierAutoFill.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 000000000000000000000320 /* DossierAutoFill.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		000000000000000160000000 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000300000000;
+			remoteInfo = DossierAutoFill;
+		};
 		000000000000000260000000 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 000000000000000000000000 /* Project object */;
@@ -16,15 +27,62 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		000000000000000150000000 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				000000000000000000000330 /* DossierAutoFill.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* Dossier.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dossier.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000220 /* DossierTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DossierTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000320 /* DossierAutoFill.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DossierAutoFill.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		000000000000000000000311 /* Exceptions for "DossierAutoFill" folder in "DossierAutoFill" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				DossierAutoFill.entitlements,
+				Info.plist,
+			);
+			target = 000000000000000300000000 /* DossierAutoFill */;
+		};
+		000000000000000000000312 /* Exceptions for "Dossier" folder in "DossierAutoFill" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Security/Sealer.swift,
+				Security/VaultKeys.swift,
+				Shared/AutoFillStore.swift,
+				Shared/FormEntry.swift,
+			);
+			target = 000000000000000300000000 /* DossierAutoFill */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		000000000000000000000010 /* Dossier */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				000000000000000000000312 /* Exceptions for "Dossier" folder in "DossierAutoFill" target */,
+			);
 			path = Dossier;
+			sourceTree = "<group>";
+		};
+		000000000000000000000310 /* DossierAutoFill */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				000000000000000000000311 /* Exceptions for "DossierAutoFill" folder in "DossierAutoFill" target */,
+			);
+			path = DossierAutoFill;
 			sourceTree = "<group>";
 		};
 		000000000000000000000210 /* DossierTests */ = {
@@ -45,6 +103,11 @@
 			files = (
 			);
 		};
+		000000000000000330000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -53,6 +116,7 @@
 			children = (
 				000000000000000000000010 /* Dossier */,
 				000000000000000000000210 /* DossierTests */,
+				000000000000000000000310 /* DossierAutoFill */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -62,6 +126,7 @@
 			children = (
 				000000000000000000000120 /* Dossier.app */,
 				000000000000000000000220 /* DossierTests.xctest */,
+				000000000000000000000320 /* DossierAutoFill.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,8 +141,12 @@
 				000000000000000120000000 /* Sources */,
 				000000000000000130000000 /* Frameworks */,
 				000000000000000140000000 /* Resources */,
+				000000000000000150000000 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
+			);
+			dependencies = (
+				000000000000000170000000 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				000000000000000000000010 /* Dossier */,
@@ -108,6 +177,24 @@
 			productReference = 000000000000000000000220 /* DossierTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		000000000000000300000000 /* DossierAutoFill */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000310000000 /* Build configuration list for PBXNativeTarget "DossierAutoFill" */;
+			buildPhases = (
+				000000000000000320000000 /* Sources */,
+				000000000000000330000000 /* Frameworks */,
+				000000000000000340000000 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				000000000000000000000310 /* DossierAutoFill */,
+			);
+			name = DossierAutoFill;
+			productName = DossierAutoFill;
+			productReference = 000000000000000000000320 /* DossierAutoFill.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -124,6 +211,9 @@
 					000000000000000200000000 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = 000000000000000100000000;
+					};
+					000000000000000300000000 = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -143,6 +233,7 @@
 			targets = (
 				000000000000000100000000 /* Dossier */,
 				000000000000000200000000 /* DossierTests */,
+				000000000000000300000000 /* DossierAutoFill */,
 			);
 		};
 /* End PBXProject section */
@@ -154,6 +245,11 @@
 			);
 		};
 		000000000000000240000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		000000000000000340000000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -171,6 +267,11 @@
 			files = (
 			);
 		};
+		000000000000000320000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -178,6 +279,11 @@
 			isa = PBXTargetDependency;
 			target = 000000000000000100000000 /* Dossier */;
 			targetProxy = 000000000000000260000000 /* PBXContainerItemProxy */;
+		};
+		000000000000000170000000 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000300000000 /* DossierAutoFill */;
+			targetProxy = 000000000000000160000000 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -454,6 +560,60 @@
 			};
 			name = Release;
 		};
+		000000000000000311000000 /* Debug configuration for PBXNativeTarget "DossierAutoFill" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DossierAutoFill/DossierAutoFill.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LUHSSW7GT5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DossierAutoFill/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Dossier;
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Dossier uses Face ID to unlock your values for AutoFill.";
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = liziyue.Dossier.AutoFill;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		000000000000000312000000 /* Release configuration for PBXNativeTarget "DossierAutoFill" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DossierAutoFill/DossierAutoFill.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LUHSSW7GT5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DossierAutoFill/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Dossier;
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Dossier uses Face ID to unlock your values for AutoFill.";
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = liziyue.Dossier.AutoFill;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -478,6 +638,14 @@
 			buildConfigurations = (
 				000000000000000211000000 /* Debug configuration for PBXNativeTarget "DossierTests" */,
 				000000000000000212000000 /* Release configuration for PBXNativeTarget "DossierTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		000000000000000310000000 /* Build configuration list for PBXNativeTarget "DossierAutoFill" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000311000000 /* Debug configuration for PBXNativeTarget "DossierAutoFill" */,
+				000000000000000312000000 /* Release configuration for PBXNativeTarget "DossierAutoFill" */,
 			);
 			defaultConfigurationName = Release;
 		};

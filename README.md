@@ -22,7 +22,9 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | Timeline › List | Year scrubber, homes, trips, statuses and address gaps (with "Add address") for the selected year |
 | Timeline › Map | Homes as numbered pins joined by moves; trips with a destination as arcs; the scrubber moves the camera |
 | Timeline › Overview | Swimlanes for homes, status, documents and trips, days abroad per year, and an "on this date" crosshair |
-| Forms | Choose a fillable PDF, match its fields to your facts, fill with Face ID for numbers, save a copy |
+| Forms | One catalog of everything Dossier can fill (you, documents, current and previous addresses with dates, trips and arrivals, family) and one matcher for every kind of form: per-site memory, autofill hints, rules that know whose value a field wants and which history list it's in, then the model from labels only. PDF forms: fill and save a copy |
+| Fill a website | Forms › Fill a Website: sites open in Dossier's browser. Fill reads the page from an isolated script world, shows every value before writing it (change any match; it's remembered for the site), fills dropdowns, radios and split dates, attaches vault files to uploads, and never submits. Repeated sections fill in page order and continue after the site's Add button. Numbers need Face ID; without it the rest is still filled. Try it with `SampleDocuments/Sample web form.html` |
+| AutoFill everywhere | The DossierAutoFill extension: in any app, touch and hold a field › AutoFill › Dossier, unlock, pick a value. It reads a sealed copy of the catalog from the Keychain group shared with the app; numbers need Face ID |
 | Siri and Shortcuts | "What's my passport number in Dossier", expiry dates, "Where did I live", days abroad |
 | App lock | Face ID (passcode fallback) on launch, when the iPhone locks, and after 1 minute in the background (Immediately, 1, 5 or 15 minutes in Settings). The lock covers open sheets too |
 | Managing documents | All in the Vault. One document: swipe, touch and hold, or the ••• menu on its page (Read Again, Remove from Vault). Several: ••• › Select, then Read Again or Remove in the bottom bar. All: ••• › Read All Again or Remove All Documents (documents, edits, timeline and keys), which leaves the empty Vault ready to add files again. Removing never deletes the file itself |
@@ -43,6 +45,9 @@ Design system and architecture: https://claude.ai/artifact/5s2cvvfakSxCnfqp95FNk
 | `Dossier/Import` | `ImportCoordinator`: a queue of added files → download → read → extract → verify → seal, one result per file |
 | `Dossier/Profile` | `Reconciler` (pure matching rules), `Profile` (compiled personal information and your edits), `SharedConfirmation` (a confirmation reaches every document with the same reading) |
 | `Dossier/Timeline` | `LifeTimeline` (pure interval logic), `TimelineLoader`, `Geocoder` |
+| `Dossier/WebFill` | `WebFillSession` (browser, scan, fill, attach) and `WebFillScript` (the page scripts) |
+| `Dossier/Shared` | Shared with the AutoFill extension: `FormEntry`, `AutoFillStore` |
+| `DossierAutoFill` | The AutoFill extension (text insertion) |
 | `Dossier/Forms` | `FormFieldMatcher` rules, `AddressParts`, `FormFiller` (PDFKit), `FormFieldAssistant` (labels only to the model), `FactBook` |
 | `Dossier/Intents` | App Intents, entities and App Shortcuts |
 | `Dossier/Features` | SwiftUI screens |

@@ -269,39 +269,35 @@ struct WebFillView: View {
 
     private func fill(_ plan: WebFillPlan, chosen: [String: FieldMatch], attachments: [String: SourceDocument]) async {
         let assignment = FormMatcher.assign(plan.fields, matches: chosen, catalog: catalog)
-        do {
-            // Numbers need Face ID. Without it, everything else is still filled and the numbers are left.
-            var context: LAContext?
-            var skippedNumbers = 0
-            if catalog.needsFaceID(assignment.entries.values) {
-                context = try? await Authenticator.authenticate(reason: "Fill your document numbers")
-                if context == nil { skippedNumbers = assignment.entries.values.filter { catalog.entry($0)?.isSensitive == true }.count }
-            }
-            var values: [String: [String]] = [:]
-            for field in plan.fields {
-                guard let id = assignment.entries[field.id], let entry = catalog.entry(id), let value = catalog.value(of: entry, context: context) else { continue }
-                values[field.id] = FormMatcher.candidates(for: value, kind: entry.kind, part: chosen[field.id]?.part, field: field)
-            }
-            let results = await session.fill(values)
-            var attached = 0
-            for (token, document) in attachments {
-                guard let url = document.bookmark.flatMap(FileAccess.resolve)?.url, let data = try? FileAccess.read(url) else { continue }
-                let type = FileAccess.isPDF(url) ? "application/pdf" : "image/jpeg"
-                if await session.attach(data, name: document.fileName, type: type, to: token) { attached += 1 }
-            }
-            let filled = results.values.filter { $0 }.count
-            var message = filled == 1 ? "Filled 1 field." : "Filled \(filled) fields."
-            if results.count > filled { message += " \(results.count - filled) didn’t take a value; check them." }
-            if attached > 0 { message += attached == 1 ? " Attached 1 file." : " Attached \(attached) files." }
-            if skippedNumbers > 0 { message += skippedNumbers == 1 ? " 1 number was left without Face ID." : " \(skippedNumbers) numbers were left without Face ID." }
-            for (section, count) in assignment.remaining.sorted(by: { $0.key < $1.key }) {
-                message += "\n\(count) more \(section.lowercased()): use the site’s Add button, then tap Fill again."
-            }
-            withAnimation { notice = message }
-            await session.countFillable(catalog: catalog)
-        } catch {
-            withAnimation { notice = "Not filled: \(error.localizedDescription)" }
+        // Numbers need Face ID. Without it, everything else is still filled and the numbers are left.
+        var context: LAContext?
+        var skippedNumbers = 0
+        if catalog.needsFaceID(assignment.entries.values) {
+            context = try? await Authenticator.authenticate(reason: "Fill your document numbers")
+            if context == nil { skippedNumbers = assignment.entries.values.filter { catalog.entry($0)?.isSensitive == true }.count }
         }
+        var values: [String: [String]] = [:]
+        for field in plan.fields {
+            guard let id = assignment.entries[field.id], let entry = catalog.entry(id), let value = catalog.value(of: entry, context: context) else { continue }
+            values[field.id] = FormMatcher.candidates(for: value, kind: entry.kind, part: chosen[field.id]?.part, field: field)
+        }
+        let results = await session.fill(values)
+        var attached = 0
+        for (token, document) in attachments {
+            guard let url = document.bookmark.flatMap(FileAccess.resolve)?.url, let data = try? FileAccess.read(url) else { continue }
+            let type = FileAccess.isPDF(url) ? "application/pdf" : "image/jpeg"
+            if await session.attach(data, name: document.fileName, type: type, to: token) { attached += 1 }
+        }
+        let filled = results.values.filter { $0 }.count
+        var message = filled == 1 ? "Filled 1 field." : "Filled \(filled) fields."
+        if results.count > filled { message += " \(results.count - filled) didn’t take a value; check them." }
+        if attached > 0 { message += attached == 1 ? " Attached 1 file." : " Attached \(attached) files." }
+        if skippedNumbers > 0 { message += skippedNumbers == 1 ? " 1 number was left without Face ID." : " \(skippedNumbers) numbers were left without Face ID." }
+        for (section, count) in assignment.remaining.sorted(by: { $0.key < $1.key }) {
+            message += "\n\(count) more \(section.lowercased()): use the site’s Add button, then tap Fill again."
+        }
+        withAnimation { notice = message }
+        await session.countFillable(catalog: catalog)
     }
 }
 

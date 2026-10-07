@@ -60,6 +60,14 @@ struct MainTabView: View {
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
+    @Query private var documents: [SourceDocument]
+    @Query private var overrides: [ProfileOverride]
+
+    /// Changes whenever something AutoFill offers could have changed.
+    private var autoFillSignature: [String] {
+        documents.map { "\($0.contentHash)\($0.stateRaw)\($0.facts.count)\($0.facts.filter { $0.status == .verified }.count)\($0.dismissedFields.count)" }
+            + overrides.map { "\($0.keyRaw)\($0.editedAt.timeIntervalSince1970)" }
+    }
 
     var body: some View {
         TabView {
@@ -79,6 +87,11 @@ struct MainTabView: View {
         // Each time the app opens, read files that finished downloading from iCloud or changed since.
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { importer.start(context: modelContext, preferPrivateCloud: usePrivateCloud) }
+        }
+        // Keep AutoFill's sealed copy of your values up to date for other apps.
+        .task(id: autoFillSignature) {
+            try? await Task.sleep(for: .seconds(1))
+            AutoFillStore.save(FormCatalog.build(documents: documents, overrides: overrides).entries)
         }
     }
 }
