@@ -1,3 +1,4 @@
+import LocalAuthentication
 import PDFKit
 import SwiftData
 import SwiftUI
@@ -10,24 +11,19 @@ struct FormFillView: View {
     @Query private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
-    @State private var mapping: [String: FormValue] = [:]
+    @State private var catalog = FormCatalog(entries: [])
+    @State private var assignment = FormAssignment(entries: [:], matches: [:], remaining: [:])
     @State private var skipped: Set<String> = []
     @State private var isMatching = true
     @State private var filled: FilledPDF?
     @State private var isExporting = false
     @State private var errorMessage: String?
 
-    @State private var book = FactBook(documents: [])
+    private var fields: [FieldDescriptor] { form.fields.map(\.descriptor) }
 
-    private var matched: [FormFieldInfo] {
-        form.fields.filter { field in mapping[field.name].map { book.has($0) } ?? false }
-    }
-
-    private var unmatched: [FormFieldInfo] {
-        form.fields.filter { !matched.contains($0) }
-    }
-
-    private var fillCount: Int { matched.filter { !skipped.contains($0.name) }.count }
+    private var matched: [FieldDescriptor] { fields.filter { assignment.entries[$0.id] != nil } }
+    private var unmatched: [FieldDescriptor] { fields.filter { assignment.entries[$0.id] == nil } }
+    private var fillCount: Int { matched.filter { !skipped.contains($0.id) }.count }
 
     var body: some View {
         List {
@@ -35,28 +31,38 @@ struct FormFillView: View {
                 Section { Label("Matching fields…", systemImage: "sparkles").foregroundStyle(.secondary) }
             }
 
-            Section("\(matched.count) of \(form.fields.count) fields matched") {
+            Section("\(matched.count) of \(fields.count) fields matched") {
                 ForEach(matched) { field in
-                    let value = mapping[field.name]!
-                    Toggle(isOn: Binding(get: { !skipped.contains(field.name) }, set: { if $0 { skipped.remove(field.name) } else { skipped.insert(field.name) } })) {
+                    let entry = assignment.entries[field.id].flatMap(catalog.entry)
+                    Toggle(isOn: Binding(get: { !skipped.contains(field.id) }, set: { if $0 { skipped.remove(field.id) } else { skipped.insert(field.id) } })) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(field.displayName).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
-                            Text(preview(value, for: field))
-                                .font(value.isSensitive || value.isDate ? .dsFieldValue : .body)
+                            Text(field.label).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                            Text(preview(field))
+                                .font(entry?.isSensitive == true || entry?.kind == .date ? .dsFieldValue : .body)
                         }
                     }
+                }
+            }
+
+            if !assignment.remaining.isEmpty {
+                Section {
+                    ForEach(assignment.remaining.sorted { $0.key < $1.key }, id: \.key) { name, count in
+                        Label("\(count) more \(name.lowercased()) than this form has room for", systemImage: "rectangle.stack.badge.plus")
+                    }
+                } footer: {
+                    Text("Forms usually have a continuation sheet for these.")
                 }
             }
 
             if !unmatched.isEmpty {
                 Section {
                     ForEach(unmatched) { field in
-                        Text(field.displayName).foregroundStyle(.secondary).lineLimit(2)
+                        Text(field.label).foregroundStyle(.secondary).lineLimit(2)
                     }
                 } header: {
                     Text("Left for you")
                 } footer: {
-                    Text("Dossier doesn’t answer eligibility questions, signatures or fields about other people.")
+                    Text("Dossier doesn’t answer eligibility questions or signatures.")
                 }
             }
         }
@@ -86,34 +92,41 @@ struct FormFillView: View {
         }
     }
 
-    private func preview(_ value: FormValue, for field: FormFieldInfo) -> String {
-        if value.isSensitive { return book.masked(value) ?? "—" }
-        return book.string(for: value, dateStyle: FormDateStyle.style(for: field), context: nil) ?? "—"
+    private func preview(_ field: FieldDescriptor) -> String {
+        guard let entry = assignment.entries[field.id].flatMap(catalog.entry) else { return "—" }
+        if entry.isSensitive { return entry.masked ?? "•••• ••" }
+        return text(for: field, context: nil) ?? "—"
+    }
+
+    private func text(for field: FieldDescriptor, context: LAContext?) -> String? {
+        guard let entry = assignment.entries[field.id].flatMap(catalog.entry), let value = catalog.value(of: entry, context: context) else { return nil }
+        return FormMatcher.candidates(for: value, kind: entry.kind, part: assignment.matches[field.id]?.part, field: field).first
     }
 
     private func match() async {
-        book = FactBook(documents: documents, overrides: overrides)
-        var result: [String: FormValue] = [:]
-        for field in form.fields {
-            if let value = FormFieldMatcher.match(field) { result[field.name] = value }
+        catalog = FormCatalog.build(documents: documents, overrides: overrides)
+        let slots = Set(catalog.slots.map(\.slot))
+        var matches: [String: FieldMatch] = [:]
+        for field in fields {
+            if let match = FormMatcher.match(field, slots: slots) { matches[field.id] = match }
         }
-        mapping = result
-        let rest = form.fields.filter { result[$0.name] == nil }
-        let suggested = await FormFieldAssistant().suggest(for: rest, preferPrivateCloud: usePrivateCloud)
-        mapping.merge(suggested) { current, _ in current }
+        assignment = FormMatcher.assign(fields, matches: matches, catalog: catalog)
+        let rest = fields.filter { matches[$0.id] == nil }
+        let suggested = await FieldAssistant().suggest(for: rest, slots: catalog.slots, preferPrivateCloud: usePrivateCloud)
+        matches.merge(suggested) { current, _ in current }
+        assignment = FormMatcher.assign(fields, matches: matches, catalog: catalog)
         isMatching = false
     }
 
     private func fill() {
         Task {
             do {
-                let fields = matched.filter { !skipped.contains($0.name) }
-                let needsFaceID = fields.contains { mapping[$0.name]?.isSensitive == true }
+                let chosen = matched.filter { !skipped.contains($0.id) }
+                let needsFaceID = catalog.needsFaceID(chosen.compactMap { assignment.entries[$0.id] })
                 let context = needsFaceID ? try await Authenticator.authenticate(reason: "Fill document numbers into the form") : nil
                 var values: [String: String] = [:]
-                for field in fields {
-                    guard let value = mapping[field.name] else { continue }
-                    values[field.name] = book.string(for: value, dateStyle: FormDateStyle.style(for: field), context: context)
+                for field in chosen {
+                    values[field.id] = text(for: field, context: context)
                 }
                 guard let document = PDFDocument(data: form.data), let data = FormFiller.fill(document, values: values) else {
                     errorMessage = "The filled PDF couldn’t be created."
