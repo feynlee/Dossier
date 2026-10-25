@@ -7,6 +7,12 @@ struct DossierApp: App {
     @State private var importer = ImportCoordinator()
     @State private var appLock = AppLock()
 
+    init() {
+        #if DEBUG
+        if SampleVault.isRequested { SampleVault.load(into: VaultStore.container) }
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

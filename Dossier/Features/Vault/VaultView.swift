@@ -240,6 +240,7 @@ struct VaultView: View {
                         } label: {
                             LibraryFolderRow(name: folder.name, documents: folder.items)
                         }
+                        .accessibilityIdentifier("folder \(folder.name)")
                     }
                 }
             }
@@ -264,6 +265,7 @@ struct VaultView: View {
         NavigationLink(value: document) {
             DocumentRow(document: document)
         }
+        .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
         .tag(document.persistentModelID)
         .swipeActions {
             Button("Remove", systemImage: "trash", role: .destructive) { removing = [document] }
@@ -360,6 +362,7 @@ struct LibraryFolderView: View {
                 NavigationLink(value: document) {
                     DocumentRow(document: document)
                 }
+                .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
             }
         }
         .navigationTitle(title)
