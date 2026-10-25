@@ -22,7 +22,7 @@ struct LibraryIndexTests {
         #expect(folders.contains(["Mei", "Identity"]))
         #expect(folders.contains(["Mei", "Identity", "Passports"]))
         #expect(!folders.contains([]))
-        #expect(folders.count == 9)
+        #expect(folders.count == 11)
     }
 
     @Test func contentsListSubfoldersAndDocuments() {
