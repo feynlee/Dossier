@@ -90,11 +90,14 @@ final class VaultNavigationTests: XCTestCase {
             if element.exists, element.isHittable { return true }
         }
         // A swipe flings past lazy rows, so the lists are dragged a little at a time.
+        // Down first, then back up, since the swipes above can fling a list past it to the end.
         for list in app.collectionViews.allElementsBoundByIndex where list.isHittable {
-            for _ in 0..<12 {
-                if element.exists, element.isHittable { return true }
-                list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-                    .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
+            for (from, to) in [(0.8, 0.45), (0.45, 0.8)] {
+                for _ in 0..<12 {
+                    if element.exists, element.isHittable { return true }
+                    list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from))
+                        .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: to)))
+                }
             }
         }
         return element.exists && element.isHittable
