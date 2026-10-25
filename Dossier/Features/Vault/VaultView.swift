@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Home: your compiled personal information, what needs review, and every document you added.
 struct VaultView: View {
@@ -10,6 +11,10 @@ struct VaultView: View {
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
     @State private var isPicking = false
+    @State private var isPickingFolder = false
+    /// A folder to choose files from: picked, or dropped on the Vault.
+    @State private var pickedFolder: URL?
+    @Environment(IncomingFiles.self) private var incoming
     @State private var isScanning = false
     @State private var profile = Profile(entries: [])
     /// Documents waiting for you to confirm removing them.
@@ -125,7 +130,8 @@ struct VaultView: View {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Button("Scan Documents", systemImage: "doc.viewfinder") { isScanning = true }
-                            Button("Choose Files", systemImage: "folder") { isPicking = true }
+                            Button("Choose Files", systemImage: "doc") { isPicking = true }
+                            Button("Choose from a Folder", systemImage: "folder") { isPickingFolder = true }
                         } label: {
                             Label("Add Documents", systemImage: "plus")
                         }
@@ -139,6 +145,11 @@ struct VaultView: View {
             }
             .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
             .addDocuments(isPresented: $isPicking)
+            .chooseFromFolder(isPresented: $isPickingFolder, folder: $pickedFolder)
+            .onDrop(of: [.item], isTargeted: nil) { providers in
+                Task { await receive(providers) }
+                return true
+            }
             .fullScreenCover(isPresented: $isScanning) { DocumentScanner() }
             .removeDocuments($removing) { endSelecting() }
             .onChange(of: documents.count) { _, count in
@@ -148,6 +159,21 @@ struct VaultView: View {
                 profile = Profile.build(documents: documents, overrides: overrides)
             }
         }
+    }
+
+    /// Files dropped on the Vault are added where they are; a folder opens so you can choose files in it.
+    /// Copies (from Mail, say) are handled like files shared to Dossier.
+    private func receive(_ providers: [NSItemProvider]) async {
+        var files: [URL] = []
+        for provider in providers {
+            switch await DroppedItem.load(provider) {
+            case .file(let url): files.append(url)
+            case .folder(let url): pickedFolder = url
+            case .copy(let url): incoming.receive(url)
+            case nil: break
+            }
+        }
+        if !files.isEmpty { importer.add(files, context: modelContext, preferPrivateCloud: usePrivateCloud) }
     }
 
     private var selected: [SourceDocument] {

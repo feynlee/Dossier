@@ -23,6 +23,7 @@ struct RootView: View {
         }
         // Files sent from other apps are handled once Dossier is unlocked.
         .modifier(IncomingFilesModifier(incoming: incoming, isLocked: lock.isLocked && isSetUp))
+        .environment(incoming)
         .onAppear {
             if !hasOnboarded, !documents.isEmpty || FolderAccess.hasLegacyFolders { hasOnboarded = true }
             if !isSetUp { lock.release() }
