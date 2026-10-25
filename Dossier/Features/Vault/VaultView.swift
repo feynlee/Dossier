@@ -26,6 +26,8 @@ struct VaultView: View {
     @State private var rereadingSelected: [SourceDocument] = []
     @State private var editMode: EditMode = .inactive
     @State private var selection = Set<PersistentIdentifier>()
+    /// The person whose documents the Vault shows; nil for everyone.
+    @State private var person: String?
 
     private var isSelecting: Bool { editMode.isEditing }
 
@@ -69,6 +71,8 @@ struct VaultView: View {
                         EmptyVault(isPicking: $isPicking, isScanning: $isScanning)
                     }
                     .listRowBackground(Color.clear)
+                } else if searchText.isEmpty, !isSelecting, !placed.isEmpty {
+                    librarySections
                 } else {
                     Section {
                         if filtered.isEmpty {
@@ -196,6 +200,62 @@ struct VaultView: View {
         .removeDocuments($removingAll)
     }
 
+    // MARK: Library
+
+    /// Documents with a place in the library, and where.
+    private var placed: [(item: SourceDocument, placement: LibraryPlacement)] {
+        documents.compactMap { document in document.placement.map { (item: document, placement: $0) } }
+    }
+
+    private var people: [String] {
+        let placements = placed.map(\.placement)
+        let counts = Dictionary(placements.filter { $0.person != LibraryPlacement.household }.map { ($0.person, 1) }, uniquingKeysWith: +)
+        let owner = counts.max { ($0.value, $1.key) < ($1.value, $0.key) }?.key
+        return LibraryGroups.people(placements, owner: owner)
+    }
+
+    /// The Vault laid out like the library: a person switcher when there's more than one person, then a
+    /// section per category. A folder with one document shows the document; one with several opens a list.
+    @ViewBuilder private var librarySections: some View {
+        let names = people
+        if names.count > 1 {
+            Section {
+                Picker("Person", selection: $person) {
+                    Text("Everyone").tag(String?.none)
+                    ForEach(names, id: \.self) { Text($0).tag(Optional($0)) }
+                }
+                .pickerStyle(.segmented)
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+        }
+        ForEach(LibraryGroups.sections(placed, person: names.count > 1 ? person : nil)) { section in
+            Section(section.isShared ? "\(section.category) · shared" : section.category) {
+                ForEach(section.folders) { folder in
+                    if folder.items.count == 1, let document = folder.items.first {
+                        row(document)
+                    } else {
+                        NavigationLink {
+                            LibraryFolderView(title: folder.name, documents: folder.items)
+                        } label: {
+                            LibraryFolderRow(name: folder.name, documents: folder.items)
+                        }
+                    }
+                }
+            }
+        }
+        let unplaced = documents.filter { $0.placement == nil }
+        if !unplaced.isEmpty {
+            Section {
+                ForEach(unplaced) { row($0) }
+            } header: {
+                Text("Not sorted yet")
+            } footer: {
+                Text("Dossier sorts documents into folders once it has read them.")
+            }
+        }
+    }
+
     /// Expired documents get their own section, below the current ones.
     private var expired: [SourceDocument] { filtered.filter(\.isExpired) }
     private var current: [SourceDocument] { filtered.filter { !$0.isExpired } }
@@ -272,6 +332,38 @@ struct DocumentRow: View {
             return (expiry < .now ? "Expired " : "Expires ") + SimpleDate(utc: expiry).display
         }
         return document.fileName
+    }
+}
+
+/// A folder of several documents: "I-20s · 3 documents · 2019 to 2022", badged with the one that most needs you.
+private struct LibraryFolderRow: View {
+    let name: String
+    let documents: [SourceDocument]
+
+    var body: some View {
+        let badges = documents.map(\.badge)
+        let badge: TileBadge = badges.contains(.review) ? .review : badges.contains(.expiring) ? .expiring : badges.contains(.reading) ? .reading : .verified
+        let dates = documents.flatMap { [$0.libraryFacts.from, $0.libraryFacts.until, $0.libraryFacts.date].compactMap { $0 } }
+        let subtitle = ["\(documents.count) documents", LibraryGroups.years(dates)].compactMap { $0 }.joined(separator: " · ")
+        TileRow(symbol: documents.first?.kind.symbol ?? "folder", badge: badge, title: name, subtitle: subtitle)
+    }
+}
+
+/// The documents in one library folder.
+struct LibraryFolderView: View {
+    let title: String
+    let documents: [SourceDocument]
+
+    var body: some View {
+        List {
+            ForEach(documents) { document in
+                NavigationLink(value: document) {
+                    DocumentRow(document: document)
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

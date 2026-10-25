@@ -44,6 +44,13 @@ final class SourceDocument {
     /// Fields you deleted (`Fact.fieldID`), left out when the document is read again.
     var dismissedFields: [String] = []
     @Relationship(deleteRule: .cascade, inverse: \TravelEvent.document) var travel: [TravelEvent] = []
+    /// Where the document sits in the library and what it's called there. Set by `LibraryOrganizer`, or by
+    /// you, in which case Dossier never changes it.
+    var libraryPerson: String?
+    var libraryCategory: String?
+    var libraryFolder: String?
+    var libraryName: String?
+    var placementIsYours: Bool = false
 
     init(contentHash: String, fileName: String, relativePath: String = "", folderID: String = "", kind: DocumentKind, title: String, engine: ExtractionEngine, pageCount: Int) {
         self.contentHash = contentHash
@@ -69,6 +76,19 @@ final class SourceDocument {
     }
 
     var kind: DocumentKind { DocumentKind(rawValue: kindRaw) ?? .other }
+
+    var placement: LibraryPlacement? {
+        get {
+            guard let libraryPerson, let libraryCategory, let libraryFolder, let libraryName else { return nil }
+            return LibraryPlacement(person: libraryPerson, category: libraryCategory, folder: libraryFolder, name: libraryName)
+        }
+        set {
+            libraryPerson = newValue?.person
+            libraryCategory = newValue?.category
+            libraryFolder = newValue?.folder
+            libraryName = newValue?.name
+        }
+    }
     var engine: ExtractionEngine { ExtractionEngine(rawValue: engineRaw) ?? .onDevice }
 
     var state: DocumentState {

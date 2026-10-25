@@ -18,6 +18,8 @@ final class ImportCoordinator {
     private(set) var lastEngine: ExtractionEngine?
 
     @ObservationIgnored private let extractor = DocumentExtractor()
+    /// Places and names documents in the library after each pass.
+    @ObservationIgnored let organizer = LibraryOrganizer()
     @ObservationIgnored private let sealer = Sealer.shared
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let logger = Logger(subsystem: "liziyue.Dossier", category: "Import")
@@ -173,6 +175,8 @@ final class ImportCoordinator {
             }
         }
         try? context.save()
+        // Every pass ends with the library up to date, including documents from before it existed.
+        if !Task.isCancelled { await organizer.organize(context: context) }
         return waiting
     }
 

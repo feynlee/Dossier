@@ -26,6 +26,7 @@ struct DocumentDetailView: View {
     @State private var showingMissing = false
     @State private var showingDecision = false
     @State private var removing: [SourceDocument] = []
+    @State private var isPlacing = false
     @State private var isEditingPages = false
     @State private var isScanningReplacement = false
     @State private var isChoosingReplacement = false
@@ -267,6 +268,7 @@ struct DocumentDetailView: View {
         }
         .sheet(isPresented: $showingMissing) { MissingSourceSheet(document: document) }
         .sheet(isPresented: $showingDecision) { DocumentDecisionSheet(document: document) }
+        .sheet(isPresented: $isPlacing) { LibraryPlacementSheet(document: document) }
     }
 
     private var factList: some View {
@@ -311,6 +313,20 @@ struct DocumentDetailView: View {
                     Section(group.title) {
                         ForEach(shown(group.facts)) { factRow($0) }
                     }
+                }
+            }
+
+            if let placement = document.placement {
+                Section {
+                    LabeledContent("Name", value: placement.name)
+                    LabeledContent("Folder", value: ([placement.person, placement.category, placement.folder]).joined(separator: " › "))
+                    Button("Rename or Move", systemImage: "folder") { isPlacing = true }
+                } header: {
+                    Text("In your library")
+                } footer: {
+                    Text(document.placementIsYours
+                        ? "You chose this name and folder, so Dossier keeps them."
+                        : "Dossier chose this name and folder from what it read. Your file isn’t renamed or moved.")
                 }
             }
 
