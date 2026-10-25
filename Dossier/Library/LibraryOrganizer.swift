@@ -73,7 +73,7 @@ extension SourceDocument {
 
     /// The non-sensitive facts the library's names are made from.
     var libraryFacts: LibraryFacts {
-        func text(_ key: FactKey) -> String? { fact(key).flatMap(VaultReader.value)?.nilIfEmpty }
+        func text(_ key: FactKey) -> String? { fact(key).flatMap { VaultReader.value(of: $0) }?.nilIfEmpty }
         func date(_ key: FactKey) -> SimpleDate? { fact(key)?.plainDate.map { SimpleDate(utc: $0) } }
         let from: SimpleDate?
         let until: SimpleDate?
