@@ -43,7 +43,7 @@ actor DocumentExtractor {
     private static let privateCloudTextLimit = 90_000
 
     /// Bumped when the instructions change enough that documents should be read again.
-    static let readingVersion = 2
+    static let readingVersion = 3
 
     static let baseInstructions = """
         You read personal documents for their owner: passports, US immigration cards and notices, driver's \
