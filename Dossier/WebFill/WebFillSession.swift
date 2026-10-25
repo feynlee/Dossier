@@ -19,6 +19,8 @@ final class WebFillSession: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// Fields on the page that Dossier can fill, by the quick (rules-only) match after each load.
     private(set) var fillableCount = 0
     private(set) var loadError: String?
+    /// A site's upload field is asking for files. Dossier's picker answers it.
+    private(set) var upload: UploadRequest?
 
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
     /// Dossier's scripts run here, out of the page's reach.
@@ -31,6 +33,9 @@ final class WebFillSession: NSObject, WKNavigationDelegate, WKUIDelegate {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.defaultWebpagePreferences.preferredContentMode = .mobile
+        configuration.userContentController.addUserScript(
+            WKUserScript(source: WebFillScript.watchUploads, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .world(name: "Dossier"))
+        )
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         webView.navigationDelegate = self
@@ -107,6 +112,27 @@ final class WebFillSession: NSObject, WKNavigationDelegate, WKUIDelegate {
         try? await webView.pdf()
     }
 
+    // MARK: Uploads
+
+    /// A site's upload field, tapped: Dossier shows its own picker, with the documents that fit first.
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo) async -> [URL]? {
+        let field = try? await webView.callAsyncJavaScript(WebFillScript.lastUpload, in: frame, contentWorld: world) as? [String: Any]
+        upload?.finish(nil)
+        return await withCheckedContinuation { continuation in
+            upload = UploadRequest(
+                label: field?["label"] as? String ?? "",
+                accept: field?["accept"] as? String ?? "",
+                allowsMultiple: parameters.allowsMultipleSelection
+            ) { continuation.resume(returning: $0) }
+        }
+    }
+
+    /// Answers the upload field: the files to attach, or nil when you cancel.
+    func finishUpload(_ urls: [URL]?) {
+        upload?.finish(urls)
+        upload = nil
+    }
+
     // MARK: Navigation
 
     var onPageLoaded: (() -> Void)?
@@ -161,5 +187,48 @@ nonisolated enum WebFillHistory {
 
     static func clear() {
         UserDefaults.standard.removeObject(forKey: key)
+    }
+}
+
+/// A site's request for files, answered once.
+@MainActor
+final class UploadRequest: Identifiable {
+    let id = UUID()
+    /// What the field says it's for, such as "Upload a copy of your passport".
+    let label: String
+    /// The field's accepted types, such as "image/*,.pdf".
+    let accept: String
+    let allowsMultiple: Bool
+    private var respond: (([URL]?) -> Void)?
+
+    init(label: String, accept: String, allowsMultiple: Bool, respond: @escaping ([URL]?) -> Void) {
+        self.label = label
+        self.accept = accept
+        self.allowsMultiple = allowsMultiple
+        self.respond = respond
+    }
+
+    func finish(_ urls: [URL]?) {
+        respond?(urls)
+        respond = nil
+    }
+}
+
+/// Files handed to a site: copies of your documents in a temporary folder, named as in your library.
+nonisolated enum UploadFiles {
+    static var directory: URL { FileManager.default.temporaryDirectory.appending(path: "Uploads", directoryHint: .isDirectory) }
+
+    /// Writes the data under the name, in a folder of its own so names never collide.
+    static func write(_ data: Data, name: String) throws -> URL {
+        let folder = directory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: name)
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        return url
+    }
+
+    /// Copies handed to earlier pages, once they're done with.
+    static func clear() {
+        try? FileManager.default.removeItem(at: directory)
     }
 }

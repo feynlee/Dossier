@@ -172,6 +172,25 @@ nonisolated enum WebFillScript {
         return results;
         """#
 
+    /// Runs on every page from the start: remembers the upload field you tapped last, so Dossier's file
+    /// picker can say what the site asks for and suggest the right document.
+    static let watchUploads = #"""
+        document.addEventListener('click', (event) => {
+            const el = event.target && event.target.closest ? event.target.closest('input[type=file]') : null;
+            if (!el) return;
+            const textOf = (node) => ((node && (node.innerText || node.textContent)) || '').replace(/\s+/g, ' ').trim();
+            let label = el.labels && el.labels.length ? Array.from(el.labels).map(textOf).join(' ') : '';
+            if (!label) label = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+            let node = el.parentElement, depth = 0;
+            while (!label && node && depth < 4) { label = textOf(node); node = node.parentElement; depth += 1; }
+            if (!label) label = el.name || el.id || '';
+            window.__dossierUpload = { label: label.slice(0, 200), accept: el.accept || '' };
+        }, true);
+        """#
+
+    /// The upload field tapped last in this frame: `{label, accept}`, or null.
+    static let lastUpload = "return window.__dossierUpload || null;"
+
     /// Attaches a file to an upload field: `{token, name, type, base64}`.
     static let attach = helpers + #"""
         const els = find(token);
