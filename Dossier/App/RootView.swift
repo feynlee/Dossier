@@ -70,6 +70,14 @@ struct MainTabView: View {
             + overrides.map { "\($0.keyRaw)\($0.editedAt.timeIntervalSince1970)" }
     }
 
+    /// Changes whenever what the Dossier location in Files shows could have changed.
+    private var librarySignature: [String] {
+        documents.map { document in
+            let place = document.placement.map { "\($0.person)/\($0.category)/\($0.folder)/\($0.name)" } ?? ""
+            return "\(document.contentHash)\(document.stateRaw)\(place)\(document.fileName)\(document.fileModifiedAt?.timeIntervalSince1970 ?? 0)"
+        }
+    }
+
     var body: some View {
         TabView {
             Tab("Vault", systemImage: "person.text.rectangle") {
@@ -93,6 +101,12 @@ struct MainTabView: View {
         .task(id: autoFillSignature) {
             try? await Task.sleep(for: .seconds(1))
             AutoFillStore.save(FormCatalog.build(documents: documents, overrides: overrides).entries)
+        }
+        // Keep the Dossier location in Files showing the library as it is now.
+        .task(id: librarySignature) {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            await LibraryPublisher.publish(LibraryPublisher.sources(documents))
         }
     }
 }

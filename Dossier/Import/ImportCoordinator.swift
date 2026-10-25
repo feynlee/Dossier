@@ -427,6 +427,7 @@ final class ImportCoordinator {
         Self.deleteAllRecords(context: context)
         VaultKeys.shared.destroyAll()
         AutoFillStore.clear()
+        Task { await LibraryPublisher.remove() }
         FolderAccess.forgetLegacyFolders()
         unsupportedFiles = []
         duplicates = []
