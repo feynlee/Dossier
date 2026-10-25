@@ -218,7 +218,7 @@ struct RemovingTests {
     func context() throws -> ModelContext {
         let container = try ModelContainer(
             for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )
         return ModelContext(container)
     }
@@ -270,7 +270,7 @@ struct SharedConfirmationTests {
     init() throws {
         let container = try ModelContainer(
             for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )
         context = ModelContext(container)
     }
@@ -481,7 +481,7 @@ struct ProfileDetailsTests {
     init() throws {
         let container = try ModelContainer(
             for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )
         context = ModelContext(container)
     }
