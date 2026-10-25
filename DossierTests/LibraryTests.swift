@@ -150,3 +150,39 @@ struct LibraryTests {
         #expect(LibraryGroups.years([SimpleDate(iso: "2019-08-15")!, SimpleDate(iso: "2022-01-02")!]) == "2019 to 2022")
     }
 }
+
+struct LibraryFolderTests {
+    @Test func filesGoUnderPersonCategoryAndFolder() {
+        let root = URL(filePath: "/tmp/Dossier/Documents", directoryHint: .isDirectory)
+        let placement = LibraryPlacement(person: "Mei", category: "Immigration", folder: "EAD cards", name: "Mei · EAD card C09 · 2024-05-01 to 2026-04-30")
+        #expect(LibraryFolder.destination(for: placement, showingPerson: true, fileExtension: "jpg", root: root).path
+            == "/tmp/Dossier/Documents/Mei/Immigration/EAD cards/Mei · EAD card C09 · 2024-05-01 to 2026-04-30.jpg")
+        #expect(LibraryFolder.destination(for: placement, showingPerson: false, fileExtension: "", root: root).path
+            == "/tmp/Dossier/Documents/Immigration/EAD cards/Mei · EAD card C09 · 2024-05-01 to 2026-04-30.pdf")
+        #expect(LibraryFolder.contains(URL(filePath: "/tmp/Dossier/Documents/Scan.pdf"), root: root))
+        #expect(!LibraryFolder.contains(URL(filePath: "/tmp/Dossier/Elsewhere.pdf"), root: root))
+    }
+
+    @Test func movesAFileWithoutReplacingAnother() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "Library-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let scan = root.appending(path: "Scan.pdf")
+        try Data("new".utf8).write(to: scan)
+        let destination = root.appending(path: "Identity/Passports/Li · Passport.pdf")
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: destination)
+
+        let moved = try #require(LibraryFolder.move(scan, to: destination))
+        #expect(moved.lastPathComponent == "Li · Passport (2).pdf")
+        #expect(try Data(contentsOf: destination) == Data("old".utf8))
+        #expect(try Data(contentsOf: moved) == Data("new".utf8))
+        // Moving it to where it already is leaves it alone.
+        #expect(LibraryFolder.move(moved, to: destination) == moved)
+    }
+
+    @Test func showsDossiersOwnFolderByName() {
+        let url = URL(filePath: "/private/var/mobile/Library/Mobile Documents/iCloud~liziyue~Dossier/Documents/Mei/Immigration")
+        #expect(FolderAccess.displayPath(for: url) == "iCloud Drive › Dossier › Mei › Immigration")
+    }
+}

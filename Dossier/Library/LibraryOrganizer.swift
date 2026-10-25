@@ -51,6 +51,27 @@ final class LibraryOrganizer {
             }
         }
         try? context.save()
+        await arrangeFiles(documents, showingPerson: LibraryPlanner.showsPeople(plan.values), context: context)
+    }
+
+    /// Files Dossier keeps itself, in iCloud Drive › Dossier, are moved and renamed to match the library.
+    /// Your own files are never touched.
+    private func arrangeFiles(_ documents: [SourceDocument], showingPerson: Bool, context: ModelContext) async {
+        guard let root = await LibraryFolder.findRoot() else { return }
+        for document in documents where !document.isGone {
+            guard let placement = document.placement, let bookmark = document.bookmark,
+                  let url = FileAccess.resolve(bookmark)?.url, LibraryFolder.contains(url, root: root)
+            else { continue }
+            let target = LibraryFolder.destination(for: placement, showingPerson: showingPerson, fileExtension: url.pathExtension.lowercased(), root: root)
+            guard url.standardizedFileURL != target.standardizedFileURL else { continue }
+            guard let moved = await Task.detached(priority: .utility, operation: { LibraryFolder.move(url, to: target) }).value,
+                  moved.standardizedFileURL != url.standardizedFileURL
+            else { continue }
+            guard !document.isGone, let newBookmark = try? FileAccess.bookmark(for: moved) else { continue }
+            document.bookmark = newBookmark
+            document.fileName = moved.lastPathComponent
+        }
+        try? context.save()
     }
 
     /// Your own placement for a document. Dossier keeps it from now on.

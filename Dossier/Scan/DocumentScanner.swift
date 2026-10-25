@@ -429,6 +429,8 @@ struct SavePDFSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var folder = ScanFolders.preferredFolder
+    /// iCloud Drive › Dossier, where new files go unless you choose another folder.
+    @State private var library: URL?
     @State private var isChoosingFolder = false
     @State private var isWorking = false
     @State private var errorMessage: String?
@@ -477,8 +479,15 @@ struct SavePDFSheet: View {
                 } header: {
                     Text("Save to")
                 } footer: {
-                    Text(footer)
+                    Text(isInLibrary
+                        ? "Once Dossier has read it, it’s named and filed with your other documents in iCloud Drive › Dossier."
+                        : footer)
                 }
+            }
+            .task {
+                guard let found = await LibraryFolder.findRoot() else { return }
+                library = found
+                folder = found
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -509,6 +518,11 @@ struct SavePDFSheet: View {
             .onAppear { if name.isEmpty { name = suggestedName } }
         }
         .interactiveDismissDisabled(isWorking)
+    }
+
+    private var isInLibrary: Bool {
+        guard let folder, let library else { return false }
+        return folder.standardizedFileURL == library.standardizedFileURL
     }
 
     private func save() {
