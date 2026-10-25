@@ -111,3 +111,40 @@ struct AppLockPolicyTests {
         #expect(AppLockPolicy.timeoutChoices.contains(AppLockPolicy.defaultTimeout))
     }
 }
+
+struct DocumentContentsTests {
+    let pages = [[
+        "INTERNATIONAL CERTIFICATE OF VACCINATION",
+        "Yellow fever 12 JUL 2018 Lot AB123 Travel clinic Seattle",
+        "MMR 02/04/2019 Lot MM55",
+    ]]
+
+    @Test func entriesWithEveryNumberOnThePageAreVerified() throws {
+        let dose = try #require(Verifier.verifyEntry("2018-07-12 · Lot AB123 · Travel clinic Seattle", isConfident: true, page: 1, pages: pages))
+        #expect(dose.status == .verified)
+        #expect(dose.check == .pageText)
+        #expect(dose.value == "2018-07-12 · Lot AB123 · Travel clinic Seattle")
+    }
+
+    @Test func entriesWithANumberNotOnThePageNeedALook() throws {
+        let wrongLot = try #require(Verifier.verifyEntry("2018-07-12 · Lot AB128", isConfident: true, page: 1, pages: pages))
+        #expect(wrongLot.status == .needsReview)
+        let unsure = try #require(Verifier.verifyEntry("Negative", isConfident: false, page: 1, pages: pages))
+        #expect(unsure.status == .needsReview)
+        let words = try #require(Verifier.verifyEntry("Normal", isConfident: true, page: 1, pages: pages))
+        #expect(words.status == .verified)
+        #expect(Verifier.verifyEntry("  ", isConfident: true, page: 1, pages: pages) == nil)
+    }
+
+    @Test func entriesAreIdentifiedBySectionAndLabel() {
+        #expect(Fact.entryID(section: "Vaccinations", label: "MMR · dose 1") == "entry|vaccinations|mmr · dose 1")
+        #expect(Fact.entryID(section: "Vaccinations", label: "MMR · dose 1") != Fact.entryID(section: "Boosters", label: "MMR · dose 1"))
+    }
+
+    @Test func instructionsAskForEverythingTheDocumentRecords() {
+        let instructions = DocumentExtractor.instructions(for: DetailRequest())
+        #expect(instructions.contains("contents"))
+        #expect(instructions.contains("vaccination"))
+        #expect(instructions.contains("every table row"))
+    }
+}

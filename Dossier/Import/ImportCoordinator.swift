@@ -115,6 +115,7 @@ final class ImportCoordinator {
         let documents = (try? context.fetch(FetchDescriptor<SourceDocument>(sortBy: [SortDescriptor(\.ingestedAt)]))) ?? []
         await checkSources(documents)
         markChangedFiles(documents)
+        queueOutdated(documents, preferPrivateCloud: preferPrivateCloud)
         var queue = documents.filter { [.queued, .downloading, .reading].contains($0.state) }
         var waiting = 0
 
@@ -161,6 +162,7 @@ final class ImportCoordinator {
                 guard !pages.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
                 let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud, request: .current)
                 lastEngine = engine
+                if preferPrivateCloud, engine == .onDevice { privateCloudFailed = true }
                 // Removed from the vault while it was being read: drop the result.
                 guard !document.isGone else { continue }
                 try save(reading, engine: engine, pages: pages, hash: loaded.hash, info: info, into: document, context: context)
@@ -223,6 +225,73 @@ final class ImportCoordinator {
             }
             fact.document = document
             context.insert(fact)
+        }
+    }
+
+    /// Saves everything else the document records (test results, vaccine doses, tax boxes), in reading order,
+    /// checked against the page text like details. Identification numbers are sealed behind Face ID.
+    private func saveContents(
+        _ entries: [ReadEntry], pages: [ReadPage], dismissed: Set<String>, showsNumber: (String) -> Bool,
+        into document: SourceDocument, context: ModelContext
+    ) throws {
+        let pageLines = pages.map(\.lines)
+        var seen = Set<String>()
+        for (position, entry) in entries.prefix(Self.maxEntries).enumerated() {
+            let section = entry.section.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Other"
+            var label = entry.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !label.isEmpty else { continue }
+            // Two rows with the same label, such as two "Dose" rows: number them so both are kept.
+            let base = label
+            var number = 2
+            while seen.contains(Fact.entryID(section: section, label: label)) {
+                label = "\(base) (\(number))"
+                number += 1
+            }
+            let id = Fact.entryID(section: section, label: label)
+            guard !dismissed.contains(id),
+                  let item = Verifier.verifyEntry(entry.value, isConfident: entry.confidence != "low", page: max(1, entry.page), pages: pageLines)
+            else { continue }
+            seen.insert(id)
+
+            let sensitive = entry.isNumber == "yes"
+            let fact = Fact(
+                key: .detail,
+                sealedValue: try sealer.seal(item.value, sensitive: sensitive),
+                sealedHint: sensitive ? try sealer.seal(String(item.value.suffix(4)), sensitive: false) : nil,
+                status: item.status,
+                check: item.check,
+                page: item.page
+            )
+            fact.isSensitive = sensitive
+            fact.label = label
+            fact.section = section
+            fact.position = position
+            if let line = item.context, !sensitive, !showsNumber(line) {
+                fact.sealedContext = try sealer.seal(line, sensitive: false)
+            }
+            fact.cropRevealsNumber = item.context.map(showsNumber) ?? false
+            if let location = item.location, pages.indices.contains(location.page), pages[location.page].boxes.indices.contains(location.line) {
+                fact.setCrop(page: location.page + 1, rect: pages[location.page].boxes[location.line])
+            }
+            fact.document = document
+            context.insert(fact)
+        }
+    }
+
+    /// Enough for a vaccination booklet or a long lab report.
+    static let maxEntries = 200
+
+    /// Documents read with older instructions, or on this iPhone when Private Cloud Compute can be used now,
+    /// are read again, unless you've confirmed or corrected something on them. Set when Private Cloud
+    /// Compute failed during this launch, so the same documents aren't read on this iPhone over and over.
+    @ObservationIgnored private var privateCloudFailed = false
+
+    private func queueOutdated(_ documents: [SourceDocument], preferPrivateCloud: Bool) {
+        let canUsePrivateCloud = preferPrivateCloud && !privateCloudFailed && DocumentExtractor.privateCloudStatus() == nil
+        let wanted = canUsePrivateCloud ? DocumentExtractor.readingVersion : DocumentExtractor.readingVersion - 1
+        for document in documents where document.isReady && !document.sourceMissing && document.bookmark != nil && document.kind != .addedByYou {
+            guard document.readVersion < wanted, !document.facts.contains(where: { $0.check == .userConfirmed }) else { continue }
+            document.state = .queued
         }
     }
 
@@ -306,6 +375,8 @@ final class ImportCoordinator {
         }
 
         try saveDetails(reading.details, pages: pages, dismissed: dismissed, showsNumber: showsNumber, into: document, context: context)
+        try saveContents(reading.contents, pages: pages, dismissed: dismissed, showsNumber: showsNumber, into: document, context: context)
+        document.readVersion = engine == .privateCloudCompute ? DocumentExtractor.readingVersion : DocumentExtractor.readingVersion - 1
 
         // Fingerprints for spotting another file of the same document later, taken while the values are in
         // the clear. Only fingerprints are stored.

@@ -51,7 +51,7 @@ nonisolated enum DocumentKind: String, CaseIterable, Codable, Sendable {
         case .i94:
             [.surname, .givenNames, .dateOfBirth, .i94Number, .classOfAdmission, .admitUntil, .documentNumber]
         case .other:
-            [.surname, .givenNames, .dateOfBirth, .address, .documentNumber, .issueDate, .expiryDate]
+            [.surname, .givenNames, .dateOfBirth, .address, .documentNumber, .formType, .issueDate, .expiryDate]
         case .addedByYou:
             [.address, .validFrom, .validUntil]
         }

@@ -65,6 +65,7 @@ enum SampleVault {
             document.ingestedAt = .now.addingTimeInterval(Double(-index * 60))
             document.placement = sample.placement
             document.placementIsYours = true
+            document.readVersion = DocumentExtractor.readingVersion
             context.insert(document)
             for (key, value) in sample.facts {
                 guard let sealed = try? Sealer.shared.seal(value, sensitive: false) else { continue }

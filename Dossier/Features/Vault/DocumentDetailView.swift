@@ -43,7 +43,20 @@ struct DocumentDetailView: View {
     /// The document's own fields, then other details about its holder, then each family member's.
     private var mainFacts: [Fact] { facts.filter { $0.key != .detail } }
     private var holderDetails: [Fact] {
-        facts.filter { $0.key == .detail && $0.relation == nil }.sorted { ($0.label ?? "") < ($1.label ?? "") }
+        facts.filter { $0.key == .detail && $0.section == nil && $0.relation == nil }.sorted { ($0.label ?? "") < ($1.label ?? "") }
+    }
+
+    /// What the document records, under its own section headings, in the document's order.
+    private var contentGroups: [(section: String, facts: [Fact])] {
+        let entries = facts.filter { $0.section != nil }.sorted { $0.position < $1.position }
+        var order: [String] = []
+        var grouped: [String: [Fact]] = [:]
+        for fact in entries {
+            let section = fact.section ?? "Other"
+            if grouped[section] == nil { order.append(section) }
+            grouped[section, default: []].append(fact)
+        }
+        return order.map { ($0, grouped[$0] ?? []) }
     }
 
     private struct FamilyGroup {
@@ -53,7 +66,7 @@ struct DocumentDetailView: View {
     }
 
     private var familyGroups: [FamilyGroup] {
-        let details = facts.filter { $0.key == .detail && $0.relation != nil }
+        let details = facts.filter { $0.key == .detail && $0.section == nil && $0.relation != nil }
         let grouped = Dictionary(grouping: details) { "\($0.relationRaw ?? "")|\(($0.personName ?? "").uppercased())" }
         return grouped.map { id, facts in
             let first = facts[0]
@@ -299,6 +312,14 @@ struct DocumentDetailView: View {
             } footer: {
                 if !facts.isEmpty {
                     Text("Tap a field to see where it was read. Confirming a name, birth date or place of birth also confirms it on your other documents.")
+                }
+            }
+
+            ForEach(contentGroups, id: \.section) { group in
+                if !shown(group.facts).isEmpty {
+                    Section(group.section) {
+                        ForEach(shown(group.facts)) { factRow($0) }
+                    }
                 }
             }
 

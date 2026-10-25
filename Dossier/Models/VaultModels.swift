@@ -51,6 +51,9 @@ final class SourceDocument {
     var libraryFolder: String?
     var libraryName: String?
     var placementIsYours: Bool = false
+    /// `DocumentExtractor.readingVersion` when the document was read with Private Cloud Compute, one less
+    /// when it was read on this iPhone; 0 for documents read before versions were kept.
+    var readVersion: Int = 0
 
     init(contentHash: String, fileName: String, relativePath: String = "", folderID: String = "", kind: DocumentKind, title: String, engine: ExtractionEngine, pageCount: Int) {
         self.contentHash = contentHash
@@ -174,6 +177,11 @@ final class Fact {
     var relationRaw: String?
     /// For a family member's detail: their name, sealed under the vault key.
     var sealedPersonName: Data?
+    /// For something the document records (a test result, a vaccine dose): the document's section it's in,
+    /// such as "Vaccinations". Nil for facts and details.
+    var section: String?
+    /// Its place in the document's reading order.
+    var position: Int = 0
     var document: SourceDocument?
 
     var relation: Relation? { relationRaw.flatMap(Relation.init(rawValue:)) }
@@ -193,7 +201,12 @@ final class Fact {
     /// fingerprints, not text.
     var fieldID: String {
         guard key == .detail else { return keyRaw }
+        if let section { return Self.entryID(section: section, label: label ?? "") }
         return Self.detailID(label: label ?? "", relation: relationRaw, personName: personName)
+    }
+
+    static func entryID(section: String, label: String) -> String {
+        "entry|\(section.lowercased())|\(label.lowercased())"
     }
 
     static func detailID(label: String, relation: String?, personName: String?) -> String {
