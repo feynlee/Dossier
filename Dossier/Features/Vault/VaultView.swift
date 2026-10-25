@@ -50,9 +50,7 @@ struct VaultView: View {
             List(selection: $selection) {
                 if searchText.isEmpty, !isSelecting, documents.contains(where: \.isReady) {
                     Section {
-                        NavigationLink {
-                            ProfileView()
-                        } label: {
+                        NavigationLink(value: VaultRoute.profile) {
                             TileRow(symbol: "person.crop.circle", badge: profile.conflicts.isEmpty ? .verified : .review, title: "Personal information", subtitle: profileSummary)
                         }
                     }
@@ -106,7 +104,15 @@ struct VaultView: View {
             }
             .environment(\.editMode, $editMode)
             .navigationTitle(isSelecting ? selectionTitle : "Vault")
+            // Every link in the Vault pushes a value, so the stack stays in step: a link that pushes a view
+            // directly can't sit under a link that pushes a value.
             .navigationDestination(for: SourceDocument.self) { DocumentDetailView(document: $0) }
+            .navigationDestination(for: VaultRoute.self) { route in
+                switch route {
+                case .profile: ProfileView()
+                case .folder(let folder): LibraryFolderView(folder: folder)
+                }
+            }
             .searchable(text: $searchText, prompt: "Search")
             .toolbar {
                 if isSelecting {
@@ -235,9 +241,9 @@ struct VaultView: View {
                     if folder.items.count == 1, let document = folder.items.first {
                         row(document)
                     } else {
-                        NavigationLink {
-                            LibraryFolderView(title: folder.name, documents: folder.items)
-                        } label: {
+                        NavigationLink(value: VaultRoute.folder(LibraryFolderRoute(
+                            person: names.count > 1 ? person : nil, category: section.category, folder: folder.name, isShared: section.isShared
+                        ))) {
                             LibraryFolderRow(name: folder.name, documents: folder.items)
                         }
                         .accessibilityIdentifier("folder \(folder.name)")
@@ -351,21 +357,55 @@ private struct LibraryFolderRow: View {
     }
 }
 
-/// The documents in one library folder.
+/// Where a link in the Vault goes.
+enum VaultRoute: Hashable {
+    case profile
+    case folder(LibraryFolderRoute)
+}
+
+/// One library folder, as a section of the Vault shows it.
+struct LibraryFolderRoute: Hashable {
+    /// The person the Vault was showing; nil for everyone.
+    var person: String?
+    var category: String
+    var folder: String
+    /// The folder of Household documents shown with one person's.
+    var isShared: Bool
+
+    func contains(_ placement: LibraryPlacement) -> Bool {
+        guard placement.category == category, placement.folder == folder else { return false }
+        guard let person else { return true }
+        return placement.person == (isShared ? LibraryPlacement.household : person)
+    }
+}
+
+/// The documents in one library folder. Reads them itself, so it stays current while it's open.
 struct LibraryFolderView: View {
-    let title: String
-    let documents: [SourceDocument]
+    let folder: LibraryFolderRoute
+
+    @Query private var documents: [SourceDocument]
+
+    private var shown: [SourceDocument] {
+        documents
+            .compactMap { document in document.placement.map { (document, $0) } }
+            .filter { folder.contains($0.1) }
+            .sorted { $0.1.name.localizedStandardCompare($1.1.name) == .orderedAscending }
+            .map(\.0)
+    }
 
     var body: some View {
         List {
-            ForEach(documents) { document in
+            ForEach(shown) { document in
                 NavigationLink(value: document) {
                     DocumentRow(document: document)
                 }
                 .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
             }
         }
-        .navigationTitle(title)
+        .overlay {
+            if shown.isEmpty { ContentUnavailableView("No documents here now", systemImage: "folder") }
+        }
+        .navigationTitle(folder.folder)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
