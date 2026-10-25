@@ -28,6 +28,8 @@ struct VaultView: View {
     @State private var selection = Set<PersistentIdentifier>()
     /// The person whose documents the Vault shows; nil for everyone.
     @State private var person: String?
+    /// What's open on top of the Vault, kept here so Back always returns one screen.
+    @State private var path: [VaultRoute] = []
 
     private var isSelecting: Bool { editMode.isEditing }
 
@@ -46,7 +48,7 @@ struct VaultView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List(selection: $selection) {
                 if searchText.isEmpty, !isSelecting, documents.contains(where: \.isReady) {
                     Section {
@@ -106,12 +108,21 @@ struct VaultView: View {
             .navigationTitle(isSelecting ? selectionTitle : "Vault")
             // Every link in the Vault pushes a value, so the stack stays in step: a link that pushes a view
             // directly can't sit under a link that pushes a value.
-            .navigationDestination(for: SourceDocument.self) { DocumentDetailView(document: $0) }
             .navigationDestination(for: VaultRoute.self) { route in
                 switch route {
                 case .profile: ProfileView()
                 case .folder(let folder): LibraryFolderView(folder: folder)
+                case .document(let id):
+                    if let document = documents.first(where: { $0.persistentModelID == id }) {
+                        DocumentDetailView(document: document)
+                    } else {
+                        ContentUnavailableView("Document removed", systemImage: "doc")
+                    }
                 }
+            }
+            // A screen is never open twice in a row: a second push of the same screen is dropped.
+            .onChange(of: path) { _, newPath in
+                if newPath.count >= 2, newPath[newPath.count - 1] == newPath[newPath.count - 2] { path.removeLast() }
             }
             .searchable(text: $searchText, prompt: "Search")
             .toolbar {
@@ -268,7 +279,7 @@ struct VaultView: View {
     private var current: [SourceDocument] { filtered.filter { !$0.isExpired } }
 
     private func row(_ document: SourceDocument) -> some View {
-        NavigationLink(value: document) {
+        NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
             DocumentRow(document: document)
         }
         .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
@@ -361,6 +372,7 @@ private struct LibraryFolderRow: View {
 enum VaultRoute: Hashable {
     case profile
     case folder(LibraryFolderRoute)
+    case document(PersistentIdentifier)
 }
 
 /// One library folder, as a section of the Vault shows it.
@@ -396,7 +408,7 @@ struct LibraryFolderView: View {
     var body: some View {
         List {
             ForEach(shown) { document in
-                NavigationLink(value: document) {
+                NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
                     DocumentRow(document: document)
                 }
                 .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
