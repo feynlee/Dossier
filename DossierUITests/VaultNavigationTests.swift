@@ -42,6 +42,10 @@ final class VaultNavigationTests: XCTestCase {
 
         tap(app.buttons["document Li · Medical exam I-693 · 2024-02-10"])
         XCTAssertTrue(app.navigationBars["Report of medical examination"].waitForExistence(timeout: 5), "The exam didn't open")
+        // What the exam records shows under its own sections.
+        XCTAssertTrue(reveal(app.staticTexts["IGRA result"]), "The exam's results are missing")
+        XCTAssertTrue(reveal(app.staticTexts["MMR · dose 2"]), "The exam's vaccinations are missing")
+        keepScreenshot("Medical exam contents")
         goBack()
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
     }

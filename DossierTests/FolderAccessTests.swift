@@ -457,7 +457,7 @@ struct DetailExtractionTests {
         #expect(text.contains("Family members of the holder"))
         #expect(text.contains("\"Height\", \"Employer\""))
         let none = DocumentExtractor.instructions(for: DetailRequest(findsUsefulDetails: false, requested: []))
-        #expect(none.hasSuffix("Leave details empty."))
+        #expect(none.hasSuffix("Leave details empty; put everything in fields and contents."))
     }
 
     @Test func detailsAreCheckedAgainstThePageText() {

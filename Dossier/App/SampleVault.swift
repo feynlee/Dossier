@@ -15,6 +15,8 @@ enum SampleVault {
         var title: String
         var placement: LibraryPlacement
         var facts: [(FactKey, String)]
+        /// What the document records: section, label, value.
+        var contents: [(String, String, String)] = []
     }
 
     private static let samples: [Sample] = [
@@ -41,7 +43,13 @@ enum SampleVault {
         Sample(
             file: "Medical exam.pdf", kind: .other, title: "Report of medical examination",
             placement: LibraryPlacement(person: "Li", category: "Health", folder: "Medical exams", name: "Li · Medical exam I-693 · 2024-02-10"),
-            facts: [(.givenNames, "LI"), (.issueDate, "2024-02-10")]
+            facts: [(.givenNames, "LI"), (.issueDate, "2024-02-10")],
+            contents: [
+                ("Tuberculosis", "IGRA result", "Negative"),
+                ("Chest X-ray", "Result", "Normal"),
+                ("Vaccinations", "MMR · dose 1", "2019-04-02 · Lot MM55"),
+                ("Vaccinations", "MMR · dose 2", "2019-05-07 · Lot MM61"),
+            ]
         ),
     ]
 
@@ -71,6 +79,15 @@ enum SampleVault {
                 guard let sealed = try? Sealer.shared.seal(value, sensitive: false) else { continue }
                 let fact = Fact(key: key, sealedValue: sealed, sealedHint: nil, status: .verified, check: .pageText, page: 1)
                 if key.isDate { fact.plainDate = SimpleDate(iso: value)?.date }
+                fact.document = document
+                context.insert(fact)
+            }
+            for (position, (section, label, value)) in sample.contents.enumerated() {
+                guard let sealed = try? Sealer.shared.seal(value, sensitive: false) else { continue }
+                let fact = Fact(key: .detail, sealedValue: sealed, sealedHint: nil, status: .verified, check: .pageText, page: 1)
+                fact.label = label
+                fact.section = section
+                fact.position = position
                 fact.document = document
                 context.insert(fact)
             }
