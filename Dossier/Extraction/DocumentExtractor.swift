@@ -65,22 +65,15 @@ actor DocumentExtractor {
         - i94: surname, givenNames, dateOfBirth, i94Number, classOfAdmission, admitUntil, documentNumber, plus every travel row
         - other: surname, givenNames, dateOfBirth, address, documentNumber, issueDate, expiryDate, and formType for a numbered form such as I-693
 
-        2. contents: everything else the document records that its owner could need later, in reading \
-        order, grouped by the document's own sections. Report every filled-in field, every table row and \
-        every result, not a summary. For example:
-        - A medical examination (such as Form I-693): each examination and test with its result, date and \
-        the doctor's findings: section "Tuberculosis", label "IGRA result", value "Negative"; section \
-        "Chest X-ray", label "Result", value "Normal"; and the civil surgeon's name and the exam date.
-        - A vaccination certificate (such as the International Certificate of Vaccination or Prophylaxis): \
-        one entry for every dose: section "Vaccinations", label "Yellow fever · dose 1", value \
-        "2018-07-12 · Lot AB123 · Valid from 2018-07-22 · Travel clinic Seattle".
-        - A lab report: each test with its value, unit and reference range, and any flag.
-        - A tax form: each filled box with its number and label, such as "Box 1 · Wages".
-        - A school record: each course or subject with its term and grade; degrees and dates.
-        - A lease: rent, deposit, due day, landlord or agent, utilities and other terms.
-        - A statement or notice: its dates, amounts, period and what it decides or asks for.
-        Use the document's own labels. Leave out blank fields, instructions, legal fine print and form \
-        boilerplate, and anything already reported in fields.
+        2. contents: everything else on the document that is relevant to it or could be useful to its \
+        owner later, especially anything another form might ask for. Decide what that is from the document \
+        itself; no list limits it. Report every filled-in field, every table row and every result, not a \
+        summary, in reading order, grouped by the document's own sections and labelled with its own words. \
+        For instance: each test and result on a medical exam, every dose on a vaccination record (date, \
+        lot, clinic), each box on a tax form, each course and grade on a transcript, a lease's rent and \
+        terms, the people the document names in a role (doctor, landlord, employer, school). Leave out \
+        blank fields, instructions, legal fine print and form boilerplate, and anything already reported \
+        in fields.
 
         3. details: as described below.
 

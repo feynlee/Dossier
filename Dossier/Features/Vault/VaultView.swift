@@ -10,7 +10,6 @@ struct VaultView: View {
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
-    @State private var isPicking = false
     @State private var isPickingFolder = false
     /// A folder to choose files from: picked, or dropped on the Vault.
     @State private var pickedFolder: URL?
@@ -68,7 +67,7 @@ struct VaultView: View {
 
                 if documents.isEmpty {
                     Section {
-                        EmptyVault(isPicking: $isPicking, isScanning: $isScanning)
+                        EmptyVault(isPicking: $isPickingFolder, isScanning: $isScanning)
                     }
                     .listRowBackground(Color.clear)
                 } else if searchText.isEmpty, !isSelecting, !placed.isEmpty {
@@ -151,8 +150,7 @@ struct VaultView: View {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Button("Scan Documents", systemImage: "doc.viewfinder") { isScanning = true }
-                            Button("Choose Files", systemImage: "doc") { isPicking = true }
-                            Button("Choose from a Folder", systemImage: "folder") { isPickingFolder = true }
+                            Button("Choose Files", systemImage: "folder") { isPickingFolder = true }
                         } label: {
                             Label("Add Documents", systemImage: "plus")
                         }
@@ -165,7 +163,6 @@ struct VaultView: View {
                 }
             }
             .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
-            .addDocuments(isPresented: $isPicking)
             .chooseFromFolder(isPresented: $isPickingFolder, folder: $pickedFolder)
             .onDrop(of: [.item], isTargeted: nil) { providers in
                 Task { await receive(providers) }

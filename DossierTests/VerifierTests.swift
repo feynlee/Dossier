@@ -146,5 +146,6 @@ struct DocumentContentsTests {
         #expect(instructions.contains("contents"))
         #expect(instructions.contains("vaccination"))
         #expect(instructions.contains("every table row"))
+        #expect(instructions.contains("another form might ask for"))
     }
 }

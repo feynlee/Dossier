@@ -258,20 +258,29 @@ private struct SelectionBar: View {
     }
 }
 
-/// Picking a folder in the Files picker, then files inside it with `FolderTreePicker`.
+/// Choosing files in Dossier's own list, `FolderTreePicker`, starting in the folder you chose files from
+/// last time. The Files picker opens only to choose a folder: the first time, or when you tap Change.
 struct ChooseFromFolderModifier: ViewModifier {
     @Binding var isPresented: Bool
     /// Set to open the tree straight away, for a folder you dropped on the Vault.
     @Binding var folder: URL?
     var onAdded: () -> Void = {}
 
+    @State private var isChoosingFolder = false
     @State private var errorMessage: String?
 
     func body(content: Content) -> some View {
         content
-            .fileImporter(isPresented: $isPresented, allowedContentTypes: [.folder]) { result in
+            .onChange(of: isPresented) { _, presented in
+                guard presented else { return }
+                isPresented = false
+                if let last = LastFolder.url { folder = last } else { isChoosingFolder = true }
+            }
+            .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
                 switch result {
-                case .success(let url): folder = url
+                case .success(let url):
+                    LastFolder.remember(url)
+                    folder = url
                 case .failure(let error): errorMessage = error.localizedDescription
                 }
             }
@@ -285,13 +294,37 @@ struct ChooseFromFolderModifier: ViewModifier {
             }
     }
 
-    /// Closes the tree, then opens the Files picker again once the sheet is gone.
+    /// Closes the tree, then opens the Files picker to choose another folder once the sheet is gone.
     private func changeFolder() {
         folder = nil
         Task {
             try? await Task.sleep(for: .milliseconds(450))
-            isPresented = true
+            isChoosingFolder = true
         }
+    }
+}
+
+/// The folder you last chose files from, kept as a bookmark so Dossier can open it again.
+nonisolated enum LastFolder {
+    private static let key = "lastChosenFolder"
+
+    static var url: URL? {
+        guard let data = UserDefaults.standard.data(forKey: key), let resolved = FileAccess.resolve(data) else { return nil }
+        guard FileAccess.exists(resolved.url) else {
+            forget()
+            return nil
+        }
+        if let refreshed = resolved.refreshed { UserDefaults.standard.set(refreshed, forKey: key) }
+        return resolved.url
+    }
+
+    static func remember(_ folder: URL) {
+        guard let data = try? FileAccess.bookmark(for: folder) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    static func forget() {
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }
 
