@@ -104,7 +104,8 @@ nonisolated enum LibraryPublisher {
     /// Adds the Dossier location to Files the first time, then asks Files to enumerate it again.
     private static func signal(registering: Bool) async {
         do {
-            if registering || !(await isRegistered()) { try await NSFileProviderManager.add(domain) }
+            let added = registering ? false : await isRegistered()
+            if !added { try await NSFileProviderManager.add(domain) }
             try await NSFileProviderManager(for: domain)?.signalEnumerator(for: .workingSet)
         } catch {
             logger.error("Couldn't update the Dossier location in Files: \(String(describing: error), privacy: .public)")
