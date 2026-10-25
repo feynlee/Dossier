@@ -81,7 +81,7 @@ final class VaultNavigationTests: XCTestCase {
     // MARK: Helpers
 
     /// Scrolls until the element is on screen. Rows further down aren't made until they're near, and the
-    /// document page's list scrolls on its own below the page preview, so each scrolling view gets a turn.
+    /// document page's list scrolls on its own below the page preview, so each list gets a turn.
     @discardableResult
     private func reveal(_ element: XCUIElement) -> Bool {
         if element.waitForExistence(timeout: 3), element.isHittable { return true }
@@ -89,14 +89,15 @@ final class VaultNavigationTests: XCTestCase {
             app.swipeUp()
             if element.exists, element.isHittable { return true }
         }
-        let scrolling = app.collectionViews.allElementsBoundByIndex + app.scrollViews.allElementsBoundByIndex
-        for view in scrolling where view.isHittable {
-            for _ in 0..<6 {
-                view.swipeUp()
+        // A swipe flings past lazy rows, so the lists are dragged a little at a time.
+        for list in app.collectionViews.allElementsBoundByIndex where list.isHittable {
+            for _ in 0..<12 {
                 if element.exists, element.isHittable { return true }
+                list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+                    .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
             }
         }
-        return false
+        return element.exists && element.isHittable
     }
 
     private func tap(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
