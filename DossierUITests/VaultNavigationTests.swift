@@ -80,13 +80,21 @@ final class VaultNavigationTests: XCTestCase {
 
     // MARK: Helpers
 
-    /// Scrolls the list until the element is on screen. Rows further down aren't made until they're near.
+    /// Scrolls until the element is on screen. Rows further down aren't made until they're near, and the
+    /// document page's list scrolls on its own below the page preview, so each scrolling view gets a turn.
     @discardableResult
     private func reveal(_ element: XCUIElement) -> Bool {
         if element.waitForExistence(timeout: 3), element.isHittable { return true }
         for _ in 0..<6 {
             app.swipeUp()
             if element.exists, element.isHittable { return true }
+        }
+        let scrolling = app.collectionViews.allElementsBoundByIndex + app.scrollViews.allElementsBoundByIndex
+        for view in scrolling where view.isHittable {
+            for _ in 0..<6 {
+                view.swipeUp()
+                if element.exists, element.isHittable { return true }
+            }
         }
         return false
     }

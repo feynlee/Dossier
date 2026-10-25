@@ -64,7 +64,7 @@ nonisolated struct FolderTree: Sendable {
         case all = "All"
         case pdfs = "PDFs"
         case photos = "Photos"
-        case notAdded = "Not in Dossier"
+        case notAdded = "New"
 
         var id: Self { self }
     }
