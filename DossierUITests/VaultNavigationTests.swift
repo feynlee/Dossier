@@ -7,7 +7,7 @@ final class VaultNavigationTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["-SampleVault", "-appLockEnabled", "NO", "-hasOnboarded", "YES"]
+        app.launchArguments = ["-SampleVault"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 15), "The Vault didn't open")
     }
@@ -68,7 +68,7 @@ final class VaultNavigationTests: XCTestCase {
     }
 
     func testPersonalInformationOpensAndGoesBack() {
-        tap(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Personal information'")).firstMatch)
+        tap(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Personal information'")).firstMatch)
         XCTAssertTrue(app.navigationBars["Personal information"].waitForExistence(timeout: 5))
         goBack()
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))

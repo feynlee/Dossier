@@ -45,7 +45,7 @@ final class AppLock {
     @ObservationIgnored private var lastUnlock: (context: LAContext, at: ContinuousClock.Instant)?
 
     var isEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: AppLockPolicy.enabledKey) as? Bool ?? true }
+        get { Self.isEnabledByDefault }
         set { UserDefaults.standard.set(newValue, forKey: AppLockPolicy.enabledKey) }
     }
 
@@ -56,7 +56,15 @@ final class AppLock {
 
     init() {
         // A fresh launch is always locked (when there's anything to protect; see `RootView`).
-        isLocked = UserDefaults.standard.object(forKey: AppLockPolicy.enabledKey) as? Bool ?? true
+        isLocked = Self.isEnabledByDefault
+    }
+
+    /// On unless you turned it off. Off for the sample vault, which UI tests open without Face ID.
+    private static var isEnabledByDefault: Bool {
+        #if DEBUG
+        if SampleVault.isRequested { return false }
+        #endif
+        return UserDefaults.standard.object(forKey: AppLockPolicy.enabledKey) as? Bool ?? true
     }
 
     // MARK: Events
