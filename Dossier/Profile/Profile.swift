@@ -38,8 +38,14 @@ struct Profile {
     // MARK: Building
 
     static func build(documents: [SourceDocument], overrides: [ProfileOverride], timeline: LifeTimeline? = nil) -> Profile {
-        // Built in a task, so a document may have been removed since: skip those.
-        let ready = documents.filter { !$0.isGone && $0.isReady }
+        // Built in a task, so a document may have been removed since: skip those. Family members' documents
+        // are theirs, not yours: only the owner's, the household's and unsorted ones count.
+        let owner = LibraryGroups.owner(documents.compactMap(\.placement))
+        let ready = documents.filter { document in
+            guard !document.isGone, document.isReady else { return false }
+            guard let person = document.placement?.person, let owner else { return true }
+            return person == owner || person == LibraryPlacement.household
+        }
         let overrides = overrides.filter { !$0.isDeleted && $0.modelContext != nil }
         let overridesByKey = Dictionary(overrides.map { ($0.keyRaw, $0) }, uniquingKeysWith: { first, _ in first })
         var factsByID: [String: Fact] = [:]

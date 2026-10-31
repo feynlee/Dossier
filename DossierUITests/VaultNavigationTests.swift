@@ -72,7 +72,11 @@ final class VaultNavigationTests: XCTestCase {
     }
 
     func testPersonalInformationOpensAndGoesBack() {
-        tap(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Personal information'")).firstMatch)
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Personal information'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        // Li's vault: Mei's EAD cards are hers, so they don't make Li's given names disagree.
+        XCTAssertFalse(row.label.contains("disagree"), "Family members' documents count as yours: \(row.label)")
+        tap(row)
         XCTAssertTrue(app.navigationBars["Personal information"].waitForExistence(timeout: 5))
         goBack()
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))

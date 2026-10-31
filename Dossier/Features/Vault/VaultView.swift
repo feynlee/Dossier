@@ -222,9 +222,7 @@ struct VaultView: View {
 
     private var people: [String] {
         let placements = placed.map(\.placement)
-        let counts = Dictionary(placements.filter { $0.person != LibraryPlacement.household }.map { ($0.person, 1) }, uniquingKeysWith: +)
-        let owner = counts.max { ($0.value, $1.key) < ($1.value, $0.key) }?.key
-        return LibraryGroups.people(placements, owner: owner)
+        return LibraryGroups.people(placements, owner: LibraryGroups.owner(placements))
     }
 
     /// The Vault laid out like the library: a person switcher when there's more than one person, then a

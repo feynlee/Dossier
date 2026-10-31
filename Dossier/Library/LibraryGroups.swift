@@ -17,6 +17,12 @@ nonisolated enum LibraryGroups {
         var id: String { isShared ? "\(category) · shared" : category }
     }
 
+    /// Whose vault this mainly is: the person with the most documents. Ties go to the name first in order.
+    static func owner(_ placements: [LibraryPlacement]) -> String? {
+        let counts = Dictionary(placements.filter { $0.person != LibraryPlacement.household }.map { ($0.person, 1) }, uniquingKeysWith: +)
+        return counts.max { ($0.value, $1.key) < ($1.value, $0.key) }?.key
+    }
+
     /// The people to switch between: the owner first, then others by name, then Household.
     static func people(_ placements: [LibraryPlacement], owner: String?) -> [String] {
         let names = Set(placements.map(\.person))
