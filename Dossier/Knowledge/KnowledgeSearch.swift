@@ -177,6 +177,15 @@ nonisolated enum KnowledgeSearch {
     static func hint(_ question: KnowledgeQuestion, _ topic: KnowledgeTopic, isDate: Bool) -> Double {
         let words = Set(question.words)
         let name = topic.name.lowercased()
+        // A family member's detail filed on your record ("Anna|detail|spouse|DAVID|…") answers questions about
+        // them, not you: only when the question says spouse, husband, mother… or their name.
+        let parts = topic.id.components(separatedBy: "|")
+        if parts.count >= 5, parts[1] == "detail", let relation = Relation(rawValue: parts[2]) {
+            let raw = Set(KnowledgeText.words(question.text.lowercased()).map { $0.hasSuffix("'s") ? String($0.dropLast(2)) : $0 })
+            let mentioned = !raw.isDisjoint(with: KnowledgeTerms.relationWords(relation)) || raw.contains(parts[3].lowercased())
+                || KnowledgeText.words(parts[3]).contains { raw.contains($0) }
+            if !mentioned { return 0.4 }
+        }
         if !words.isDisjoint(with: ["born", "birthday", "dob", "birth"]) {
             if question.asksWhere { return topic.id.hasSuffix("|placeOfBirth") ? 1.6 : 1 }
             if topic.id.hasSuffix("|dateOfBirth") { return 1.6 }
