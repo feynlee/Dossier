@@ -31,11 +31,11 @@ enum KnowledgeService {
         let rules = { RuleAnswerer.answer(question, in: knowledge) }
         let device = { () async -> KnowledgeAnswer? in
             guard SystemLanguageModel.default.isAvailable else { return nil }
-            return await limited { try await ModelAnswerer(engine: .onDevice).answer(question, in: knowledge) }
+            return try? await ModelAnswerer(engine: .onDevice).answer(question, in: knowledge)
         }
         let cloud = { () async -> KnowledgeAnswer? in
             guard DocumentExtractor.privateCloudStatus() == nil else { return nil }
-            return await limited { try await ModelAnswerer(engine: .privateCloud).answer(question, in: knowledge) }
+            return try? await ModelAnswerer(engine: .privateCloud).answer(question, in: knowledge)
         }
         var result: KnowledgeAnswer?
         switch strategy {
@@ -51,25 +51,6 @@ enum KnowledgeService {
             if result?.found != true { result = await device() ?? result }
         }
         return result ?? KnowledgeAnswer(text: notFound, method: .rules, topicIDs: [], sources: [], found: false)
-    }
-
-    /// How long one model may take before Siri moves on. Seen in testing: on-device answers that the checks
-    /// then refused took 60 to 75 seconds.
-    static let modelTimeLimit: Duration = .seconds(12)
-
-    /// The model's answer, or nil when it fails or takes longer than `modelTimeLimit`.
-    static func limited(_ work: @escaping @Sendable () async throws -> KnowledgeAnswer) async -> KnowledgeAnswer? {
-        let limit = modelTimeLimit
-        return await withTaskGroup(of: KnowledgeAnswer?.self) { group in
-            group.addTask { try? await work() }
-            group.addTask {
-                try? await Task.sleep(for: limit)
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
-        }
     }
 }
 
