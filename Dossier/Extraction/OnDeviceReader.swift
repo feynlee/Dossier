@@ -78,9 +78,16 @@ nonisolated struct OnDeviceReader {
                 return try await respond(Self.factsInstructions, prompt, DeviceFacts.self)
             } catch {
                 lastError = error
-                guard DocumentExtractor.isContextOverflow(error) else { break }
-                logger.notice("On-device facts didn't fit with \(limit) characters; trying with less")
+                // Too long: less text. Refused by the guardrails: without the image, then with less text.
+                guard DocumentExtractor.isContextOverflow(error) || Self.isGuardrail(error) else { break }
+                logger.notice("On-device facts failed with \(limit) characters; trying with less")
             }
+        }
+        // Lab results and tax forms were refused outright in testing. Their facts are left to the parts, which
+        // are read one at a time, so one refused part doesn't lose the whole document.
+        if let lastError, Self.isGuardrail(lastError) {
+            let title = pages.first?.lines.first { $0.count > 6 }?.trimmingCharacters(in: .whitespaces) ?? "Document"
+            return DeviceFacts(kind: DocumentKind.other.rawValue, title: title, fields: [])
         }
         throw ExtractorError.failed(lastError.map { String(describing: $0) } ?? "The document couldn’t be read.")
     }
@@ -183,7 +190,8 @@ nonisolated struct OnDeviceReader {
         - other: surname, givenNames, dateOfBirth, address, documentNumber, issueDate, expiryDate, and formType for a numbered form
         Kinds: driversLicense and stateID are only driving licences and state ID cards. A health insurance card, \
         Social Security card, birth or marriage certificate, medical exam, vaccination record, lab report or tax \
-        form is other. A USCIS medical exam (I-693) is other, not a work permit.
+        form is other. A USCIS medical exam (I-693) is other, not a work permit. On a birth certificate the \
+        holder is the child: report the child's name and birth, never a parent's.
         Only the holder's facts, only what is printed; never guess. Copy numbers and names exactly as \
         printed, letter by letter (ERIKSSON stays ERIKSSON). Dates as YYYY-MM-DD; US documents write dates month \
         first. Match each date to its own label: the issue date is never the birth date. For a USCIS notice, formType is the form the notice is about \

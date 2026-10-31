@@ -140,9 +140,16 @@ nonisolated enum Verifier {
                 guard let date = looseDate(field.value, order: order) else { continue }
                 field.value = date.iso
             }
-            if field.key == .surname || field.key == .givenNames {
+            if field.key == .surname || field.key == .givenNames || field.key == .placeOfBirth {
                 // Names have no digits: that's a number the model put in the wrong place.
                 if field.value.contains(where: \.isNumber) { continue }
+                // A name nowhere on a well-read page, not even a letter or two off, was made up ("ANDERSSON" on
+                // a Social Security card that says ERIKSSON).
+                let parts = field.value.uppercased().split { !$0.isLetter }.map(String.init).filter { $0.count >= 3 }
+                if isWellRead(pages), !parts.isEmpty, field.key != .placeOfBirth,
+                   parts.allSatisfy({ part in !words.contains(part) && !words.contains { abs($0.count - part.count) <= 2 && distance($0, part) <= 2 } }) {
+                    continue
+                }
                 field.value = field.value.split(separator: " ").map { part in
                     let word = String(part)
                     let upper = word.uppercased()
