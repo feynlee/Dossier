@@ -63,6 +63,9 @@ nonisolated enum Verifier {
             } else {
                 // OCR reliably finds printed numbers and dates, so one it can't find is worth a look. Names and
                 // addresses can be read from the image even where OCR fails, so those aren't flagged for it.
+                // A date or number that isn't anywhere in a well-read page is made up, not misread (seen in testing:
+                // the on-device model gave a lease a birth date of 2000-01-15 and a document number 123456789).
+                if field.key.isMonospaced, context == nil, Self.isWellRead(pages), !Self.hasNearMatch(value, key: field.key, in: pages) { continue }
                 let isUncertain = !field.isConfident || (field.key.isMonospaced && context == nil)
                 let check: FactCheck = context != nil ? .pageText : (isUncertain ? .unchecked : .model)
                 results.append(VerifiedFact(
@@ -81,6 +84,26 @@ nonisolated enum Verifier {
             ))
         }
         return results.sorted { $0.key.sortOrder < $1.key.sortOrder }
+    }
+
+    // MARK: Made-up values
+
+    /// Enough OCR text that a printed date or number would be in it.
+    static func isWellRead(_ pages: [[String]]) -> Bool {
+        pages.joined().count >= 12
+    }
+
+    /// Whether OCR shows something close: a number a character or two off, or a date's digits in any order.
+    static func hasNearMatch(_ value: String, key: FactKey, in pages: [[String]]) -> Bool {
+        let target = compact(value)
+        guard target.count >= 4 else { return true }
+        if key.isDate, let date = SimpleDate(iso: value) {
+            // A line with its year and its day: a date OCR read with a slip or printed in a form not spelled out.
+            let day = String(date.day)
+            return pages.joined().map(compact).contains { $0.contains(String(date.year)) && $0.contains(day) }
+        }
+        let tokens = pages.joined().flatMap { $0.split(separator: " ").map { compact(String($0)) } } + pages.joined().map(compact)
+        return tokens.contains { token in abs(token.count - target.count) <= 2 && distance(token, target) <= 2 }
     }
 
     // MARK: Repairs

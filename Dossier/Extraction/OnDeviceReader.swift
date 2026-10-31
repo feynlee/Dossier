@@ -20,9 +20,9 @@ nonisolated struct OnDeviceReader {
 
     /// The most text one part holds. With the instructions and schema that leaves about half the context for
     /// the answer.
-    static let partLimit = 1_800
+    static let partLimit = 1_200
     /// Parts read per document; the rest of a very long document is left out.
-    static let maxParts = 14
+    static let maxParts = 20
 
     func read(_ pages: [ReadPage]) async throws -> DocumentReading {
         let facts = try await readFacts(pages)
@@ -196,9 +196,11 @@ nonisolated struct OnDeviceReader {
             Already read, so leave out: \(known.isEmpty ? "nothing" : known).
             In contents, report every filled-in field, table row and result in this part, in reading order, \
             labelled with the document's own words and grouped by its own section headings: each test and \
-            result, each vaccine dose (date, product, lot), each tax box, a lease's rent, deposit and terms, and \
-            the people it names in a role (doctor, landlord, employer). For a table row, join its columns with \
-            " · ". Leave out instructions, legal fine print and blank fields.
+            result, each vaccine dose, each tax box, every amount of money with its label (rent, deposit, fees, \
+            copays), parking spaces, pets and other terms, member and group numbers, and the people it names in a \
+            role (doctor, landlord, employer, insurer). For a table row, the value is all its other columns \
+            joined with " · ", such as "2019-04-02 · Lot AB123 · King County clinic" for a vaccine dose. Leave out \
+            instructions and legal boilerplate, but not the numbers, dates and amounts inside clauses.
             """
         if request.isEmpty {
             text += "\nLeave details empty."

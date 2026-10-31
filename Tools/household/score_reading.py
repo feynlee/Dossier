@@ -111,11 +111,15 @@ def entry_captured(expected, candidates):
         texts = [t for t in tokens if t[0] == "text"]
         found = sum(t[1] in flat for t in texts)
         has_date = any(t[0] == "date" for t in tokens)
-        ok = date_ok and (found == len(texts) or (has_date and found * 2 >= len(texts)) or (not has_date and texts and found >= 1 and len(texts) > 1 and found * 2 > len(texts)))
+        cand_words = set(words(text))
+        # A dated row with the right label and date is captured even without its lot or clinic: that answers
+        # "when was my flu shot". The lot and clinic are counted separately as row detail.
+        label_match = bool(label_words & cand_words)
+        ok = date_ok and (found == len(texts) or (has_date and found * 2 >= len(texts)) or (has_date and label_match)
+                          or (not has_date and texts and found >= 1 and len(texts) > 1 and found * 2 > len(texts)))
         if not ok:
             continue
         # A bare value such as "$2,950.00" or "Negative" could be any row: also want a word of the label.
-        cand_words = set(words(text))
         label_ok = not label_words or bool(label_words & cand_words) or len("".join(t[1] for t in tokens)) >= 8
         if label_ok:
             return True
