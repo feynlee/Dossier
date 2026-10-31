@@ -63,7 +63,6 @@ nonisolated struct OnDeviceReader {
         let text = Self.text(of: pages)
         var lastError: Error?
         for (limit, image) in [(3_000, true), (3_000, false), (1_500, false)] {
-            let session = LanguageModelSession(model: model, instructions: Self.factsInstructions)
             let attach = image && model.capabilities.contains(.vision) ? pages.first?.image : nil
             let prompt = Prompt {
                 if let attach {
@@ -76,7 +75,7 @@ nonisolated struct OnDeviceReader {
                 String(text.prefix(limit))
             }
             do {
-                return try await session.respond(to: prompt, generating: DeviceFacts.self, options: GenerationOptions(samplingMode: .greedy)).content
+                return try await respond(Self.factsInstructions, prompt, DeviceFacts.self)
             } catch {
                 lastError = error
                 guard DocumentExtractor.isContextOverflow(error) else { break }
@@ -89,10 +88,9 @@ nonisolated struct OnDeviceReader {
     /// One part; when its answer doesn't fit, its two halves.
     private func readPart(_ part: Part, facts: DeviceFacts, known: String) async -> [DevicePart] {
         let instructions = Self.partInstructions(kind: facts.kind, title: facts.title, known: known, request: request)
-        let session = LanguageModelSession(model: model, instructions: instructions)
         do {
-            let prompt = "Part of the document (page \(part.page)):\n\(part.text)"
-            return [try await session.respond(to: prompt, generating: DevicePart.self, options: GenerationOptions(samplingMode: .greedy)).content]
+            let text = "Part of the document (page \(part.page)):\n\(part.text)"
+            return [try await respond(instructions, Prompt { text }, DevicePart.self)]
         } catch let error where DocumentExtractor.isContextOverflow(error) && part.text.count > 400 {
             let lines = part.text.components(separatedBy: "\n")
             let middle = lines.count / 2
@@ -107,8 +105,28 @@ nonisolated struct OnDeviceReader {
     }
 
     private func readTravel(_ text: String) async throws -> [ReadTravelEvent] {
-        let session = LanguageModelSession(model: model, instructions: "You copy rows from an I-94 travel history. Report every arrival and departure row in the text, with its date as YYYY-MM-DD and its port as printed. Only rows that are printed.")
-        return try await session.respond(to: text, generating: DeviceTravel.self, options: GenerationOptions(samplingMode: .greedy)).content.travel
+        let instructions = "You copy rows from an I-94 travel history. Report every arrival and departure row in the text, with its date as YYYY-MM-DD and its port as printed. Only rows that are printed."
+        return try await respond(instructions, Prompt { text }, DeviceTravel.self).travel
+    }
+
+    /// One fresh session. Lab results and tax forms tripped the default guardrails in testing ("May contain
+    /// unsafe content"); copying what a document says is a transformation of its text, so those get a second
+    /// try with the guardrails meant for that.
+    private func respond<Content: Generable>(_ instructions: String, _ prompt: Prompt, _ type: Content.Type) async throws -> Content {
+        let options = GenerationOptions(samplingMode: .greedy)
+        do {
+            return try await LanguageModelSession(model: model, instructions: instructions).respond(to: prompt, generating: type, options: options).content
+        } catch let error where Self.isGuardrail(error) {
+            logger.notice("On-device guardrails stopped a reading; trying with the guardrails for transforming text")
+            let permissive = SystemLanguageModel(guardrails: .permissiveContentTransformations)
+            return try await LanguageModelSession(model: permissive, instructions: instructions).respond(to: prompt, generating: type, options: options).content
+        }
+    }
+
+    static func isGuardrail(_ error: Error) -> Bool {
+        if let error = error as? LanguageModelSession.GenerationError, case .guardrailViolation = error { return true }
+        let text = String(describing: error).lowercased()
+        return text.contains("unsafe") || text.contains("guardrail")
     }
 
     // MARK: Text
@@ -163,8 +181,12 @@ nonisolated struct OnDeviceReader {
         - uscisNotice: surname, givenNames, dateOfBirth, alienNumber, formType, receiptNumber, noticeDate, uscisCategory, validFrom, validUntil
         - i94: surname, givenNames, dateOfBirth, i94Number, classOfAdmission, admitUntil, documentNumber
         - other: surname, givenNames, dateOfBirth, address, documentNumber, issueDate, expiryDate, and formType for a numbered form
-        Only the holder's facts, only what is printed; never guess. Copy numbers exactly. Dates as YYYY-MM-DD; \
-        US documents write dates month first. For a USCIS notice, formType is the form the notice is about \
+        Kinds: driversLicense and stateID are only driving licences and state ID cards. A health insurance card, \
+        Social Security card, birth or marriage certificate, medical exam, vaccination record, lab report or tax \
+        form is other. A USCIS medical exam (I-693) is other, not a work permit.
+        Only the holder's facts, only what is printed; never guess. Copy numbers and names exactly as \
+        printed, letter by letter (ERIKSSON stays ERIKSSON). Dates as YYYY-MM-DD; US documents write dates month \
+        first. Match each date to its own label: the issue date is never the birth date. For a USCIS notice, formType is the form the notice is about \
         (such as I-485), not I-797.
         """
 

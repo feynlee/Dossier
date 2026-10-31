@@ -39,7 +39,7 @@ nonisolated enum Verifier {
         var results: [VerifiedFact] = []
         var seen = Set<FactKey>()
 
-        for field in fields {
+        for field in repaired(fields, pages: pages, order: order) {
             var value = normalizedValue(field.value, for: field.key)
             if field.key.isDate, let date = SimpleDate(iso: value) { value = correctedDate(date, pages: pages, order: order).iso }
             guard !value.isEmpty, seen.insert(field.key).inserted else { continue }
@@ -47,6 +47,11 @@ nonisolated enum Verifier {
             let context = location.map { pages[$0.page][$0.line] }
 
             if let reference = references[field.key] {
+                // "C1USASRC21904567896" for SRC2190456789: the model kept the zone's code and check digit.
+                if field.key == .documentNumber, !matches(value, reference.value, key: field.key),
+                   compact(value).contains(compact(reference.value)), compact(reference.value).count >= 6 {
+                    value = reference.value
+                }
                 if matches(value, reference.value, key: field.key) {
                     results.append(VerifiedFact(key: field.key, value: value, page: field.page, status: .verified, check: reference.check, context: context, location: location))
                 } else {
@@ -76,6 +81,76 @@ nonisolated enum Verifier {
             ))
         }
         return results.sorted { $0.key.sortOrder < $1.key.sortOrder }
+    }
+
+    // MARK: Repairs
+
+    /// Fixes the on-device model's usual slips before checking, each only when the page shows the right reading
+    /// (seen in testing): a name spelled the common way ("Eriksen") where the page says ERIKSSON, a licence number
+    /// read as the surname, a date left as 12-08-1990, the birth date given as the issue date, and issue and
+    /// expiry swapped.
+    static func repaired(_ fields: [Input], pages: [[String]], order: DateOrder?) -> [Input] {
+        let words = Set(pages.joined().flatMap { line in
+            line.uppercased().split { !$0.isLetter }.map(String.init).filter { $0.count >= 3 }
+        })
+        var out: [Input] = []
+        for var field in fields {
+            if field.key.isDate, SimpleDate(iso: field.value.trimmingCharacters(in: .whitespaces)) == nil {
+                guard let date = looseDate(field.value, order: order) else { continue }
+                field.value = date.iso
+            }
+            if field.key == .surname || field.key == .givenNames {
+                // Names have no digits: that's a number the model put in the wrong place.
+                if field.value.contains(where: \.isNumber) { continue }
+                field.value = field.value.split(separator: " ").map { part in
+                    let word = String(part)
+                    let upper = word.uppercased()
+                    guard upper.count >= 3, !words.contains(upper) else { return word }
+                    let close = words.filter { $0.first == upper.first && abs($0.count - upper.count) <= 2 && distance($0, upper) <= 2 }
+                    guard let best = close.min(by: { distance($0, upper) < distance($1, upper) }) else { return word }
+                    return word == upper ? best : String(best.prefix(1)) + best.dropFirst().lowercased()
+                }.joined(separator: " ")
+            }
+            out.append(field)
+        }
+        func date(_ key: FactKey) -> SimpleDate? { out.first { $0.key == key }.flatMap { SimpleDate(iso: $0.value) } }
+        if let issue = date(.issueDate), let birth = date(.dateOfBirth), issue == birth {
+            out.removeAll { $0.key == .issueDate }
+        }
+        if let issue = date(.issueDate), let expiry = date(.expiryDate), issue > expiry,
+           let i = out.firstIndex(where: { $0.key == .issueDate }), let e = out.firstIndex(where: { $0.key == .expiryDate }) {
+            out[i].value = expiry.iso
+            out[e].value = issue.iso
+        }
+        return out
+    }
+
+    /// 12-08-1990, 08/12/1990, 12.08.1990: in the order the document writes dates, else day first when the first
+    /// number can't be a month, else month first. Written-out months are read as they are.
+    static func looseDate(_ text: String, order: DateOrder?) -> SimpleDate? {
+        if let regex = try? Regex(#"\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})\b"#), let match = text.firstMatch(of: regex),
+           let a = match.output[1].substring.flatMap({ Int($0) }), let b = match.output[2].substring.flatMap({ Int($0) }),
+           let year = match.output[3].substring.flatMap({ Int($0) }) {
+            let dayFirst = a > 12 || (b <= 12 && order == .dayFirst)
+            return dayFirst ? SimpleDate(year: year, month: b, day: a) : SimpleDate(year: year, month: a, day: b)
+        }
+        return KnowledgeText.date(text)
+    }
+
+    /// Edit distance, for names a letter or two off.
+    static func distance(_ a: String, _ b: String) -> Int {
+        let x = Array(a), y = Array(b)
+        var row = Array(0...y.count)
+        for i in 1...max(x.count, 1) where !x.isEmpty {
+            var previous = row[0]
+            row[0] = i
+            for j in 1...max(y.count, 1) where !y.isEmpty {
+                let saved = row[j]
+                row[j] = min(row[j] + 1, row[j - 1] + 1, previous + (x[i - 1] == y[j - 1] ? 0 : 1))
+                previous = saved
+            }
+        }
+        return x.isEmpty ? y.count : y.isEmpty ? x.count : row[y.count]
     }
 
     // MARK: Details
