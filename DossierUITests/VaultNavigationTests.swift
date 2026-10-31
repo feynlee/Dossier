@@ -78,6 +78,36 @@ final class VaultNavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
     }
 
+    func testSearchResultsAndExpiredDocumentsOpen() {
+        let search = app.searchFields.firstMatch
+        if !search.waitForExistence(timeout: 3) { app.swipeDown() }
+        XCTAssertTrue(search.waitForExistence(timeout: 5), "No search field")
+        search.tap()
+        search.typeText("EAD")
+        // The 2024 card is current; the 2022 one has expired and is listed under Expired.
+        tap(app.buttons["document Mei · EAD card C09 · 2024-05-01 to 2026-04-30"])
+        XCTAssertTrue(app.navigationBars["EAD card"].waitForExistence(timeout: 5), "A search result didn't open")
+        goBack()
+        tap(app.buttons["document Mei · EAD card C09 · 2022-05-01 to 2024-04-30"])
+        XCTAssertTrue(app.navigationBars["EAD card"].waitForExistence(timeout: 5), "An expired document didn't open")
+        goBack()
+        XCTAssertTrue(app.buttons["document Mei · EAD card C09 · 2022-05-01 to 2024-04-30"].waitForExistence(timeout: 5), "Back didn't return to the results")
+    }
+
+    func testSelectModeSelectsInsteadOfOpening() {
+        app.buttons["More"].tap()
+        app.buttons["Select"].tap()
+        XCTAssertTrue(app.navigationBars["Select documents"].waitForExistence(timeout: 5), "Select mode didn't start")
+        app.buttons["document Li · Passport · 2019-03-14 to 2029-03-14"].tap()
+        XCTAssertTrue(app.navigationBars["1 selected"].waitForExistence(timeout: 5), "Tapping a row in Select mode didn't select it")
+        XCTAssertFalse(app.navigationBars["Passport"].exists, "Tapping a row in Select mode opened it")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
+        // Out of Select mode, the same tap opens the document again.
+        tap(app.buttons["document Li · Passport · 2019-03-14 to 2029-03-14"])
+        XCTAssertTrue(app.navigationBars["Passport"].waitForExistence(timeout: 5), "After Select mode, a row didn't open")
+    }
+
     // MARK: Helpers
 
     /// Scrolls until the element is on screen. Rows further down aren't made until they're near, and the

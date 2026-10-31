@@ -441,6 +441,10 @@ struct DocumentDetailView: View {
 
     private func unlockAutomatically() {
         guard needsFaceID, !reveal.isUnlocked, !askedToUnlock, !appLock.isLocked else { return }
+        #if DEBUG
+        // UI tests run on simulators without Face ID, where the prompt is a passcode sheet over the app.
+        if SampleVault.isRequested { return }
+        #endif
         askedToUnlock = true
         reveal.reveal(facts, reason: "Unlock \(document.title)", reusing: appLock.recentUnlock())
     }

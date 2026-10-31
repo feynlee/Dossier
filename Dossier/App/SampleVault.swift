@@ -9,6 +9,10 @@ enum SampleVault {
 
     static var isRequested: Bool { ProcessInfo.processInfo.arguments.contains(launchArgument) }
 
+    /// With `-SampleVaultStale` too, the samples count as read with older instructions, so Dossier reads them
+    /// all again on launch, as it does after an update changes how documents are read.
+    static var isStale: Bool { ProcessInfo.processInfo.arguments.contains("-SampleVaultStale") }
+
     private struct Sample {
         var file: String
         var kind: DocumentKind
@@ -73,7 +77,7 @@ enum SampleVault {
             document.ingestedAt = .now.addingTimeInterval(Double(-index * 60))
             document.placement = sample.placement
             document.placementIsYours = true
-            document.readVersion = DocumentExtractor.readingVersion
+            document.readVersion = isStale ? 0 : DocumentExtractor.readingVersion
             context.insert(document)
             for (key, value) in sample.facts {
                 guard let sealed = try? Sealer.shared.seal(value, sensitive: false) else { continue }

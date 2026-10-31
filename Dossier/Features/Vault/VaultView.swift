@@ -48,7 +48,10 @@ struct VaultView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List(selection: $selection) {
+            // Rows are selectable only in Select mode. A list that can select treats a tap on a row as a
+            // selection as well as the link's push, so a folder row (which has no selection tag) opened twice
+            // and the stack got out of step with the path: Back then did nothing.
+            List(selection: isSelecting ? $selection : nil) {
                 if searchText.isEmpty, !isSelecting, documents.contains(where: \.isReady) {
                     Section {
                         NavigationLink(value: VaultRoute.profile) {
@@ -118,10 +121,6 @@ struct VaultView: View {
                         ContentUnavailableView("Document removed", systemImage: "doc")
                     }
                 }
-            }
-            // A screen is never open twice in a row: a second push of the same screen is dropped.
-            .onChange(of: path) { _, newPath in
-                if newPath.count >= 2, newPath[newPath.count - 1] == newPath[newPath.count - 2] { path.removeLast() }
             }
             .searchable(text: $searchText, prompt: "Search")
             .toolbar {
