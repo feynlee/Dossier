@@ -330,13 +330,21 @@ nonisolated struct ModelAnswerer {
             : LanguageModelSession(model: SystemLanguageModel.default, instructions: Self.instructions)
         let prompt = "\(context.text)\n\nQuestion from \(knowledge.owner ?? "the owner"): \(question.text)"
         let reply = try await session.respond(to: prompt, generating: KnowledgeModelReply.self, options: GenerationOptions(samplingMode: .greedy)).content
-        let cited = reply.factIDs.filter { context.ids[$0] != nil }
+        var cited = reply.factIDs.filter { context.ids[$0] != nil }
+        // The on-device model sometimes cites the wrong line: "done by Dr. Priya Raman" citing the exam date
+        // beside the name. Then the facts the answer does rest on are cited instead, if they're few.
+        let checked = { (ids: [String]) in Self.isGrounded(reply.answer, in: context.header + ids.compactMap { context.lines[$0] } + [question.text]) }
+        if reply.outcome == "answered", !cited.isEmpty, !checked(cited) {
+            let given = context.lines.keys.sorted { $0.count == $1.count ? $0 < $1 : $0.count < $1.count }
+            let resting = given.filter { checked(cited + [$0]) }
+            if !resting.isEmpty, resting.count <= 2 { cited = resting + cited }
+        }
         let used = cited.compactMap { context.ids[$0] }
         let claims = used.compactMap { knowledge.topic($0) }.flatMap(\.claims)
         // An answer must rest on the facts it cites. Seen in testing: with the right fact missing, the on-device
         // model made up a rent, a parking space, lab results and an employer's figures. It may repeat the
         // question's own words ("Your Immigration Medical Exam was with…").
-        let isGrounded = Self.isGrounded(reply.answer, in: context.header + cited.compactMap { context.lines[$0] } + [question.text])
+        let isGrounded = checked(cited)
         let fitsRelation = Self.fitsRelation(used.compactMap { knowledge.topic($0) }, question)
         guard reply.outcome == "answered", !cited.isEmpty, isGrounded, fitsRelation else {
             let given = topics.map(\.id).joined(separator: ", ")
