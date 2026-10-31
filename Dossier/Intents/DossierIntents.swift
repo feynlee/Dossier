@@ -157,6 +157,25 @@ struct DaysAbroadIntent: AppIntent {
 struct DossierShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
+            intent: AskDossierIntent(),
+            phrases: [
+                "Ask \(.applicationName)",
+                "Ask \(.applicationName) a question",
+                "Look something up in \(.applicationName)",
+            ],
+            shortTitle: "Ask Dossier",
+            systemImageName: "questionmark.bubble"
+        )
+        AppShortcut(
+            intent: GetFactIntent(),
+            phrases: [
+                "What’s \(\.$fact) in \(.applicationName)",
+                "Get \(\.$fact) from \(.applicationName)",
+            ],
+            shortTitle: "Look up a fact",
+            systemImageName: "text.magnifyingglass"
+        )
+        AppShortcut(
             intent: DocumentNumberIntent(),
             phrases: [
                 "What’s my \(\.$document) number in \(.applicationName)",
