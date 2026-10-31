@@ -15,6 +15,8 @@ nonisolated struct KnowledgeAnswer: Sendable, Codable {
     /// A sensitive value the answer refers to, which the snippet can reveal after Face ID.
     var hiddenFactID: String?
     var found: Bool
+    /// Why a model's reply was not used, for the answer evaluation: never spoken.
+    var note: String?
 
     static let notFound = "I couldn’t find that in your documents."
 }
@@ -334,11 +336,14 @@ nonisolated struct ModelAnswerer {
         // An answer must rest on the facts it cites. Seen in testing: with the right fact missing, the on-device
         // model made up a rent, a parking space, lab results and an employer's figures. It may repeat the
         // question's own words ("Your Immigration Medical Exam was with…").
-        let grounded = !cited.isEmpty && Self.isGrounded(reply.answer, in: context.header + cited.compactMap { context.lines[$0] } + [question.text])
-            && Self.fitsRelation(used.compactMap { knowledge.topic($0) }, question)
-        guard reply.outcome == "answered", grounded else {
+        let isGrounded = Self.isGrounded(reply.answer, in: context.header + cited.compactMap { context.lines[$0] } + [question.text])
+        let fitsRelation = Self.fitsRelation(used.compactMap { knowledge.topic($0) }, question)
+        guard reply.outcome == "answered", !cited.isEmpty, isGrounded, fitsRelation else {
+            let given = topics.map(\.id).joined(separator: ", ")
+            let note = "outcome \(reply.outcome); cited \(reply.factIDs.joined(separator: " ")); grounded \(isGrounded); "
+                + "relation \(fitsRelation); reply \"\(reply.answer)\"; given \(given)"
             return KnowledgeAnswer(text: KnowledgeAnswer.notFound, method: engine == .privateCloud ? .privateCloud : .onDevice,
-                                   topicIDs: [], sources: [], found: false)
+                                   topicIDs: [], sources: [], found: false, note: note)
         }
         return KnowledgeAnswer(
             text: reply.answer, method: engine == .privateCloud ? .privateCloud : .onDevice, topicIDs: used,

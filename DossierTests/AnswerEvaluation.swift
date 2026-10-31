@@ -32,6 +32,7 @@ struct AnswerEvaluation {
         var found: Bool
         var topics: [String]
         var seconds: Double
+        var note: String?
     }
 
     @Test(.timeLimit(.minutes(60)))
@@ -59,7 +60,8 @@ struct AnswerEvaluation {
                     rows.append(Row(
                         strategy: strategy.rawValue, knowledge: name, question: question.question, expected: question.answer,
                         accept: question.accept, sensitive: question.sensitive, kind: question.kind, answer: answer.text,
-                        method: answer.method.rawValue, found: answer.found, topics: answer.topicIDs, seconds: Date.now.timeIntervalSince(started)
+                        method: answer.method.rawValue, found: answer.found, topics: answer.topicIDs, seconds: Date.now.timeIntervalSince(started),
+                        note: answer.note
                     ))
                 }
                 try encoder.encode(rows).write(to: output.appending(path: "answers-\(name)-\(strategy.rawValue).json"))
