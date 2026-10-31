@@ -100,6 +100,15 @@ struct KnowledgeTests {
         #expect(ask("When was I born?").contains("1990"))
     }
 
+    @Test func birthDateQuestionFindsTheBirthDate() {
+        let question = KnowledgeQuestion("When was I born?", knowledge: knowledge)
+        let matches = KnowledgeSearch.search(question, in: knowledge, limit: 5)
+        let listing = matches.map { "\($0.topic.id) \(String(format: "%.2f", $0.score)) covers=\(RuleAnswerer.covers($0.topic, question)) value=\($0.topic.current?.value.text ?? "nil")" }
+            .joined(separator: " | ")
+        let answer = RuleAnswerer.answer(question, in: knowledge)?.text ?? "nil"
+        #expect(answer.contains("1990"), "words=\(question.words) people=\(question.people) answer=\(answer) matches: \(listing)")
+    }
+
     // Questions the Siri test got wrong, and why.
     @Test func answersFromTheDocumentTheQuestionNames() throws {
         func ask(_ text: String) -> String { RuleAnswerer.answer(KnowledgeQuestion(text, knowledge: knowledge), in: knowledge)?.text ?? "" }
