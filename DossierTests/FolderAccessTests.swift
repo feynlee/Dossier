@@ -162,6 +162,14 @@ struct DocumentIdentityTests {
         #expect(DocumentIdentity.match(keys(.driversLicense, renewed), against: keys(.driversLicense, old)) == .newVersion)
     }
 
+    @Test func anEADCardForTheNextPeriodIsASeparateDocument() {
+        let old: [FactKey: String] = [.documentNumber: "SRC1234567890", .uscisCategory: "C09", .validFrom: "2022-05-01", .validUntil: "2024-04-30"]
+        var next = old
+        next[.validFrom] = "2024-05-01"
+        next[.validUntil] = "2026-04-30"
+        #expect(DocumentIdentity.match(keys(.employmentAuthorization, next), against: keys(.employmentAuthorization, old)) == .newVersion)
+    }
+
     @Test func differentDocumentsDontMatch() {
         var other = passport
         other[.documentNumber] = "PX9999999"

@@ -165,8 +165,11 @@ final class ImportCoordinator {
                 if preferPrivateCloud, engine == .onDevice { privateCloudFailed = true }
                 // Removed from the vault while it was being read: drop the result.
                 guard !document.isGone else { continue }
+                // A document already in the vault that's read again (after an update, or Read Again) stays
+                // where it is: only a newly added file is compared with the others.
+                let isNew = document.contentHash.hasPrefix(SourceDocument.pendingPrefix)
                 try save(reading, engine: engine, pages: pages, hash: loaded.hash, info: info, into: document, context: context)
-                classify(document, among: documents)
+                if isNew { classify(document, among: documents) }
                 // Readings you already confirmed on another document don't need confirming again.
                 SharedConfirmation.apply(to: document, context: context)
                 try? context.save()

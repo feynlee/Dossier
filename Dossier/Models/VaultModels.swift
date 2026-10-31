@@ -67,10 +67,13 @@ final class SourceDocument {
         self.pageCount = pageCount
     }
 
+    /// The start of a content hash for a file that hasn't been read yet.
+    static let pendingPrefix = "pending-"
+
     /// A file you just added, waiting to be read.
     static func pending(fileName: String, bookmark: Data) -> SourceDocument {
         let document = SourceDocument(
-            contentHash: "pending-\(UUID().uuidString)", fileName: fileName, kind: .other,
+            contentHash: "\(pendingPrefix)\(UUID().uuidString)", fileName: fileName, kind: .other,
             title: (fileName as NSString).deletingPathExtension, engine: .privateCloudCompute, pageCount: 0
         )
         document.bookmark = bookmark

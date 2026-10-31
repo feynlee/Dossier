@@ -37,7 +37,9 @@ nonisolated enum DocumentIdentity {
 
     static func versionKeys(for kind: DocumentKind) -> [FactKey] {
         switch kind {
-        case .passport, .greenCard, .employmentAuthorization, .visa, .driversLicense, .stateID: [.issueDate, .expiryDate]
+        case .passport, .greenCard, .visa, .driversLicense, .stateID: [.issueDate, .expiryDate]
+        // EAD cards print "valid from" and "card expires", read as validFrom and validUntil.
+        case .employmentAuthorization: [.validFrom, .validUntil]
         default: []
         }
     }
