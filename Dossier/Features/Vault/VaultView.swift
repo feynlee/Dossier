@@ -52,20 +52,23 @@ struct VaultView: View {
             // selection as well as the link's push, so a folder row (which has no selection tag) opened twice
             // and the stack got out of step with the path: Back then did nothing.
             List(selection: isSelecting ? $selection : nil) {
-                if searchText.isEmpty, !isSelecting, documents.contains(where: \.isReady) {
+                // Rows above the documents stay put while documents are read, so a tap lands on the row you
+                // aimed at: Personal information is there from the first document, and reading progress is
+                // shown at the end of the list.
+                if searchText.isEmpty, !isSelecting, !documents.isEmpty {
                     Section {
                         NavigationLink(value: VaultRoute.profile) {
-                            TileRow(symbol: "person.crop.circle", badge: profile.conflicts.isEmpty ? .verified : .review, title: "Personal information", subtitle: profileSummary)
+                            TileRow(
+                                symbol: "person.crop.circle",
+                                badge: !documents.contains(where: \.isReady) ? .reading : profile.conflicts.isEmpty ? .verified : .review,
+                                title: "Personal information", subtitle: profileSummary
+                            )
                         }
                     }
                 }
 
                 if searchText.isEmpty, !isSelecting {
                     AttentionSection(documents: documents)
-                }
-
-                if !isSelecting {
-                    ImportStatusSection()
                 }
 
                 if documents.isEmpty {
@@ -104,6 +107,10 @@ struct VaultView: View {
                             Text("Kept for your records. They still count for your timeline, like past addresses and trips.")
                         }
                     }
+                }
+
+                if !isSelecting {
+                    ImportStatusSection()
                 }
             }
             .environment(\.editMode, $editMode)

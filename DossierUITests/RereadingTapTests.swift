@@ -32,6 +32,17 @@ final class RereadingTapTests: XCTestCase {
         goBack(to: "Vault")
     }
 
+    func testRowsStayPutWhileReading() {
+        let passport = app.buttons["document Li · Passport · 2019-03-14 to 2029-03-14"]
+        XCTAssertTrue(passport.waitForExistence(timeout: 5))
+        let start = passport.frame.minY
+        // Documents finish reading one by one; rows above the passport mustn't appear or go away meanwhile.
+        for _ in 0..<12 {
+            sleep(1)
+            XCTAssertEqual(passport.frame.minY, start, accuracy: 1, "The passport row moved while documents were being read")
+        }
+    }
+
     // MARK: Helpers
 
     private func tapOnce(_ element: XCUIElement, opens title: String, backTo: String = "Vault", goingBack: Bool = true,
