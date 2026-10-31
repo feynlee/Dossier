@@ -34,8 +34,22 @@ def spoken_dates(text):
     return iso_dates(text)
 
 
+NUMBER_WORDS = {"one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8",
+                "nine": "9", "ten": "10", "eleven": "11", "twelve": "12"}
+
+
+def spoken_forms(text):
+    """The answer with number words as digits and 24-hour times also as 12-hour ones ("16:12" → "4:12 PM")."""
+    out = re.sub(r"\b(" + "|".join(NUMBER_WORDS) + r")\b", lambda m: NUMBER_WORDS[m.group(1).lower()], text, flags=re.I)
+
+    def twelve(m):
+        h, mnt = int(m.group(1)), m.group(2)
+        return f"{m.group(0)} ({(h - 1) % 12 + 1}:{mnt} {'PM' if h >= 12 else 'AM'})"
+    return re.sub(r"\b(\d{1,2}):(\d{2})\b(?!\s*[AaPp][Mm])", twelve, out)
+
+
 def correct(row):
-    answer = row["answer"]
+    answer = spoken_forms(row["answer"])
     if not row["found"] and "couldn" in answer.lower():
         return False
     flat = compact(answer)

@@ -172,6 +172,23 @@ nonisolated struct KnowledgeMatch: Sendable {
 /// Finds the topics a question is about. Plain word matching with synonyms: fast, predictable, and enough to
 /// put the right topic in the top few for the model to choose from.
 nonisolated enum KnowledgeSearch {
+    /// Common questions whose words fit several topics equally: "when was Emma born" also matches her birth
+    /// certificate's issue date, "when did I get married" every date on the marriage certificate.
+    static func hint(_ question: KnowledgeQuestion, _ topic: KnowledgeTopic, isDate: Bool) -> Double {
+        let words = Set(question.words)
+        let name = topic.name.lowercased()
+        if !words.isDisjoint(with: ["born", "birthday", "dob", "birth"]) {
+            if question.asksWhere { return topic.id.hasSuffix("|placeOfBirth") ? 1.6 : 1 }
+            if topic.id.hasSuffix("|dateOfBirth") { return 1.6 }
+        }
+        if !words.isDisjoint(with: ["married", "marriage", "wedding", "anniversary"]), question.asksWhen || words.contains("anniversary") {
+            return isDate && (name.contains("marriage") || name.contains("married")) && !name.contains("issue") && !name.contains("filed") ? 1.6 : 1
+        }
+        if !words.isDisjoint(with: ["a-number", "anumber", "alien"]), topic.id.hasSuffix("|alienNumber") { return 1.6 }
+        if words.contains("i-94") || words.contains("i94"), words.contains("number"), topic.id.hasSuffix("|i94Number") { return 1.6 }
+        return 1
+    }
+
     static func search(_ question: KnowledgeQuestion, in knowledge: Knowledge, limit: Int = 12) -> [KnowledgeMatch] {
         let words = KnowledgeTerms.expand(question.words)
         let asked = Set(question.words)
@@ -202,6 +219,7 @@ nonisolated enum KnowledgeSearch {
             let isDate = topic.current?.value.text.flatMap(KnowledgeText.date) != nil || topic.behavior == .event
             if question.asksWhen { score *= isDate ? 1.3 : 0.8 }
             if question.asksWhere, isDate { score *= 0.7 }
+            score *= KnowledgeSearch.hint(question, topic, isDate: isDate)
             score /= (1 + Double(KnowledgeText.words(topic.name).count) * 0.05)
             matches.append(KnowledgeMatch(topic: topic, score: score))
         }

@@ -86,6 +86,24 @@ nonisolated enum Verifier {
         return results.sorted { $0.key.sortOrder < $1.key.sortOrder }
     }
 
+    // MARK: Identification numbers
+
+    /// Whether a value the model called a number is an identification number to keep hidden, rather than an
+    /// amount, a date, a time or a measurement ("$2,950.00", "2023-10-02" and "32 ng/mL" were hidden in testing,
+    /// so Siri said "a number ending in 0000").
+    static func isIdentifier(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.contains(where: \.isNumber), compact(trimmed).count >= 4 else { return false }
+        if ["$", "€", "£", "%", "¥"].contains(where: trimmed.contains) { return false }
+        if SimpleDate(iso: trimmed) != nil || KnowledgeText.date(trimmed) != nil { return false }
+        if trimmed.range(of: #"^\d{1,3}(,\d{3})*(\.\d+)?$"#, options: .regularExpression) != nil { return false }
+        if trimmed.range(of: #"^\d{1,2}:\d{2}"#, options: .regularExpression) != nil { return false }
+        // A measurement: a number then a unit word.
+        if trimmed.range(of: #"^[<>]?\d+(\.\d+)?\s*[a-zA-Z/%]+(/[a-zA-Z]+)?$"#, options: .regularExpression) != nil,
+           compact(trimmed).filter(\.isNumber).count < 5 { return false }
+        return true
+    }
+
     // MARK: Made-up values
 
     /// Enough OCR text that a printed date or number would be in it.

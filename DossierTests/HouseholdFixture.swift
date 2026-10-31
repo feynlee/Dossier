@@ -117,7 +117,7 @@ nonisolated enum HouseholdFixture {
             }
             var entries = output.contents.map { entry in
                 KnowledgeEntry(section: entry.section, label: entry.label,
-                               value: entry.isNumber == "yes" ? sensitive(entry.value) : .plain(entry.value, strength: entry.confidence == "low" ? .doubtful : .pageText))
+                               value: entry.isNumber == "yes" && Verifier.isIdentifier(entry.value) ? sensitive(entry.value) : .plain(entry.value, strength: entry.confidence == "low" ? .doubtful : .pageText))
             }
             entries += output.details.map { detail in
                 KnowledgeEntry(section: nil, label: detail.label, value: .plain(detail.value, strength: detail.confidence == "low" ? .doubtful : .pageText),

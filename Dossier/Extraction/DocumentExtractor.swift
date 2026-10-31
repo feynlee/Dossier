@@ -112,12 +112,22 @@ actor DocumentExtractor {
         let instructions = Self.instructions(for: request)
         if preferPrivateCloud {
             do {
-                return (try await extractWithPrivateCloud(pages, instructions: instructions), .privateCloudCompute)
+                return (Self.withTravelRows(try await extractWithPrivateCloud(pages, instructions: instructions), pages: pages), .privateCloudCompute)
             } catch let error as ExtractorError where error.allowsFallback {
                 logger.notice("PCC unavailable, using on-device model: \(error.localizedDescription, privacy: .public)")
             }
         }
-        return (try await extractOnDevice(pages, request: request), .onDevice)
+        return (Self.withTravelRows(try await extractOnDevice(pages, request: request), pages: pages), .onDevice)
+    }
+
+    /// An I-94's travel rows as OCR shows them, when that finds at least as many as the model did.
+    nonisolated static func withTravelRows(_ reading: DocumentReading, pages: [ReadPage]) -> DocumentReading {
+        guard reading.kind == DocumentKind.i94.rawValue else { return reading }
+        let parsed = TravelHistoryParser.rows(in: pages)
+        guard parsed.count >= reading.travel.count, !parsed.isEmpty else { return reading }
+        var reading = reading
+        reading.travel = parsed
+        return reading
     }
 
     /// Tells the UI whether PCC can be used right now, and why not.

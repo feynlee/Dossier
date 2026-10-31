@@ -207,7 +207,7 @@ final class ImportCoordinator {
                   let item = Verifier.verifyDetail(detail.value, isConfident: detail.confidence != "low", page: max(1, detail.page), pages: pageLines, order: order)
             else { continue }
 
-            let sensitive = detail.isNumber == "yes"
+            let sensitive = detail.isNumber == "yes" && Verifier.isIdentifier(detail.value)
             let fact = Fact(
                 key: .detail,
                 sealedValue: try sealer.seal(item.value, sensitive: sensitive),
@@ -258,7 +258,7 @@ final class ImportCoordinator {
             else { continue }
             seen.insert(id)
 
-            let sensitive = entry.isNumber == "yes"
+            let sensitive = entry.isNumber == "yes" && Verifier.isIdentifier(entry.value)
             let fact = Fact(
                 key: .detail,
                 sealedValue: try sealer.seal(item.value, sensitive: sensitive),
