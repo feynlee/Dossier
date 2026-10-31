@@ -13,11 +13,14 @@ import Testing
 ///     TEST_RUNNER_DOSSIER_EVAL_OUT=/path/to/results \
 ///     TEST_RUNNER_DOSSIER_EVAL_ENGINE=pcc|device \
 ///     xcodebuild test -scheme Dossier -only-testing:DossierTests/ReadingEvaluation …
-@Suite(.enabled(if: ReadingEvaluation.folder != nil), .serialized)
-struct ReadingEvaluation {
-    nonisolated static var folder: URL? {
+nonisolated enum EvaluationEnvironment {
+    static var folder: URL? {
         ProcessInfo.processInfo.environment["DOSSIER_EVAL_DIR"].map { URL(filePath: $0, directoryHint: .isDirectory) }
     }
+}
+
+@Suite(.enabled(if: EvaluationEnvironment.folder != nil), .serialized)
+struct ReadingEvaluation {
 
     nonisolated struct Output: Codable {
         struct Field: Codable { var key: String; var value: String; var page: Int; var confidence: String }
@@ -49,7 +52,7 @@ struct ReadingEvaluation {
 
     @Test(.timeLimit(.minutes(90)))
     func readHousehold() async throws {
-        let folder = try #require(Self.folder)
+        let folder = try #require(EvaluationEnvironment.folder)
         let environment = ProcessInfo.processInfo.environment
         let usePrivateCloud = environment["DOSSIER_EVAL_ENGINE"] != "device"
         let output = URL(filePath: environment["DOSSIER_EVAL_OUT"] ?? folder.appending(path: "results").path(), directoryHint: .isDirectory)
