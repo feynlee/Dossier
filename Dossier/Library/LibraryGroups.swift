@@ -67,3 +67,15 @@ nonisolated enum LibraryGroups {
         return first == last ? "\(first)" : "\(first) to \(last)"
     }
 }
+
+extension Array where Element == SourceDocument {
+    /// The documents that are yours: the owner's, the household's and ones not sorted yet. Family members'
+    /// documents are theirs, so they don't count for your personal information or timeline.
+    var owners: [SourceDocument] {
+        guard let owner = LibraryGroups.owner(compactMap(\.placement)) else { return self }
+        return filter { document in
+            guard let person = document.placement?.person else { return true }
+            return person == owner || person == LibraryPlacement.household
+        }
+    }
+}

@@ -112,6 +112,14 @@ final class VaultNavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Passport"].waitForExistence(timeout: 5), "After Select mode, a row didn't open")
     }
 
+    func testTimelineShowsOnlyYourDocuments() {
+        app.tabBars.buttons["Timeline"].tap()
+        XCTAssertTrue(app.buttons["List"].waitForExistence(timeout: 5), "The timeline didn't open")
+        // Mei's EAD cards are hers: her status isn't on Li's timeline.
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'EAD'")).firstMatch.waitForExistence(timeout: 3),
+                       "A family member's status shows on your timeline")
+    }
+
     // MARK: Helpers
 
     /// Scrolls until the element is on screen. Rows further down aren't made until they're near, and the
