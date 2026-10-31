@@ -349,8 +349,9 @@ nonisolated extension ModelAnswerer {
             var token = String(text[match.range])
             // "2,480" is one number; "1990-08-12" style runs are split by the regex already.
             if let dot = token.lastIndex(of: "."), token[token.index(after: dot)...].allSatisfy({ $0 == "0" }) { token = String(token[..<dot]) }
-            if token.contains(","), token.split(separator: ",").dropFirst().allSatisfy({ $0.count == 3 }) { token.removeAll { $0 == "," } }
-            return token.split(separator: ",").map(String.init)
+            let groups: [Substring] = token.split(separator: "," as Character)
+            if groups.count > 1, groups.dropFirst().allSatisfy({ $0.count == 3 }) { return [groups.joined()] }
+            return groups.map(String.init)
         }
     }
 }
