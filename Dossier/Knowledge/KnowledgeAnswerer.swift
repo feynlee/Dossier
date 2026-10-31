@@ -334,6 +334,7 @@ nonisolated struct ModelAnswerer {
         // An answer must rest on the facts it cites. Seen in testing: with the right fact missing, the on-device
         // model made up a rent, a parking space, lab results and an employer's figures.
         let grounded = !cited.isEmpty && Self.isGrounded(reply.answer, in: context.header + cited.compactMap { context.lines[$0] })
+            && Self.fitsRelation(used.compactMap { knowledge.topic($0) }, question)
         guard reply.outcome == "answered", grounded else {
             return KnowledgeAnswer(text: KnowledgeAnswer.notFound, method: engine == .privateCloud ? .privateCloud : .onDevice,
                                    topicIDs: [], sources: [], found: false)
@@ -360,16 +361,37 @@ nonisolated extension ModelAnswerer {
         let words = Set(KnowledgeText.words(answer))
         for month in months where words.contains(month) && !facts.contains(month) { return false }
         // Names too: the on-device model answered "my mother's maiden name" with a made-up "Linda Chen, born Wu".
-        let names = answer.split { !$0.isLetter && $0 != "'" }.map(String.init)
+        // "Emma's" is checked as "Emma".
+        let names = answer.replacingOccurrences(of: "’", with: "'").split { !$0.isLetter && $0 != "'" }
+            .map { word in word.hasSuffix("'s") ? String(word.dropLast(2)) : String(word) }
             .filter { $0.count >= 3 && $0.first!.isUppercase && !commonWords.contains($0.lowercased()) && !months.contains($0.lowercased()) }
         for name in names where !facts.contains(name.lowercased()) { return false }
+        return true
+    }
+
+    /// Whether the cited facts are about the relative the question asks after, and that relative belongs to the
+    /// person asked about. Seen in testing: "What's my father's name?" answered with the spouse's name, and
+    /// "my mother's maiden name" with the spouse's mother's.
+    static func fitsRelation(_ topics: [KnowledgeTopic], _ question: KnowledgeQuestion) -> Bool {
+        let raw = Set(KnowledgeText.words(question.text.lowercased().replacingOccurrences(of: "’", with: "'"))
+            .map { $0.hasSuffix("'s") ? String($0.dropLast(2)) : $0 })
+        for relation in [Relation.mother, .father, .sibling] where !raw.isDisjoint(with: KnowledgeTerms.relationWords(relation)) {
+            let fits = topics.contains { topic in
+                let parts = topic.id.components(separatedBy: "|")
+                return parts.count >= 3 && parts[1] == "detail" && parts[2] == relation.rawValue
+                    && (question.isEveryone || question.people.contains(topic.person))
+            }
+            if !fits { return false }
+        }
         return true
     }
 
     static let commonWords: Set<String> = ["you", "your", "you're", "you've", "the", "yes", "its", "this", "that", "there", "from", "for", "and",
                                            "but", "since", "before", "after", "today", "united", "states", "has", "have", "had", "was", "were",
                                            "not", "none", "nothing", "couldn't", "monday", "tuesday", "wednesday", "thursday", "friday",
-                                           "saturday", "sunday", "according", "based", "per", "with", "who", "which", "what", "when", "where"]
+                                           "saturday", "sunday", "according", "based", "per", "with", "who", "which", "what", "when", "where",
+                                           "she", "her", "his", "him", "they", "their", "our", "it's", "she's", "he's", "they're",
+                                           "it", "ends", "ending", "number", "certificate", "dr", "mr", "mrs", "ms", "md"]
 
     /// Numbers as written, without thousands separators or a zero fraction: "$2,480.00" → "2480".
     static func numbers(in text: String) -> [String] {

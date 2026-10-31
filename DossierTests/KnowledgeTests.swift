@@ -135,6 +135,18 @@ struct KnowledgeTests {
         let people = ["People: Anna (the person asking), David (spouse), Emma (child)."]
         #expect(!ModelAnswerer.isGrounded("Linda Chen, born Wu.", in: people))
         #expect(ModelAnswerer.isGrounded("Your husband is David.", in: people))
+        #expect(ModelAnswerer.isGrounded("Emma's birth certificate number ends in 7182.",
+                                         in: people + ["F1 · Emma · Birth certificate number: [hidden number ending 7182] (Birth certificate)"]))
+    }
+
+    @Test func modelAnswersAboutARelativeMustCiteThatRelative() throws {
+        let question = KnowledgeQuestion("What's my father's name?", knowledge: knowledge)
+        let father = try #require(knowledge.topics.first { $0.person == "Anna" && $0.id.contains("|detail|father|") })
+        #expect(ModelAnswerer.fitsRelation([father], question))
+        let spouse = knowledge.topics.filter { $0.person == "David" }
+        #expect(!ModelAnswerer.fitsRelation(spouse, question))
+        let other = KnowledgeQuestion("When does my passport expire?", knowledge: knowledge)
+        #expect(ModelAnswerer.fitsRelation(spouse, other))
     }
 
     @Test func daysAbroadCountsWholeDaysAway() {
