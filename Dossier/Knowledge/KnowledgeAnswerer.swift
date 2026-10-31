@@ -359,8 +359,17 @@ nonisolated extension ModelAnswerer {
         for number in numbers(in: answer) where number.count > 1 && !known.contains(number) { return false }
         let words = Set(KnowledgeText.words(answer))
         for month in months where words.contains(month) && !facts.contains(month) { return false }
+        // Names too: the on-device model answered "my mother's maiden name" with a made-up "Linda Chen, born Wu".
+        let names = answer.split { !$0.isLetter && $0 != "'" }.map(String.init)
+            .filter { $0.count >= 3 && $0.first!.isUppercase && !commonWords.contains($0.lowercased()) && !months.contains($0.lowercased()) }
+        for name in names where !facts.contains(name.lowercased()) { return false }
         return true
     }
+
+    static let commonWords: Set<String> = ["you", "your", "you're", "you've", "the", "yes", "its", "this", "that", "there", "from", "for", "and",
+                                           "but", "since", "before", "after", "today", "united", "states", "has", "have", "had", "was", "were",
+                                           "not", "none", "nothing", "couldn't", "monday", "tuesday", "wednesday", "thursday", "friday",
+                                           "saturday", "sunday", "according", "based", "per", "with", "who", "which", "what", "when", "where"]
 
     /// Numbers as written, without thousands separators or a zero fraction: "$2,480.00" → "2480".
     static func numbers(in text: String) -> [String] {

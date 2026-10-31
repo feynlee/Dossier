@@ -132,6 +132,9 @@ struct KnowledgeTests {
         #expect(!ModelAnswerer.isGrounded("Your rent was $1,200.", in: facts))
         #expect(!ModelAnswerer.isGrounded("Your lease ended on 30 April 2026.", in: facts))
         #expect(ModelAnswerer.isGrounded("Your lease ends on 30 June 2026.", in: facts))
+        let people = ["People: Anna (the person asking), David (spouse), Emma (child)."]
+        #expect(!ModelAnswerer.isGrounded("Linda Chen, born Wu.", in: people))
+        #expect(ModelAnswerer.isGrounded("Your husband is David.", in: people))
     }
 
     @Test func daysAbroadCountsWholeDaysAway() {
