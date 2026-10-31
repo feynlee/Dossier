@@ -78,7 +78,7 @@ struct ReadingEvaluation {
                 let data = try Data(contentsOf: file)
                 let pages = try await PageReader.read(data, fileName: file.lastPathComponent)
                 let lines = pages.map(\.lines)
-                let mrz = MRZParser.find(in: lines.flatMap { $0 })
+                let mrz = MRZParser.find(in: pages)
                 let license = pages.flatMap(\.barcodes).lazy.compactMap(AAMVAParser.parse).first
                 result.pageCount = pages.count
                 result.ocrLines = lines.map(\.count).reduce(0, +)

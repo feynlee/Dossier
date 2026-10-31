@@ -24,7 +24,7 @@ nonisolated enum AnswerStrategy: String, CaseIterable, Sendable {
 }
 
 enum KnowledgeService {
-    static let notFound = "I couldn’t find that in your documents."
+    static let notFound = KnowledgeAnswer.notFound
 
     static func answer(_ text: String, knowledge: Knowledge, strategy: AnswerStrategy = .automatic) async -> KnowledgeAnswer {
         let question = KnowledgeQuestion(text, knowledge: knowledge)
@@ -47,8 +47,8 @@ enum KnowledgeService {
             if result == nil { result = await device() }
         case .automatic:
             result = rules()
-            if result == nil { result = await cloud() }
-            if result == nil { result = await device() }
+            if result?.found != true { result = await cloud() ?? result }
+            if result?.found != true { result = await device() ?? result }
         }
         return result ?? KnowledgeAnswer(text: notFound, method: .rules, topicIDs: [], sources: [], found: false)
     }

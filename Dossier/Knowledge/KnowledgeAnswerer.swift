@@ -15,6 +15,8 @@ nonisolated struct KnowledgeAnswer: Sendable, Codable {
     /// A sensitive value the answer refers to, which the snippet can reveal after Face ID.
     var hiddenFactID: String?
     var found: Bool
+
+    static let notFound = "I couldn’t find that in your documents."
 }
 
 // MARK: Rules
@@ -25,23 +27,16 @@ nonisolated enum RuleAnswerer {
     static func answer(_ question: KnowledgeQuestion, in knowledge: Knowledge) -> KnowledgeAnswer? {
         if question.wantsExpiries { return expiries(question, knowledge) }
         if let trips = travel(question, knowledge) { return trips }
-        let matches = KnowledgeSearch.search(question, in: knowledge, limit: 5)
+        if let home = addressInYear(question, knowledge) { return home }
+        if let moved = moveDate(question, knowledge) { return moved }
+        // Only topics that cover what the question is about: "when was my I-485 approved" must not be answered
+        // with the one date topic that matches "when".
+        let matches = KnowledgeSearch.search(question, in: knowledge, limit: 8).filter { covers($0.topic, question) }
         guard let top = matches.first else { return nil }
         // Too close to call: leave it to the model.
         if matches.count > 1, matches[1].score > top.score * 0.92, matches[1].topic.current?.value != top.topic.current?.value { return nil }
         let topic = top.topic
         let subject = KnowledgeSpeech.subject(topic.person, knowledge: knowledge)
-
-        if let year = question.year, topic.id.hasSuffix("|state|address") {
-            let homes = topic.claims.filter { claim in
-                guard let from = claim.validFrom ?? claim.date else { return false }
-                let to = claim.validUntil ?? knowledge.today
-                return from.year <= year && year <= to.year && (claim.source.kind == .lease || claim.source.kind == .addedByYou)
-            }
-            guard let home = homes.last ?? homes.first else { return nil }
-            let lived = topic.person == knowledge.owner ? "you lived" : "\(topic.person) lived"
-            return make("In \(year) \(lived) at \(home.value.spoken).", topic, [home])
-        }
         if question.wantsCount, topic.behavior == .event {
             var claims = topic.claims
             let specific = question.words.filter { word in claims.contains { KnowledgeText.words($0.label ?? "").contains(word) } }
@@ -49,7 +44,7 @@ nonisolated enum RuleAnswerer {
             let dates = claims.compactMap(\.date).sorted().map(\.spoken)
             return make("\(subject.capitalizedFirst) \(subject == "you" ? "have" : "has") \(claims.count) on file: \(dates.joined(separator: ", ")).", topic, claims)
         }
-        var picked = topic.current
+        var picked = named(in: topic, question) ?? topic.current
         if question.wantsPast, topic.behavior != .identity, let old = topic.others.first { picked = old }
         guard let claim = picked else { return nil }
         var text: String
@@ -62,6 +57,87 @@ nonisolated enum RuleAnswerer {
         }
         text += claim.source.title.isEmpty ? "." : ", from \(claim.source.title)."
         return make(text, topic, [claim])
+    }
+
+    /// Words that say what kind of answer is wanted rather than what it's about.
+    static let genericWords: Set<String> = ["when", "where", "who", "date", "day", "number", "last", "current", "new", "now", "today", "name",
+                                            "until", "valid", "s", "much", "long", "ago", "recent", "latest", "most", "kind", "type"]
+
+    /// Whether a topic is about at least half of the question's specific words.
+    static func covers(_ topic: KnowledgeTopic, _ question: KnowledgeQuestion) -> Bool {
+        let specific = Set(question.words.filter { !genericWords.contains($0) && !$0.allSatisfy(\.isNumber) })
+        guard !specific.isEmpty else { return true }
+        let terms = Set(topic.terms)
+        let covered = specific.filter { word in
+            terms.contains(word) || KnowledgeTerms.related(word).contains { terms.contains($0) }
+                || word.count >= 4 && terms.contains { $0.count >= 4 && ($0.hasPrefix(word) || word.hasPrefix($0)) }
+        }
+        return covered.count * 2 >= specific.count
+    }
+
+    /// The value from the document the question names, when it names one other than today's ("rent at Pine Ave").
+    static func named(in topic: KnowledgeTopic, _ question: KnowledgeQuestion) -> KnowledgeClaim? {
+        let claims = [topic.current].compactMap { $0 } + topic.others
+        guard claims.count > 1 else { return nil }
+        let asked = Set(question.words.filter { $0.count > 2 && !genericWords.contains($0) })
+        func overlap(_ claim: KnowledgeClaim) -> Int {
+            let words = KnowledgeText.words(claim.source.title) + KnowledgeText.words(claim.label ?? "")
+            return Set(words).intersection(asked).count
+        }
+        let best = claims.max { overlap($0) < overlap($1) }!
+        return overlap(best) > overlap(claims[0]) ? best : nil
+    }
+
+    /// "Where did we live in 2024?": the home on file for that year, from leases and your own edits.
+    static func addressInYear(_ question: KnowledgeQuestion, _ knowledge: Knowledge) -> KnowledgeAnswer? {
+        let words = Set(question.words)
+        guard let year = question.year, !words.isDisjoint(with: ["live", "lived", "living", "address", "home", "reside", "resided", "stay", "stayed"]) else { return nil }
+        let people = question.isEveryone ? [knowledge.owner].compactMap { $0 } + question.people : question.people
+        for person in people {
+            guard let topic = knowledge.topics.first(where: { $0.person == person && $0.id.hasSuffix("|state|address") }) else { continue }
+            let homes = topic.claims.filter { claim in
+                guard let from = claim.validFrom ?? claim.date else { return false }
+                let to = claim.validUntil ?? knowledge.today
+                return from.year <= year && year <= to.year && (claim.source.kind == .lease || claim.source.kind == .addedByYou)
+            }
+            // The home that covers most of the year.
+            guard let home = homes.max(by: { daysIn(year, $0, knowledge) < daysIn(year, $1, knowledge) }) else { continue }
+            let lived = question.isEveryone ? "you lived" : person == knowledge.owner ? "you lived" : "\(person) lived"
+            return make("In \(year) \(lived) at \(home.value.spoken).", topic, [home])
+        }
+        return nil
+    }
+
+    private static func daysIn(_ year: Int, _ claim: KnowledgeClaim, _ knowledge: Knowledge) -> Int {
+        guard let from = claim.validFrom ?? claim.date, let first = SimpleDate(year: year, month: 1, day: 1), let last = SimpleDate(year: year, month: 12, day: 31) else { return 0 }
+        let start = max(from, first), end = min(claim.validUntil ?? knowledge.today, last)
+        return end < start ? 0 : (end.year - start.year) * 366 + (end.month - start.month) * 31 + end.day - start.day
+    }
+
+    /// "When did we move out of Pine Ave?": the end (or start) of the lease for the place named.
+    static func moveDate(_ question: KnowledgeQuestion, _ knowledge: Knowledge) -> KnowledgeAnswer? {
+        let text = question.text.lowercased()
+        let out = ["move out", "moved out", "leave", "left"].contains { text.contains($0) }
+        let into = ["move in", "moved in", "move to", "moved to", "move into", "moved into"].contains { text.contains($0) }
+        guard out || into else { return nil }
+        let field = out ? FactKey.leaseEndDate.rawValue : FactKey.leaseStartDate.rawValue
+        let people = question.isEveryone ? [knowledge.owner].compactMap { $0 } + question.people + [KnowledgeBuilder.household] : question.people + [KnowledgeBuilder.household]
+        let asked = Set(question.words.filter { $0.count > 2 && !genericWords.contains($0) && !["move", "moved", "out", "into", "leave", "left"].contains($0) })
+        var best: (KnowledgeTopic, KnowledgeClaim, Int)?
+        for topic in knowledge.topics where people.contains(topic.person) && topic.id.hasSuffix("|\(field)") {
+            for claim in topic.claims where claim.field == field {
+                let words = Set(KnowledgeText.words(claim.source.title) + KnowledgeText.words(claim.label ?? ""))
+                let score = words.intersection(asked).count
+                if score > (best?.2 ?? 0) { best = (topic, claim, score) }
+            }
+        }
+        guard let best else { return nil }
+        let (topic, claim) = (best.0, best.1)
+        // The lease's own date, shortened by an addendum or the next lease when one ended it early.
+        guard let date = (out ? claim.validUntil : claim.validFrom) ?? claim.value.text.flatMap(KnowledgeText.date) else { return nil }
+        let subject = question.isEveryone ? "you" : KnowledgeSpeech.subject(topic.person, knowledge: knowledge)
+        let verb = out ? (date < knowledge.today ? "moved out" : "move out") : (date < knowledge.today ? "moved in" : "move in")
+        return make("\(subject.capitalizedFirst) \(verb) on \(date.spoken), from \(claim.source.title).", topic, [claim])
     }
 
     static func make(_ text: String, _ topic: KnowledgeTopic, _ claims: [KnowledgeClaim]) -> KnowledgeAnswer {
@@ -232,8 +308,16 @@ nonisolated struct ModelAnswerer {
             : LanguageModelSession(model: SystemLanguageModel.default, instructions: Self.instructions)
         let prompt = "\(context.text)\n\nQuestion from \(knowledge.owner ?? "the owner"): \(question.text)"
         let reply = try await session.respond(to: prompt, generating: KnowledgeModelReply.self, options: GenerationOptions(samplingMode: .greedy)).content
-        let used = reply.factIDs.compactMap { context.ids[$0] }
+        let cited = reply.factIDs.filter { context.ids[$0] != nil }
+        let used = cited.compactMap { context.ids[$0] }
         let claims = used.compactMap { knowledge.topic($0) }.flatMap(\.claims)
+        // An answer must rest on the facts it cites. Seen in testing: with the right fact missing, the on-device
+        // model made up a rent, a parking space, lab results and an employer's figures.
+        let grounded = !cited.isEmpty && Self.isGrounded(reply.answer, in: context.header + cited.compactMap { context.lines[$0] })
+        guard reply.outcome == "answered", grounded else {
+            return KnowledgeAnswer(text: KnowledgeAnswer.notFound, method: engine == .privateCloud ? .privateCloud : .onDevice,
+                                   topicIDs: [], sources: [], found: false)
+        }
         return KnowledgeAnswer(
             text: reply.answer, method: engine == .privateCloud ? .privateCloud : .onDevice, topicIDs: used,
             sources: Array(Set(used.compactMap { knowledge.topic($0)?.current?.source })),
@@ -244,12 +328,42 @@ nonisolated struct ModelAnswerer {
     }
 }
 
+nonisolated extension ModelAnswerer {
+    static let months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+
+    /// Whether every number and month the answer says is in the facts it rests on. Single digits are let
+    /// through: they're counts the answer works out ("4 doses") and days of the month.
+    static func isGrounded(_ answer: String, in lines: [String]) -> Bool {
+        let facts = lines.joined(separator: "\n").lowercased()
+        let known = Set(numbers(in: facts))
+        for number in numbers(in: answer) where number.count > 1 && !known.contains(number) { return false }
+        let words = Set(KnowledgeText.words(answer))
+        for month in months where words.contains(month) && !facts.contains(month) { return false }
+        return true
+    }
+
+    /// Numbers as written, without thousands separators or a zero fraction: "$2,480.00" → "2480".
+    static func numbers(in text: String) -> [String] {
+        guard let regex = try? Regex(#"\d+(?:[.,]\d+)*"#) else { return [] }
+        return text.matches(of: regex).flatMap { match -> [String] in
+            var token = String(text[match.range])
+            // "2,480" is one number; "1990-08-12" style runs are split by the regex already.
+            if let dot = token.lastIndex(of: "."), token[token.index(after: dot)...].allSatisfy({ $0 == "0" }) { token = String(token[..<dot]) }
+            if token.contains(","), token.split(separator: ",").dropFirst().allSatisfy({ $0.count == 3 }) { token.removeAll { $0 == "," } }
+            return token.split(separator: ",").map(String.init)
+        }
+    }
+}
+
 /// The facts as the model reads them: one line per topic, with short ids.
 nonisolated enum KnowledgeContext {
     struct Rendered {
         var text: String
         /// "F3" → topic id.
         var ids: [String: String]
+        /// The lines before the facts (today, people, travel), and each fact's line by id, to check answers against.
+        var header: [String] = []
+        var lines: [String: String] = [:]
     }
 
     static func render(_ topics: [KnowledgeTopic], knowledge: Knowledge, question: KnowledgeQuestion) -> Rendered {
@@ -268,10 +382,12 @@ nonisolated enum KnowledgeContext {
                 days.append("\(year): \(total) days")
             }
             lines.append("Days outside the US by year (travel days count as in the US): \(days.joined(separator: ", ")).")
-            lines.append("Trips abroad: " + trips.map { "left \($0.departure.iso), back \($0.arrival?.iso ?? "not yet")" }.joined(separator: "; ") + ".")
+            lines.append("Trips abroad: " + trips.map { "left \($0.departure.spoken), back \($0.arrival?.spoken ?? "not yet")" }.joined(separator: "; ") + ".")
         }
+        let header = lines
         lines.append("Facts:")
         var ids: [String: String] = [:]
+        var factLines: [String: String] = [:]
         for (index, topic) in topics.enumerated() {
             let id = "F\(index + 1)"
             ids[id] = topic.id
@@ -281,17 +397,19 @@ nonisolated enum KnowledgeContext {
             if !earlier.isEmpty { line += topic.behavior == .event ? " · earlier: " : " · other documents: " ; line += earlier.joined(separator: "; ") }
             if let note = topic.note { line += " · note: \(note)" }
             lines.append(line)
+            factLines[id] = line
         }
-        return Rendered(text: lines.joined(separator: "\n"), ids: ids)
+        return Rendered(text: lines.joined(separator: "\n"), ids: ids, header: header, lines: factLines)
     }
 
     static func describe(_ claim: KnowledgeClaim, behavior: KnowledgeTopic.Behavior) -> String {
-        let value = claim.value.text ?? "[hidden number ending \(claim.value.hint ?? "????")]"
+        // Dates are written out ("1 March 2031") so the model repeats them instead of re-reading 2031-03-01.
+        let value = claim.value.text != nil ? KnowledgeSpeech.value(claim.value) : "[hidden number ending \(claim.value.hint ?? "????")]"
         var parts = [value]
         if let label = claim.label, behavior == .event, !value.contains(label) { parts.append(label) }
         var source = claim.source.title
-        if let from = claim.validFrom, let to = claim.validUntil { source += ", \(from.iso) to \(to.iso)" }
-        else if let date = claim.date, behavior != .event { source += ", \(date.iso)" }
+        if let from = claim.validFrom, let to = claim.validUntil { source += ", \(from.spoken) to \(to.spoken)" }
+        else if let date = claim.date, behavior != .event { source += ", \(date.spoken)" }
         parts.append("(\(source))")
         return parts.joined(separator: " ")
     }

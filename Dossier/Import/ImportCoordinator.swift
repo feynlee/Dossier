@@ -324,7 +324,7 @@ final class ImportCoordinator {
         into document: SourceDocument, context: ModelContext
     ) throws {
         let pageLines = pages.map(\.lines)
-        let mrz = MRZParser.find(in: pageLines.flatMap { $0 })
+        let mrz = MRZParser.find(in: pages)
         let license = pages.flatMap(\.barcodes).lazy.compactMap(AAMVAParser.parse).first
         let kind = DocumentKind(rawValue: reading.kind) ?? .other
 

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// The machine-readable zone of a passport (TD3) or ID card such as a green card or EAD (TD1).
@@ -26,19 +27,98 @@ nonisolated enum MRZParser {
     /// Finds and parses the first TD3 or TD1 zone in OCR output. Lines may contain OCR noise such as
     /// spaces or `«` in place of `<`.
     static func find(in lines: [String]) -> MRZResult? {
-        let cleaned = lines.map(clean).filter { $0.contains("<") }
-        for index in cleaned.indices {
-            let line = cleaned[index]
-            if line.count == 44, index + 1 < cleaned.count, cleaned[index + 1].count == 44,
-               let result = parseTD3(line, cleaned[index + 1]) {
-                return result
-            }
-            if line.count == 30, index + 2 < cleaned.count, cleaned[index + 1].count == 30, cleaned[index + 2].count == 30,
-               let result = parseTD1(line, cleaned[index + 1], cleaned[index + 2]) {
-                return result
+        find(candidates: joinFragments(lines.map(clean).filter(isZoneLike)))
+    }
+
+    /// Like `find(in:)`, using where each line is on the page: OCR often splits a zone's line into pieces at its
+    /// long runs of `<`, and the pieces of one line sit side by side. Boxes are top-left based, 0–1.
+    static func find(in lines: [String], boxes: [CGRect]) -> MRZResult? {
+        guard boxes.count == lines.count else { return find(in: lines) }
+        if let exact = find(in: lines), exact.isValid { return exact }
+        var rows: [(midY: CGFloat, height: CGFloat, parts: [(x: CGFloat, text: String)])] = []
+        for (line, box) in zip(lines, boxes) {
+            let text = clean(line)
+            guard isZoneLike(text) else { continue }
+            if let index = rows.firstIndex(where: { abs($0.midY - box.midY) < max($0.height, box.height) * 0.6 }) {
+                rows[index].parts.append((box.minX, text))
+            } else {
+                rows.append((box.midY, box.height, [(box.minX, text)]))
             }
         }
-        return nil
+        let joined = rows.sorted { $0.midY < $1.midY }.map { row in row.parts.sorted { $0.x < $1.x }.map(\.text).joined() }
+        let byRow = find(candidates: joined)
+        if let byRow, byRow.isValid { return byRow }
+        return byRow ?? find(in: lines)
+    }
+
+    /// The first zone on any page, preferring one whose check digits pass.
+    static func find(in pages: [ReadPage]) -> MRZResult? {
+        let found = pages.compactMap { find(in: $0.lines, boxes: $0.boxes) }
+        return found.first(where: \.isValid) ?? found.first
+    }
+
+    /// Tries every run of consecutive zone lines as a passport zone (2 × 44) or a card zone (3 × 30), fitting
+    /// lines whose `<` runs OCR shortened or lengthened. Prefers a zone whose check digits pass.
+    static func find(candidates lines: [String]) -> MRZResult? {
+        var fallback: MRZResult?
+        for index in lines.indices {
+            let line = lines[index]
+            if line.first == "P", index + 1 < lines.count,
+               let first = fit(line, to: 44), let second = fit(lines[index + 1], to: 44),
+               let result = parseTD3(first, second) {
+                if result.isValid { return result }
+                if fallback == nil || result.failedChecks.count < fallback!.failedChecks.count { fallback = result }
+            }
+            if let code = line.first, "IAC".contains(code), index + 2 < lines.count,
+               let first = fit(line, to: 30), let second = fit(lines[index + 1], to: 30), let third = fit(lines[index + 2], to: 30),
+               let result = parseTD1(first, second, third) {
+                if result.isValid { return result }
+                if fallback == nil || result.failedChecks.count < fallback!.failedChecks.count { fallback = result }
+            }
+        }
+        // A zone whose every check fails is more likely text that happens to contain `<` than a zone.
+        guard let fallback, fallback.failedChecks.count < 3 else { return nil }
+        return fallback
+    }
+
+    /// Lines that look like part of a zone: any `<`, or a long run of capitals and digits.
+    static func isZoneLike(_ text: String) -> Bool {
+        !text.isEmpty && (text.contains("<") || text.count >= 25 && text.allSatisfy { $0.isUppercase || $0.isNumber })
+    }
+
+    /// Joins the pieces OCR split off a line when there are no boxes to place them. A piece of only `<` is
+    /// dropped (`fit` grows the line's filler back); a short piece ending in check digits joins the line before it.
+    static func joinFragments(_ lines: [String]) -> [String] {
+        var out: [String] = []
+        for line in lines {
+            let isPiece = line.count < 12 && line.filter { $0 != "<" }.count <= 3
+            if isPiece, !line.contains(where: { $0 != "<" }) { continue }
+            if isPiece, !out.isEmpty { out[out.count - 1] += line } else { out.append(line) }
+        }
+        return out
+    }
+
+    /// Makes a line exactly `length` long by growing or shrinking its longest run of `<`, where OCR loses count.
+    static func fit(_ line: String, to length: Int) -> String? {
+        if line.count == length { return line }
+        guard abs(line.count - length) <= 16 else { return nil }
+        let characters = Array(line)
+        var best: Range<Int>?
+        var start: Int?
+        for index in 0...characters.count {
+            let isFiller = index < characters.count && characters[index] == "<"
+            if isFiller, start == nil { start = index }
+            if !isFiller, let begin = start {
+                if best == nil || index - begin >= best!.count { best = begin..<index }
+                start = nil
+            }
+        }
+        guard let run = best else {
+            return line.count < length ? line + String(repeating: "<", count: length - line.count) : nil
+        }
+        let newCount = run.count + length - line.count
+        guard newCount >= 0 else { return nil }
+        return String(characters[..<run.lowerBound]) + String(repeating: "<", count: newCount) + String(characters[run.upperBound...])
     }
 
     /// Two 44-character lines: passports.
@@ -64,9 +144,9 @@ nonisolated enum MRZParser {
         return MRZResult(
             format: .td3,
             documentCode: trimFiller(String(l1[0..<2])),
-            issuingCountry: trimFiller(String(l1[2..<5])),
+            issuingCountry: letters(trimFiller(String(l1[2..<5]))),
             documentNumber: trimFiller(documentNumber),
-            nationality: trimFiller(String(l2[10..<13])),
+            nationality: letters(trimFiller(String(l2[10..<13]))),
             dateOfBirth: SimpleDate(mrz: birth, isBirthDate: true),
             sex: String(l2[20]),
             expiryDate: SimpleDate(mrz: expiry, isBirthDate: false),
@@ -81,11 +161,19 @@ nonisolated enum MRZParser {
         let l1 = Array(line1), l2 = Array(line2)
         guard l1.count == 30, l2.count == 30, line3.count == 30 else { return nil }
 
-        let documentNumber = String(l1[5..<14])
+        var documentNumber = String(l1[5..<14])
         let birth = digits(l2[0..<6])
         let expiry = digits(l2[8..<14])
         var failed: [String] = []
-        check(documentNumber, l1[14], "document number", into: &failed)
+        // ICAO's rule for numbers longer than nine characters (US green cards and EADs): `<` where the check
+        // digit goes, then the rest of the number and its check digit in the optional data.
+        let rest = l1[15..<30].prefix { $0 != "<" }
+        if l1[14] == "<", rest.count >= 2 {
+            documentNumber += String(rest.dropLast())
+            check(documentNumber, rest.last!, "document number", into: &failed)
+        } else {
+            check(documentNumber, l1[14], "document number", into: &failed)
+        }
         check(birth, l2[6], "date of birth", into: &failed)
         check(expiry, l2[14], "expiry date", into: &failed)
         let composite = String(l1[5..<30]) + birth + String(l2[6]) + expiry + String(l2[14]) + String(l2[18..<29])
@@ -95,9 +183,9 @@ nonisolated enum MRZParser {
         return MRZResult(
             format: .td1,
             documentCode: trimFiller(String(l1[0..<2])),
-            issuingCountry: trimFiller(String(l1[2..<5])),
+            issuingCountry: letters(trimFiller(String(l1[2..<5]))),
             documentNumber: trimFiller(documentNumber),
-            nationality: trimFiller(String(l2[15..<18])),
+            nationality: letters(trimFiller(String(l2[15..<18]))),
             dateOfBirth: SimpleDate(mrz: birth, isBirthDate: true),
             sex: String(l2[7]),
             expiryDate: SimpleDate(mrz: expiry, isBirthDate: false),
@@ -147,6 +235,20 @@ nonisolated enum MRZParser {
             case "Z": return "2"
             case "S": return "5"
             case "B": return "8"
+            default: return character
+            }
+        })
+    }
+
+    /// Country codes are letters: undo digit-for-letter swaps such as UT0 for UTO.
+    private static func letters(_ value: String) -> String {
+        String(value.map { character -> Character in
+            switch character {
+            case "0": return "O"
+            case "1": return "I"
+            case "2": return "Z"
+            case "5": return "S"
+            case "8": return "B"
             default: return character
             }
         })

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Testing
 @testable import Dossier
 
@@ -63,6 +64,28 @@ struct MRZParserTests {
         #expect(!result.isValid)
         #expect(result.failedChecks.contains("document number"))
     }
+    // What Vision actually read off the made-up household's green card and passport photo: each zone line split
+    // into pieces at its runs of `<`, with some filler lost.
+    @Test func joinsACardZoneSplitIntoPieces() throws {
+        let lines = ["C1USASRC219045<67896<<<<", "<<<", "9008124F3103016UTO<<", "<<6", "ERIKSSON<<ANNA<MARIA<<"]
+        let result = try #require(MRZParser.find(in: lines))
+        #expect(result.isValid)
+        #expect(result.documentNumber == "SRC2190456789")
+        #expect(result.dateOfBirth == SimpleDate(year: 1990, month: 8, day: 12))
+        #expect(result.surname == "ERIKSSON")
+    }
+
+    @Test func joinsAPassportZoneByRow() throws {
+        let lines = ["<<<<<<<<", "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<", "<<<<<00", "PX72048212UT09008124F2903149<<<"]
+        let boxes = [CGRect(x: 0.8, y: 0.80, width: 0.15, height: 0.03), CGRect(x: 0.05, y: 0.805, width: 0.7, height: 0.03),
+                     CGRect(x: 0.82, y: 0.85, width: 0.13, height: 0.03), CGRect(x: 0.05, y: 0.852, width: 0.6, height: 0.03)]
+        let result = try #require(MRZParser.find(in: lines, boxes: boxes))
+        #expect(result.isValid)
+        #expect(result.documentNumber == "PX7204821")
+        #expect(result.nationality == "UTO")
+        #expect(result.expiryDate == SimpleDate(year: 2029, month: 3, day: 14))
+    }
+
 }
 
 struct AAMVAParserTests {

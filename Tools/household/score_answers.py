@@ -46,7 +46,9 @@ def correct(row):
             return True
         if not accept_dates and compact(accept) and compact(accept) in flat:
             return True
-    if row["sensitive"]:
+    # The app keeps identification numbers hidden and says only their last four characters ("a number ending
+    # in 4321"), so that counts for any number, not only the ones the answer key calls sensitive.
+    if row["sensitive"] or "ending in" in answer.lower():
         tail = compact(row["expected"])[-4:]
         if tail and tail in flat:
             return True

@@ -11,10 +11,35 @@ nonisolated enum KnowledgeBuilder {
     static let household = "Household"
 
     static func build(_ documents: [KnowledgeDocument], today: SimpleDate) -> Knowledge {
+        let documents = documents.map(cleaned)
         let owner = ownerName(documents)
         var builder = Builder(documents: documents, owner: owner, today: today)
         builder.run()
-        return Knowledge(today: today, owner: owner, people: builder.people, topics: builder.topics, trips: builder.trips)
+        let topics = builder.topics.map(withSourceTerms)
+        return Knowledge(today: today, owner: owner, people: builder.people, topics: topics, trips: builder.trips)
+    }
+
+    /// Readings with nothing in them say nothing: a field or entry with an empty value (seen in testing: a
+    /// "Phone" entry with no number) would otherwise become an answer like "your phone is ,".
+    static func cleaned(_ document: KnowledgeDocument) -> KnowledgeDocument {
+        var document = document
+        func hasValue(_ value: KnowledgeValue) -> Bool {
+            if let text = value.text { return !text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)).isEmpty }
+            return value.hint != nil || value.fingerprint != nil
+        }
+        document.fields = document.fields.filter { hasValue($0.value) }
+        document.entries = document.entries.filter { hasValue($0.value) && !$0.label.trimmingCharacters(in: .whitespaces).isEmpty }
+        return document
+    }
+
+    /// A topic is also found by the documents behind each of its values ("rent at Pine Ave" finds the rent of
+    /// the lease titled "Lease for 88 Pine Ave", even when today's lease is another one).
+    static func withSourceTerms(_ topic: KnowledgeTopic) -> KnowledgeTopic {
+        var topic = topic
+        let claims = [topic.current].compactMap { $0 } + topic.others
+        let words = claims.flatMap { KnowledgeText.words($0.source.title) }.filter { $0.count > 2 && !$0.allSatisfy(\.isNumber) }
+        topic.terms = Array(Set(topic.terms + words))
+        return topic
     }
 
     /// Whose vault it is: the person with the most documents.
@@ -210,6 +235,8 @@ nonisolated enum KnowledgeBuilder {
 
         func claim(_ value: KnowledgeValue, field: String, in document: KnowledgeDocument, date: SimpleDate? = nil, label: String? = nil) -> KnowledgeClaim {
             let window = windows[document.id]
+            // A lease's values carry its address, so "the rent at Pine Ave" finds that lease's rent.
+            let label = document.kind == .lease ? document.fields[.address]?.text ?? label : label
             return KnowledgeClaim(
                 value: value, field: field, source: KnowledgeSource(documentID: document.id, title: document.title, kind: document.kind),
                 date: date ?? window?.asOf ?? window?.start, validFrom: window?.start, validUntil: window?.end, label: label
@@ -231,7 +258,16 @@ nonisolated enum KnowledgeBuilder {
                 // Standard facts, except the ones about the person (those are settled across all documents).
                 let keys = Set(members.flatMap(\.fields.keys)).subtracting(KnowledgeBuilder.identityKeys.filter { $0 != .alienNumber })
                 for key in keys.sorted(by: { $0.sortOrder < $1.sortOrder }) {
-                    let claims = ordered.compactMap { document in document.fields[key].map { claim($0, field: key.rawValue, in: document) } }
+                    var claims = ordered.compactMap { document in document.fields[key].map { claim($0, field: key.rawValue, in: document) } }
+                    if key == .leaseEndDate {
+                        // Every lease's end as amended, not only today's lease.
+                        claims = claims.map { claim in
+                            guard let end = claim.validUntil, KnowledgeText.date(claim.value.text ?? "") != end else { return claim }
+                            var amended = claim
+                            amended.value = .plain(end.iso, strength: claim.value.strength)
+                            return amended
+                        }
+                    }
                     guard let first = claims.first else { continue }
                     var note = groupNote
                     if key == .leaseEndDate, let holder = ordered.first(where: { $0.fields[key] != nil }), let amended = notes[holder.id] { note = amended }

@@ -97,6 +97,32 @@ struct KnowledgeTests {
         #expect(ask("Where did I live in 2021?").contains("412 Alder"))
         #expect(ask("When was my last tetanus shot?").contains("2020"))
         #expect(ask("When does David's passport expire?").contains("2027"))
+        #expect(ask("When was I born?").contains("1990"))
+    }
+
+    // Questions the Siri test got wrong, and why.
+    @Test func answersFromTheDocumentTheQuestionNames() throws {
+        func ask(_ text: String) -> String { RuleAnswerer.answer(KnowledgeQuestion(text, knowledge: knowledge), in: knowledge)?.text ?? "" }
+        // Two homes in 2024 for the household; the one that covers most of the year.
+        #expect(ask("Where did we live in 2024?").contains("88 Pine"))
+        // The old lease's rent, not today's lease.
+        #expect(ask("What was my rent at Pine Ave?").contains("2,480"))
+        // The termination addendum moved the end forward.
+        #expect(ask("When did we move out of Pine Ave?").contains("30 June 2026"))
+    }
+
+    @Test func rulesLeaveQuestionsTheyDoNotCoverToTheModel() {
+        let question = KnowledgeQuestion("When was my I-485 approved?", knowledge: knowledge)
+        let answer = RuleAnswerer.answer(question, in: knowledge)
+        #expect(answer.map { !$0.text.contains("born") } ?? true)
+    }
+
+    @Test func modelAnswersMustRestOnTheirFacts() {
+        let facts = ["F1 · Anna · Lease · Rent: $2,480.00 (Lease for 88 Pine Ave, 1 July 2023 to 30 June 2026)"]
+        #expect(ModelAnswerer.isGrounded("Your rent at Pine Ave was $2,480 a month.", in: facts))
+        #expect(!ModelAnswerer.isGrounded("Your rent was $1,200.", in: facts))
+        #expect(!ModelAnswerer.isGrounded("Your lease ended on 30 April 2026.", in: facts))
+        #expect(ModelAnswerer.isGrounded("Your lease ends on 30 June 2026.", in: facts))
     }
 
     @Test func daysAbroadCountsWholeDaysAway() {

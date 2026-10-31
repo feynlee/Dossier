@@ -64,7 +64,7 @@ nonisolated enum HouseholdFixture {
 
     static func sensitive(_ text: String, normalizedFor key: FactKey? = nil) -> KnowledgeValue {
         let normalized = key == .alienNumber ? Reconciler.normalize(text, for: .alienNumber) : KnowledgeText.compact(text)
-        return KnowledgeValue(text: nil, hint: String(text.suffix(4)), isSensitive: true, strength: .pageText, factID: text, fingerprint: normalized)
+        return KnowledgeValue(text: nil, hint: String(KnowledgeText.compact(text).suffix(4)), isSensitive: true, strength: .pageText, factID: text, fingerprint: normalized)
     }
 
     /// The household exactly as the answer key says.

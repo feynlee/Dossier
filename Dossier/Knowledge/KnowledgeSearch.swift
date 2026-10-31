@@ -70,6 +70,16 @@ nonisolated enum KnowledgeTerms {
         return out
     }
 
+    /// The word, its synonyms, and every group it belongs to: "expire" → expires, expiry, expiration, …
+    static func related(_ word: String) -> Set<String> {
+        var out: Set<String> = [word]
+        for (root, list) in synonyms where root == word || list.contains(word) || word.hasPrefix(root) && root.count >= 4 {
+            out.insert(root)
+            out.formUnion(list)
+        }
+        return out
+    }
+
     static func terms(person: String, group: String, label: String, key: FactKey?, value: KnowledgeValue) -> [String] {
         var words = KnowledgeText.words(person) + KnowledgeText.words(group) + KnowledgeText.words(label)
         if let key { words += KnowledgeText.words(key.label) + KnowledgeText.words(key.rawValue) }
@@ -105,6 +115,8 @@ nonisolated struct KnowledgeQuestion: Sendable {
     var wantsPast: Bool
     var wantsExpiries: Bool
     var asksYesNo: Bool
+    var asksWhen: Bool
+    var asksWhere: Bool
 
     static let stopWords: Set<String> = ["what", "what's", "whats", "is", "my", "me", "i", "the", "a", "an", "of", "for", "in", "on", "to", "do", "does", "did",
                                          "was", "were", "are", "am", "have", "has", "had", "and", "it", "its", "it's", "at", "be", "been", "from", "with",
@@ -147,6 +159,8 @@ nonisolated struct KnowledgeQuestion: Sendable {
         wantsPast = raw.contains("old") || raw.contains("previous") || raw.contains("former") || raw.contains("earlier") || raw.contains("first")
         wantsExpiries = (raw.contains("expire") || raw.contains("expires") || raw.contains("expiring")) && (everyone || raw.contains("documents") || raw.contains("next") || raw.contains("before"))
         asksYesNo = ["is", "was", "has", "have", "did", "does", "do", "are"].contains(raw.first ?? "")
+        asksWhen = raw.first == "when" || lower.contains("what date") || lower.contains("what day")
+        asksWhere = raw.first == "where"
     }
 }
 
@@ -161,17 +175,20 @@ nonisolated enum KnowledgeSearch {
     static func search(_ question: KnowledgeQuestion, in knowledge: Knowledge, limit: Int = 12) -> [KnowledgeMatch] {
         let words = KnowledgeTerms.expand(question.words)
         let asked = Set(question.words)
-        let pool = question.isEveryone ? knowledge.topics : knowledge.topics.filter { question.people.contains($0.person) }
+        // Household documents (leases, the marriage certificate) are everyone's.
+        let pool = question.isEveryone ? knowledge.topics : knowledge.topics.filter { question.people.contains($0.person) || $0.person == KnowledgeBuilder.household }
         var matches: [KnowledgeMatch] = []
         for topic in pool {
             let terms = Set(topic.terms)
-            let nameWords = Set(KnowledgeTerms.expand(KnowledgeText.words(topic.name)))
+            let ownName = Set(KnowledgeText.words(topic.name))
+            let nameWords = Set(KnowledgeTerms.expand(Array(ownName)))
             var score = 0.0
             for word in Set(words) {
                 let direct = asked.contains(word)
                 if terms.contains(word) {
                     score += direct ? 3 : 1
-                    if nameWords.contains(word) { score += direct ? 2 : 0.5 }
+                    // The topic's own name counts most; a synonym of its name a little.
+                    if ownName.contains(word) { score += direct ? 2 : 0.5 } else if nameWords.contains(word) { score += 0.5 }
                 } else if word.count >= 4, terms.contains(where: { $0.count >= 4 && ($0.hasPrefix(word) || word.hasPrefix($0)) }) {
                     score += direct ? 1.5 : 0.5
                 }
@@ -181,6 +198,10 @@ nonisolated enum KnowledgeSearch {
             if topic.current == nil { score *= 0.5 }
             // Settled across documents beats one document's copy of the same thing.
             if topic.behavior == .state || topic.behavior == .identity { score *= 1.1 }
+            // "When" wants a date and "where" a place: "when was I born" is the birth date, not the birthplace.
+            let isDate = topic.current?.value.text.flatMap(KnowledgeText.date) != nil || topic.behavior == .event
+            if question.asksWhen { score *= isDate ? 1.3 : 0.8 }
+            if question.asksWhere, isDate { score *= 0.7 }
             score /= (1 + Double(KnowledgeText.words(topic.name).count) * 0.05)
             matches.append(KnowledgeMatch(topic: topic, score: score))
         }
