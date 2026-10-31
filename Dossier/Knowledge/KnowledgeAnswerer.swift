@@ -34,7 +34,8 @@ nonisolated enum RuleAnswerer {
         let matches = KnowledgeSearch.search(question, in: knowledge, limit: 8).filter { covers($0.topic, question) }
         guard let top = matches.first else { return nil }
         // Too close to call: leave it to the model.
-        if matches.count > 1, matches[1].score > top.score * 0.92, matches[1].topic.current?.value != top.topic.current?.value { return nil }
+        // (Two topics saying the same thing, such as your birth date on the marriage certificate, aren't a tie.)
+        if matches.count > 1, matches[1].score > top.score * 0.92, !sameAnswer(matches[1].topic.current?.value, top.topic.current?.value) { return nil }
         let topic = top.topic
         let subject = KnowledgeSpeech.subject(topic.person, knowledge: knowledge)
         if question.wantsCount, topic.behavior == .event {
@@ -62,6 +63,14 @@ nonisolated enum RuleAnswerer {
     /// Words that say what kind of answer is wanted rather than what it's about.
     static let genericWords: Set<String> = ["when", "where", "who", "date", "day", "number", "last", "current", "new", "now", "today", "name",
                                             "until", "valid", "s", "much", "long", "ago", "recent", "latest", "most", "kind", "type"]
+
+    /// Whether two values say the same thing: the same date in any spelling, or the same letters and digits.
+    static func sameAnswer(_ a: KnowledgeValue?, _ b: KnowledgeValue?) -> Bool {
+        guard let a, let b else { return a == nil && b == nil }
+        if let x = a.text.flatMap(KnowledgeText.date), let y = b.text.flatMap(KnowledgeText.date) { return x == y }
+        guard let x = a.comparable, let y = b.comparable else { return false }
+        return KnowledgeText.compact(x) == KnowledgeText.compact(y)
+    }
 
     /// Whether a topic is about at least half of the question's specific words.
     static func covers(_ topic: KnowledgeTopic, _ question: KnowledgeQuestion) -> Bool {
