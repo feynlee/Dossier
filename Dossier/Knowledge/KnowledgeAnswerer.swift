@@ -332,8 +332,9 @@ nonisolated struct ModelAnswerer {
         let used = cited.compactMap { context.ids[$0] }
         let claims = used.compactMap { knowledge.topic($0) }.flatMap(\.claims)
         // An answer must rest on the facts it cites. Seen in testing: with the right fact missing, the on-device
-        // model made up a rent, a parking space, lab results and an employer's figures.
-        let grounded = !cited.isEmpty && Self.isGrounded(reply.answer, in: context.header + cited.compactMap { context.lines[$0] })
+        // model made up a rent, a parking space, lab results and an employer's figures. It may repeat the
+        // question's own words ("Your Immigration Medical Exam was with…").
+        let grounded = !cited.isEmpty && Self.isGrounded(reply.answer, in: context.header + cited.compactMap { context.lines[$0] } + [question.text])
             && Self.fitsRelation(used.compactMap { knowledge.topic($0) }, question)
         guard reply.outcome == "answered", grounded else {
             return KnowledgeAnswer(text: KnowledgeAnswer.notFound, method: engine == .privateCloud ? .privateCloud : .onDevice,
