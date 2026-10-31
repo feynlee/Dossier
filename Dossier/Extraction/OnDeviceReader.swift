@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import FoundationModels
+import ImageIO
 import os
 
 /// Reads a document with the on-device model in small steps. Its context is 4,096 tokens for the
