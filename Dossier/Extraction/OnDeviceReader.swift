@@ -37,12 +37,14 @@ nonisolated struct OnDeviceReader {
                 travel += (try? await readTravel(part.text)) ?? []
             }
             for read in await readPart(part, facts: facts, known: known) {
-                for entry in read.contents where !entry.value.trimmingCharacters(in: .whitespaces).isEmpty {
+                // The part was text only, so everything reported has to be in it (seen in testing without this: an
+                // employer "Tech Corp" and a flu shot in 2027 on a lease).
+                for entry in read.contents where Self.isSupported(entry.value, by: part.text) {
                     let key = [entry.section, entry.label, entry.value].joined(separator: "|").lowercased()
                     guard seen.insert(key).inserted else { continue }
                     contents.append(ReadEntry(section: entry.section, label: entry.label, value: entry.value, page: part.page, confidence: "high", isNumber: entry.isNumber))
                 }
-                for detail in read.details where !detail.value.trimmingCharacters(in: .whitespaces).isEmpty {
+                for detail in read.details where Self.isSupported(detail.value, by: part.text) {
                     let key = ["d", detail.person, detail.personName, detail.label, detail.value].joined(separator: "|").lowercased()
                     guard seen.insert(key).inserted else { continue }
                     details.append(ReadDetail(person: detail.person, personName: detail.personName, label: detail.label, value: detail.value,
@@ -137,6 +139,28 @@ nonisolated struct OnDeviceReader {
     }
 
     // MARK: Text
+
+    /// Whether a value is in the text it was read from: each date in some spelling, every number, and most words.
+    static func isSupported(_ value: String, by text: String) -> Bool {
+        let parts = value.components(separatedBy: " · ").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return false }
+        let lines = text.components(separatedBy: "\n")
+        let flat = Verifier.compact(text)
+        for part in parts {
+            if let date = SimpleDate(iso: part) ?? Verifier.looseDate(part, order: nil), part.contains(where: \.isNumber), part.count <= 20 {
+                if Verifier.locate(date.iso, key: .issueDate, in: [lines]) == nil { return false }
+                continue
+            }
+            let tokens = part.uppercased().split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { $0.count >= 2 }
+            guard !tokens.isEmpty else { continue }
+            // Numbers exactly ("2,950.00" is 2 950 00), words mostly.
+            let numbers = tokens.filter { $0.contains(where: \.isNumber) }
+            if numbers.contains(where: { !flat.contains($0) }) { return false }
+            let words = tokens.filter { !$0.contains(where: \.isNumber) }
+            if !words.isEmpty, words.filter({ flat.contains($0) }).count * 3 < words.count * 2 { return false }
+        }
+        return true
+    }
 
     struct Part {
         var page: Int

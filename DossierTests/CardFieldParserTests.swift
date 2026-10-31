@@ -44,6 +44,10 @@ struct CardFieldParserTests {
         ])
         let rows = TravelHistoryParser.rows(in: [page])
         #expect(rows.count == 2)
+        // The first row out of place, as OCR put it right under the record number.
+        let odd = ReadPage(image: nil, lines: ["Admission I-94 Record Number |", "2025-03-22", "Arrival", "SEA", "2025-03-02", "Departure", "SEA"],
+                           boxes: [], barcodes: [])
+        #expect(TravelHistoryParser.rows(in: [odd]).count == 2)
         #expect(rows.first?.date == "2025-03-22" && rows.first?.kind == "arrival" && rows.first?.port == "SEA")
     }
 }

@@ -74,6 +74,17 @@ nonisolated enum RuleAnswerer {
 
     /// Whether a topic is about at least half of the question's specific words.
     static func covers(_ topic: KnowledgeTopic, _ question: KnowledgeQuestion) -> Bool {
+        // "My father's name", "my mother's maiden name": only a detail about that relative answers it, and only
+        // one about the thing asked (not the father's phone).
+        let raw = Set(KnowledgeText.words(question.text.lowercased()).map { $0.hasSuffix("'s") ? String($0.dropLast(2)) : $0 })
+        for relation in [Relation.mother, .father, .sibling] where !raw.isDisjoint(with: KnowledgeTerms.relationWords(relation)) {
+            let parts = topic.id.components(separatedBy: "|")
+            guard parts.count >= 5, parts[1] == "detail", parts[2] == relation.rawValue else { return false }
+            let asked = Set(question.words).subtracting(KnowledgeTerms.relationWords(relation))
+            let label = Set(KnowledgeText.words(parts[4]) + KnowledgeText.words(topic.name.lowercased()))
+            if !asked.isEmpty, asked.isDisjoint(with: label), !asked.contains(where: { KnowledgeTerms.related($0).contains { label.contains($0) } }) { return false }
+        }
+        if KnowledgeSearch.hint(question, topic, isDate: false) == 0.5 { return false }
         let specific = Set(question.words.filter { !genericWords.contains($0) && !$0.allSatisfy(\.isNumber) })
         guard !specific.isEmpty else { return true }
         let terms = Set(topic.terms)

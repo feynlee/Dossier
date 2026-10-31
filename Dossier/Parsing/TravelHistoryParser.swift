@@ -7,12 +7,26 @@ import Foundation
 nonisolated enum TravelHistoryParser {
     static func rows(in pages: [ReadPage]) -> [ReadTravelEvent] {
         var events: [ReadTravelEvent] = []
+        func add(_ event: ReadTravelEvent) {
+            if !events.contains(where: { $0.date == event.date && $0.kind == event.kind }) { events.append(event) }
+        }
         for page in pages {
             for row in rows(lines: page.lines, boxes: page.boxes) {
-                if let event = event(in: row) { events.append(event) }
+                if let event = event(in: row) { add(event) }
+            }
+            // Also in reading order, a few lines at a time: a row OCR placed oddly (seen in testing: the first
+            // row, just under the record number) still reads as date, type, port.
+            for index in page.lines.indices where Verifier.looseDate(page.lines[index], order: .monthFirst) != nil {
+                // The date's line and the lines after it, up to the next date.
+                var window = [page.lines[index]]
+                for next in page.lines.dropFirst(index + 1).prefix(3) {
+                    if Verifier.looseDate(next, order: .monthFirst) != nil { break }
+                    window.append(next)
+                }
+                if let event = event(in: window.joined(separator: " ")) { add(event) }
             }
         }
-        return events
+        return events.sorted { $0.date > $1.date }
     }
 
     /// The page's lines joined into table rows by where they sit; without boxes, each line is a row.

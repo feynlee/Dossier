@@ -186,6 +186,14 @@ nonisolated enum KnowledgeSearch {
                 || KnowledgeText.words(parts[3]).contains { raw.contains($0) }
             if !mentioned { return 0.4 }
         }
+        // "What time was Emma born", "which hospital": the time or the place, not the birth date.
+        if words.contains("time") || words.contains("hour") {
+            let value = topic.current?.value.text ?? ""
+            return value.range(of: #"\d{1,2}:\d{2}"#, options: .regularExpression) != nil || name.contains("time") ? 1.8 : 0.5
+        }
+        if !words.isDisjoint(with: ["hospital", "facility", "clinic"]) {
+            return ["hospital", "facility", "clinic", "place"].contains(where: name.contains) ? 1.8 : 0.5
+        }
         if !words.isDisjoint(with: ["born", "birthday", "dob", "birth"]) {
             if question.asksWhere { return topic.id.hasSuffix("|placeOfBirth") ? 1.6 : 1 }
             if topic.id.hasSuffix("|dateOfBirth") { return 1.6 }
