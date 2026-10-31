@@ -156,25 +156,43 @@ actor DocumentExtractor {
             }
         } catch let error as LanguageModelError {
             if case .rateLimited(let details) = error { throw ExtractorError.quotaReached(resetDate: details.resetDate) }
-            throw ExtractorError.failed(String(describing: error))
+            logger.error("PCC model error: \(String(describing: error), privacy: .public)")
+            // Content the model won't read is a property of the document; anything else (seen in testing: a burst
+            // of ModelManager errors once many documents were read in a row) is PCC not being usable right now,
+            // so the on-device model reads it and Private Cloud Compute reads it again later.
+            let text = String(describing: error).lowercased()
+            if text.contains("unsafe") || text.contains("guardrail") { throw ExtractorError.failed(String(describing: error)) }
+            throw ExtractorError.unavailable("Private Cloud Compute couldn’t read it right now.")
         }
     }
 
     private func extractOnDevice(_ pages: [ReadPage], instructions: String) async throws -> DocumentReading {
         guard onDevice.isAvailable else { throw ExtractorError.unavailable("Apple Intelligence isn’t available on this iPhone.") }
-        let session = LanguageModelSession(model: onDevice, instructions: instructions)
-        do {
-            // Only the first page image fits alongside the text in the on-device context.
-            return try await generate(
-                in: session,
-                pages: pages,
-                attachImages: onDevice.capabilities.contains(.vision),
-                maxImages: 1,
-                textLimit: Self.onDeviceTextLimit
-            )
-        } catch {
-            throw ExtractorError.failed(String(describing: error))
+        // The on-device context is 4,096 tokens, shared by the instructions, the page image, the text and the
+        // answer. When a document doesn't fit, try again with less of its text, then without the image.
+        var lastError: Error?
+        for (limit, image) in [(Self.onDeviceTextLimit, true), (6_000, true), (3_500, true), (3_500, false)] {
+            let session = LanguageModelSession(model: onDevice, instructions: instructions)
+            do {
+                return try await generate(
+                    in: session,
+                    pages: pages,
+                    attachImages: image && onDevice.capabilities.contains(.vision),
+                    maxImages: 1,
+                    textLimit: limit
+                )
+            } catch {
+                lastError = error
+                guard Self.isContextOverflow(error) else { break }
+                logger.notice("On-device context exceeded with \(limit) characters; trying with less")
+            }
         }
+        throw ExtractorError.failed(lastError.map { String(describing: $0) } ?? "The document couldn’t be read.")
+    }
+
+    nonisolated static func isContextOverflow(_ error: Error) -> Bool {
+        let text = String(describing: error).lowercased()
+        return text.contains("context") && (text.contains("exceed") || text.contains("maximum"))
     }
 
     // MARK: Prompt

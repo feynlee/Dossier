@@ -192,6 +192,7 @@ final class ImportCoordinator {
         into document: SourceDocument, context: ModelContext
     ) throws {
         let pageLines = pages.map(\.lines)
+        let order = Verifier.numericDateOrder(in: pageLines, kind: document.kind)
         // The holder's standard facts are already read; don't repeat them as details.
         let standard = Set(FactKey.allCases.map { $0.label.lowercased() } + ["name", "full name", "date of birth", "place of birth", "nationality", "sex", "gender"])
         var seen = Set<String>()
@@ -203,7 +204,7 @@ final class ImportCoordinator {
             if relation == nil, standard.contains(label.lowercased()) { continue }
             let id = Fact.detailID(label: label, relation: relation?.rawValue, personName: personName)
             guard !dismissed.contains(id), seen.insert(id).inserted,
-                  let item = Verifier.verifyDetail(detail.value, isConfident: detail.confidence != "low", page: max(1, detail.page), pages: pageLines)
+                  let item = Verifier.verifyDetail(detail.value, isConfident: detail.confidence != "low", page: max(1, detail.page), pages: pageLines, order: order)
             else { continue }
 
             let sensitive = detail.isNumber == "yes"
@@ -238,6 +239,7 @@ final class ImportCoordinator {
         into document: SourceDocument, context: ModelContext
     ) throws {
         let pageLines = pages.map(\.lines)
+        let order = Verifier.numericDateOrder(in: pageLines, kind: document.kind)
         var seen = Set<String>()
         for (position, entry) in entries.prefix(Self.maxEntries).enumerated() {
             let section = entry.section.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Other"
@@ -252,7 +254,7 @@ final class ImportCoordinator {
             }
             let id = Fact.entryID(section: section, label: label)
             guard !dismissed.contains(id),
-                  let item = Verifier.verifyEntry(entry.value, isConfident: entry.confidence != "low", page: max(1, entry.page), pages: pageLines)
+                  let item = Verifier.verifyEntry(entry.value, isConfident: entry.confidence != "low", page: max(1, entry.page), pages: pageLines, order: order)
             else { continue }
             seen.insert(id)
 
@@ -332,7 +334,7 @@ final class ImportCoordinator {
             guard let key = FactKey(rawValue: field.key), important.contains(key) else { return nil }
             return Verifier.Input(key: key, value: field.value, page: max(1, field.page), isConfident: field.confidence != "low")
         }
-        let verified = Verifier.verify(inputs, pages: pageLines, mrz: mrz, license: license).filter { important.contains($0.key) }
+        let verified = Verifier.verify(inputs, pages: pageLines, mrz: mrz, license: license, kind: kind).filter { important.contains($0.key) }
 
         for fact in document.facts { context.delete(fact) }
         for event in document.travel { context.delete(event) }

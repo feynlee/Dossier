@@ -37,6 +37,9 @@ struct ReadingEvaluation {
         var ocrLines = 0
         var barcodeFound = false
         var barcodeParsed = false
+        /// What Vision read, to tell an OCR problem from a model problem. Made-up documents only.
+        var ocr: [[String]]?
+        var barcodes: [String]?
         var mrzFound = false
         var mrzValid = false
         var mrzFailedChecks: [String] = []
@@ -68,7 +71,7 @@ struct ReadingEvaluation {
 
         for file in files {
             let target = output.appending(path: file.deletingPathExtension().lastPathComponent + ".json")
-            if environment["DOSSIER_EVAL_RESUME"] != nil, FileManager.default.fileExists(atPath: target.path()) { continue }
+            if environment["DOSSIER_EVAL_RESUME"] != nil, FileManager.default.fileExists(atPath: target.path(percentEncoded: false)) { continue }
             let started = Date.now
             var result = Output(file: file.lastPathComponent, seconds: 0)
             do {
@@ -81,6 +84,8 @@ struct ReadingEvaluation {
                 result.ocrLines = lines.map(\.count).reduce(0, +)
                 result.barcodeFound = pages.contains { !$0.barcodes.isEmpty }
                 result.barcodeParsed = license != nil
+                result.ocr = lines
+                result.barcodes = pages.flatMap(\.barcodes)
                 result.mrzFound = mrz != nil
                 result.mrzValid = mrz?.isValid ?? false
                 result.mrzFailedChecks = mrz?.failedChecks ?? []
@@ -90,11 +95,17 @@ struct ReadingEvaluation {
                 result.kind = reading.kind
                 result.title = reading.title
                 result.fields = reading.fields.map { .init(key: $0.key, value: $0.value, page: $0.page, confidence: $0.confidence) }
-                result.contents = reading.contents.map {
-                    .init(section: $0.section, label: $0.label, value: $0.value, page: $0.page, confidence: $0.confidence, isNumber: $0.isNumber)
+                // As the app saves them: each value checked against the page, dates put in the page's order.
+                let order = Verifier.numericDateOrder(in: lines, kind: DocumentKind(rawValue: reading.kind))
+                result.contents = reading.contents.map { entry in
+                    let kept = Verifier.verifyEntry(entry.value, isConfident: entry.confidence != "low", page: max(1, entry.page), pages: lines, order: order)
+                    return .init(section: entry.section, label: entry.label, value: kept?.value ?? entry.value, page: entry.page,
+                                 confidence: kept?.status == .needsReview ? "low" : entry.confidence, isNumber: entry.isNumber)
                 }
-                result.details = reading.details.map {
-                    .init(person: $0.person, personName: $0.personName, label: $0.label, value: $0.value, confidence: $0.confidence)
+                result.details = reading.details.map { detail in
+                    let kept = Verifier.verifyDetail(detail.value, isConfident: detail.confidence != "low", page: max(1, detail.page), pages: lines, order: order)
+                    return .init(person: detail.person, personName: detail.personName, label: detail.label, value: kept?.value ?? detail.value,
+                                 confidence: kept?.status == .needsReview ? "low" : detail.confidence)
                 }
                 result.travel = reading.travel.map { .init(date: $0.date, kind: $0.kind, port: $0.port) }
 
@@ -104,7 +115,7 @@ struct ReadingEvaluation {
                     guard let key = FactKey(rawValue: field.key), important.contains(key) else { return nil }
                     return Verifier.Input(key: key, value: field.value, page: max(1, field.page), isConfident: field.confidence != "low")
                 }
-                result.verified = Verifier.verify(inputs, pages: lines, mrz: mrz, license: license)
+                result.verified = Verifier.verify(inputs, pages: lines, mrz: mrz, license: license, kind: kind)
                     .filter { important.contains($0.key) }
                     .map { .init(key: $0.key.rawValue, value: $0.value, status: $0.status.rawValue, check: $0.check.rawValue, alternate: $0.alternate) }
             } catch {

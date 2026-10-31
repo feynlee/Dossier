@@ -94,7 +94,7 @@ def entry_tokens(value):
         if ds:
             tokens.append(("date", min(ds)))
         else:
-            tokens.append(("text", compact(p)))
+            tokens.append(("text", compact(re.sub(r"^(LOT|Lot|lot)\s+", "", p))))
     return tokens
 
 
@@ -106,7 +106,12 @@ def entry_captured(expected, candidates):
     for cand in candidates:
         text = f"{cand.get('section', '')} {cand.get('label', '')} {cand.get('value', '')}"
         dates, flat = iso_dates(text), compact(text)
-        ok = all((t[1] in dates) if t[0] == "date" else (t[1] in flat) for t in tokens)
+        # Every date must be there; of the other parts (lot, clinic, units), most of them.
+        date_ok = all(t[1] in dates for t in tokens if t[0] == "date")
+        texts = [t for t in tokens if t[0] == "text"]
+        found = sum(t[1] in flat for t in texts)
+        has_date = any(t[0] == "date" for t in tokens)
+        ok = date_ok and (found == len(texts) or (has_date and found * 2 >= len(texts)) or (not has_date and texts and found >= 1 and len(texts) > 1 and found * 2 > len(texts)))
         if not ok:
             continue
         # A bare value such as "$2,950.00" or "Negative" could be any row: also want a word of the label.

@@ -33,13 +33,15 @@ nonisolated enum Verifier {
         var isConfident = true
     }
 
-    static func verify(_ fields: [Input], pages: [[String]], mrz: MRZResult?, license: AAMVARecord?) -> [VerifiedFact] {
+    static func verify(_ fields: [Input], pages: [[String]], mrz: MRZResult?, license: AAMVARecord?, kind: DocumentKind? = nil) -> [VerifiedFact] {
         let references = references(mrz: mrz, license: license)
+        let order = numericDateOrder(in: pages, kind: kind)
         var results: [VerifiedFact] = []
         var seen = Set<FactKey>()
 
         for field in fields {
-            let value = normalizedValue(field.value, for: field.key)
+            var value = normalizedValue(field.value, for: field.key)
+            if field.key.isDate, let date = SimpleDate(iso: value) { value = correctedDate(date, pages: pages, order: order).iso }
             guard !value.isEmpty, seen.insert(field.key).inserted else { continue }
             let location = locate(value, key: field.key, in: pages)
             let context = location.map { pages[$0.page][$0.line] }
@@ -80,10 +82,10 @@ nonisolated enum Verifier {
 
     /// Checks a detail (height, a parent's name…) like a fact: it needs a look when the model wasn't sure, or
     /// when it's a number or date the page text doesn't show.
-    static func verifyDetail(_ value: String, isConfident: Bool, page: Int, pages: [[String]]) -> VerifiedFact? {
+    static func verifyDetail(_ value: String, isConfident: Bool, page: Int, pages: [[String]], order: DateOrder? = nil) -> VerifiedFact? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        let date = SimpleDate(iso: trimmed)
+        let date = SimpleDate(iso: trimmed).map { correctedDate($0, pages: pages, order: order) }
         let key: FactKey = date != nil ? .issueDate : .detail
         let normalized = date?.iso ?? trimmed
         let location = locate(normalized, key: key, in: pages)
@@ -99,11 +101,11 @@ nonisolated enum Verifier {
 
     /// Checks something the document records, such as "2019-04-02 · Lot AB123 · King County clinic": each
     /// part with a number or date has to be in the page text, or the model has to have been sure of it.
-    static func verifyEntry(_ value: String, isConfident: Bool, page: Int, pages: [[String]]) -> VerifiedFact? {
+    static func verifyEntry(_ value: String, isConfident: Bool, page: Int, pages: [[String]], order: DateOrder? = nil) -> VerifiedFact? {
         let parts = value.components(separatedBy: " · ").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         guard !parts.isEmpty else { return nil }
         let checked = parts.map { part -> (value: String, location: LineLocation?, needsText: Bool) in
-            let date = SimpleDate(iso: part)
+            let date = SimpleDate(iso: part).map { correctedDate($0, pages: pages, order: order) }
             let normalized = date?.iso ?? part
             return (normalized, locate(normalized, key: date != nil ? .issueDate : .detail, in: pages), normalized.contains(where: \.isNumber))
         }
@@ -196,6 +198,48 @@ nonisolated enum Verifier {
             .flatMap { [$0.value, $0.alternate].compactMap { $0 } }
             .map(compact)
             .contains { $0.count >= 4 && compacted.contains($0) }
+    }
+
+    // MARK: Day and month order
+
+    enum DateOrder: Sendable { case monthFirst, dayFirst }
+
+    /// How the document writes numeric dates such as 08/12/1990: from a date that can only be read one way
+    /// (13/05/2020, 05/13/2020), else from where it's from (US cards, notices and leases put the month first).
+    static func numericDateOrder(in pages: [[String]], kind: DocumentKind?) -> DateOrder? {
+        var monthFirst = 0, dayFirst = 0
+        if let regex = try? Regex(#"\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})\b"#) {
+            for line in pages.joined() {
+                for match in line.matches(of: regex) {
+                    guard let a = match.output[1].substring.flatMap({ Int($0) }), let b = match.output[2].substring.flatMap({ Int($0) }) else { continue }
+                    if a > 12, b <= 12 { dayFirst += 1 }
+                    if b > 12, a <= 12 { monthFirst += 1 }
+                }
+            }
+        }
+        if monthFirst != dayFirst { return monthFirst > dayFirst ? .monthFirst : .dayFirst }
+        switch kind {
+        case .greenCard, .employmentAuthorization, .driversLicense, .stateID, .uscisNotice, .i94, .lease: return .monthFirst
+        default: return nil
+        }
+    }
+
+    /// A date the model read with day and month swapped (1990-12-08 for 08/12/1990 on a US card) is put back
+    /// the way the page writes it. Only when the page shows the other reading and not this one.
+    static func correctedDate(_ date: SimpleDate, pages: [[String]], order: DateOrder?) -> SimpleDate {
+        guard let order, date.day <= 12, date.day != date.month,
+              let swapped = SimpleDate(year: date.year, month: date.day, day: date.month) else { return date }
+        let text = pages.joined().map(compact)
+        func shows(_ candidate: SimpleDate) -> Bool {
+            let first = order == .monthFirst ? candidate.month : candidate.day
+            let second = order == .monthFirst ? candidate.day : candidate.month
+            let spellings = Set([
+                String(format: "%02d%02d%d", first, second, candidate.year), String(format: "%d%d%d", first, second, candidate.year),
+                String(format: "%02d%d%d", first, second, candidate.year), String(format: "%d%02d%d", first, second, candidate.year),
+            ])
+            return text.contains { line in spellings.contains { line.contains($0) } }
+        }
+        return !shows(date) && shows(swapped) ? swapped : date
     }
 
     static func dateSpellings(_ date: SimpleDate) -> [String] {
