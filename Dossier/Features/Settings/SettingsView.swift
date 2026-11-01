@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var privateCloudStatus: String?
     @AppStorage(ScanFolders.autoCaptureKey) private var autoCapture = true
     @AppStorage(DetailRequest.findsUsefulDetailsKey) private var findsUsefulDetails = true
+    @AppStorage(KnowledgeIndexer.settingKey) private var indexKnowledge = false
     @State private var requestedSummary = ""
     @State private var autoFillEnabled = false
     @State private var scanFolder: URL?
@@ -88,6 +89,19 @@ struct SettingsView: View {
                     Text(lockEnabled
                         ? "Dossier always locks when it starts and when your iPhone locks. The time above is how long you can switch to another app and come back without unlocking."
                         : "Anyone who can open your unlocked iPhone can open Dossier. Numbers still need \(AppLock.methodName) to reveal.")
+                }
+
+                Section {
+                    TileRow(symbol: "questionmark.bubble", badge: nil, title: "Ask Dossier", subtitle: "“Ask Dossier when my lease ends”")
+                    Toggle(isOn: $indexKnowledge) {
+                        TileRow(symbol: "magnifyingglass", badge: nil, title: "Let Siri find facts", subtitle: "Without saying “Dossier”")
+                    }
+                } header: {
+                    Text("Siri")
+                } footer: {
+                    Text(indexKnowledge
+                        ? "Dates, addresses and results are in Spotlight on this iPhone, so Siri can find them and they show in search while your iPhone is unlocked. Numbers never are."
+                        : "Siri answers questions about your documents when you start with “Ask Dossier”. Numbers are only ever said as their last four characters.")
                 }
 
                 Section {

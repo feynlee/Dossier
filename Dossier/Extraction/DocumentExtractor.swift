@@ -37,13 +37,12 @@ actor DocumentExtractor {
     private let onDevice = SystemLanguageModel.default
     private let logger = Logger(subsystem: "liziyue.Dossier", category: "Extraction")
 
-    /// The on-device model has an 8K context, so its OCR text is capped. PCC's 32K tokens hold roughly 25 pages
-    /// of dense text, which covers leases and notices.
-    private static let onDeviceTextLimit = 12_000
+    /// PCC's 32K tokens hold roughly 25 pages of dense text, which covers leases and notices. The on-device
+    /// model reads in parts instead; see `OnDeviceReader`.
     private static let privateCloudTextLimit = 90_000
 
     /// Bumped when the instructions change enough that documents should be read again.
-    static let readingVersion = 3
+    static let readingVersion = 4
 
     static let baseInstructions = """
         You read personal documents for their owner: passports, US immigration cards and notices, driver's \
@@ -88,6 +87,7 @@ actor DocumentExtractor {
         - For a machine-readable zone (lines of capital letters and < signs), prefer the printed fields above \
         it, but use the zone to resolve unclear characters.
         - Report each fact once, even if it appears on several pages.
+        - For a USCIS notice (an I-797), formType is the form the notice is about, such as I-485 or I-765, not I-797.
         """
 
     /// The base instructions plus what to put in `details`: other useful details, and the ones you asked for.
@@ -112,12 +112,23 @@ actor DocumentExtractor {
         let instructions = Self.instructions(for: request)
         if preferPrivateCloud {
             do {
-                return (try await extractWithPrivateCloud(pages, instructions: instructions), .privateCloudCompute)
+                return (Self.withTravelRows(try await extractWithPrivateCloud(pages, instructions: instructions), pages: pages), .privateCloudCompute)
             } catch let error as ExtractorError where error.allowsFallback {
                 logger.notice("PCC unavailable, using on-device model: \(error.localizedDescription, privacy: .public)")
             }
         }
-        return (try await extractOnDevice(pages, instructions: instructions), .onDevice)
+        return (Self.withTravelRows(try await extractOnDevice(pages, request: request), pages: pages), .onDevice)
+    }
+
+    /// Facts printed under fixed labels as OCR shows them, and an I-94's travel rows when OCR finds at least as
+    /// many as the model did.
+    nonisolated static func withTravelRows(_ reading: DocumentReading, pages: [ReadPage]) -> DocumentReading {
+        var reading = CardFieldParser.apply(to: reading, pages: pages)
+        guard reading.kind == DocumentKind.i94.rawValue else { return reading }
+        let parsed = TravelHistoryParser.rows(in: pages)
+        guard parsed.count >= reading.travel.count, !parsed.isEmpty else { return reading }
+        reading.travel = parsed
+        return reading
     }
 
     /// Tells the UI whether PCC can be used right now, and why not.
@@ -156,25 +167,33 @@ actor DocumentExtractor {
             }
         } catch let error as LanguageModelError {
             if case .rateLimited(let details) = error { throw ExtractorError.quotaReached(resetDate: details.resetDate) }
-            throw ExtractorError.failed(String(describing: error))
+            logger.error("PCC model error: \(String(describing: error), privacy: .public)")
+            // Content the model won't read is a property of the document; anything else (seen in testing: a burst
+            // of ModelManager errors once many documents were read in a row) is PCC not being usable right now,
+            // so the on-device model reads it and Private Cloud Compute reads it again later.
+            let text = String(describing: error).lowercased()
+            if text.contains("unsafe") || text.contains("guardrail") { throw ExtractorError.failed(String(describing: error)) }
+            throw ExtractorError.unavailable("Private Cloud Compute couldn’t read it right now.")
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            // Seen in testing: ModelManagerError 1001 thrown as neither error type above, for every document
+            // once PCC stopped answering. That's PCC being unusable, not the document.
+            logger.error("PCC failed: \(String(describing: error), privacy: .public)")
+            let text = String(describing: error).lowercased()
+            if text.contains("unsafe") || text.contains("guardrail") { throw ExtractorError.failed(String(describing: error)) }
+            throw ExtractorError.unavailable("Private Cloud Compute couldn’t read it right now.")
         }
     }
 
-    private func extractOnDevice(_ pages: [ReadPage], instructions: String) async throws -> DocumentReading {
+    private func extractOnDevice(_ pages: [ReadPage], request: DetailRequest) async throws -> DocumentReading {
         guard onDevice.isAvailable else { throw ExtractorError.unavailable("Apple Intelligence isn’t available on this iPhone.") }
-        let session = LanguageModelSession(model: onDevice, instructions: instructions)
-        do {
-            // Only the first page image fits alongside the text in the on-device context.
-            return try await generate(
-                in: session,
-                pages: pages,
-                attachImages: onDevice.capabilities.contains(.vision),
-                maxImages: 1,
-                textLimit: Self.onDeviceTextLimit
-            )
-        } catch {
-            throw ExtractorError.failed(String(describing: error))
-        }
+        return try await OnDeviceReader(model: onDevice, request: request).read(pages)
+    }
+
+    nonisolated static func isContextOverflow(_ error: Error) -> Bool {
+        let text = String(describing: error).lowercased()
+        return text.contains("context") && (text.contains("exceed") || text.contains("maximum"))
     }
 
     // MARK: Prompt

@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftData
 import SwiftUI
 
@@ -63,6 +64,7 @@ struct MainTabView: View {
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
     @Query private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
+    @AppStorage(KnowledgeIndexer.settingKey) private var indexKnowledge = false
 
     /// Changes whenever something AutoFill offers could have changed.
     private var autoFillSignature: [String] {
@@ -101,6 +103,13 @@ struct MainTabView: View {
         .task(id: autoFillSignature) {
             try? await Task.sleep(for: .seconds(1))
             AutoFillStore.save(FormCatalog.build(documents: documents, overrides: overrides).entries)
+        }
+        // Keep what Siri can find up to date: the facts it can name, and Spotlight's index if you turned it on.
+        .task(id: autoFillSignature + [indexKnowledge ? "index" : "no-index"]) {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            await KnowledgeIndexer.refresh()
+            DossierShortcuts.updateAppShortcutParameters()
         }
         // Keep the Dossier location in Files showing the library as it is now.
         .task(id: librarySignature) {

@@ -113,9 +113,32 @@ nonisolated enum PageReader {
         return (lines, boxes)
     }
 
+    /// PDF417 payloads. A licence's barcode is dense, and Vision often misses it on a whole page or a small
+    /// photo, so when the page finds none, each half of the page is tried again at twice the size.
     static func detectBarcodes(in image: CGImage) async throws -> [String] {
         var request = DetectBarcodesRequest()
         request.symbologies = [.pdf417]
-        return try await request.perform(on: image).compactMap(\.payloadString)
+        let found = try await request.perform(on: image).compactMap(\.payloadString)
+        guard found.isEmpty else { return found }
+        let width = image.width, height = image.height
+        let halves = [CGRect(x: 0, y: 0, width: width, height: height / 2 + height / 10),
+                      CGRect(x: 0, y: height / 2 - height / 10, width: width, height: height - height / 2 + height / 10)]
+        for half in halves {
+            guard let crop = image.cropping(to: half), let larger = scaled(crop, by: 2) else { continue }
+            let again = (try? await request.perform(on: larger).compactMap(\.payloadString)) ?? []
+            if !again.isEmpty { return again }
+        }
+        return []
+    }
+
+    private static func scaled(_ image: CGImage, by factor: CGFloat) -> CGImage? {
+        let width = Int(CGFloat(image.width) * factor), height = Int(CGFloat(image.height) * factor)
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()
     }
 }

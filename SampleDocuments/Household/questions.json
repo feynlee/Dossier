@@ -1,0 +1,951 @@
+{
+ "today": "2026-10-31",
+ "questions": [
+  {
+   "question": "When does my passport expire?",
+   "answer": "2029-03-14",
+   "kind": "lookup+current",
+   "person": "anna",
+   "sources": [
+    "anna-passport-2019"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2029-03-14"
+   ]
+  },
+  {
+   "question": "What's my passport number?",
+   "answer": "PX7204821",
+   "kind": "lookup+current",
+   "person": "anna",
+   "sources": [
+    "anna-passport-2019"
+   ],
+   "sensitive": true,
+   "accept": [
+    "PX7204821"
+   ]
+  },
+  {
+   "question": "What was my old passport number?",
+   "answer": "PX1938457",
+   "kind": "history",
+   "person": "anna",
+   "sources": [
+    "anna-passport-2009"
+   ],
+   "sensitive": true,
+   "accept": [
+    "PX1938457"
+   ]
+  },
+  {
+   "question": "Is my passport still valid?",
+   "answer": "Yes, until 2029-03-14",
+   "kind": "derived",
+   "person": "anna",
+   "sources": [
+    "anna-passport-2019"
+   ],
+   "sensitive": false,
+   "accept": [
+    "yes",
+    "2029-03-14"
+   ]
+  },
+  {
+   "question": "What's my date of birth?",
+   "answer": "1990-08-12",
+   "kind": "conflict",
+   "person": "anna",
+   "sources": [
+    "anna-passport-2019"
+   ],
+   "sensitive": false,
+   "accept": [
+    "1990-08-12"
+   ]
+  },
+  {
+   "question": "Where was I born?",
+   "answer": "Lumen City, Utopia",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "Lumen City"
+   ]
+  },
+  {
+   "question": "What's my nationality?",
+   "answer": "Utopian",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "Utopian"
+   ]
+  },
+  {
+   "question": "What's my full legal name?",
+   "answer": "Anna Maria Eriksson",
+   "kind": "conflict",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "Anna Maria Eriksson"
+   ]
+  },
+  {
+   "question": "What other names have I used?",
+   "answer": "Anna Eriksson-Chen",
+   "kind": "conflict",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "Eriksson-Chen"
+   ]
+  },
+  {
+   "question": "How tall am I?",
+   "answer": "5'6\" (168 cm)",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "5'-06\"",
+    "5'6",
+    "168"
+   ]
+  },
+  {
+   "question": "What colour are my eyes?",
+   "answer": "Brown",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "brown",
+    "BRN"
+   ]
+  },
+  {
+   "question": "What's my driver's licence number?",
+   "answer": "7812345",
+   "kind": "lookup+current",
+   "person": "anna",
+   "sources": [
+    "anna-dl-or-2023"
+   ],
+   "sensitive": true,
+   "accept": [
+    "7812345"
+   ]
+  },
+  {
+   "question": "When does my driver's licence expire?",
+   "answer": "2031-08-12",
+   "kind": "lookup+current",
+   "person": "anna",
+   "sources": [
+    "anna-dl-or-2023"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2031-08-12"
+   ]
+  },
+  {
+   "question": "What's my Social Security number?",
+   "answer": "987-65-4321",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [
+    "anna-ssn-card"
+   ],
+   "sensitive": true,
+   "accept": [
+    "987-65-4321"
+   ]
+  },
+  {
+   "question": "What's my A-number?",
+   "answer": "204815962",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [
+    "anna-greencard"
+   ],
+   "sensitive": true,
+   "accept": [
+    "204815962",
+    "204-815-962"
+   ]
+  },
+  {
+   "question": "When does my green card expire?",
+   "answer": "2031-03-01",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [
+    "anna-greencard"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2031-03-01"
+   ]
+  },
+  {
+   "question": "When did I become a permanent resident?",
+   "answer": "2021-03-02",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [
+    "anna-greencard"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2021-03-02"
+   ]
+  },
+  {
+   "question": "What's my green card category?",
+   "answer": "E21",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [
+    "anna-greencard"
+   ],
+   "sensitive": false,
+   "accept": [
+    "E21"
+   ]
+  },
+  {
+   "question": "What's my immigration status?",
+   "answer": "Permanent resident (E21) since 2021-03-02",
+   "kind": "conflict",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "permanent resident",
+    "E21"
+   ]
+  },
+  {
+   "question": "When was my I-485 approved?",
+   "answer": "2021-03-05",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [
+    "anna-i797-i485"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2021-03-05"
+   ]
+  },
+  {
+   "question": "What's my I-485 receipt number?",
+   "answer": "MSC2190312345",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [
+    "anna-i797-i485"
+   ],
+   "sensitive": true,
+   "accept": [
+    "MSC2190312345"
+   ]
+  },
+  {
+   "question": "What's my priority date?",
+   "answer": "2019-11-04",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-i797-i485"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2019-11-04"
+   ]
+  },
+  {
+   "question": "What was my EAD category?",
+   "answer": "C09",
+   "kind": "history",
+   "person": "anna",
+   "sources": [
+    "anna-ead-2020"
+   ],
+   "sensitive": false,
+   "accept": [
+    "C09"
+   ]
+  },
+  {
+   "question": "When did my EAD card expire?",
+   "answer": "2021-04-30",
+   "kind": "history",
+   "person": "anna",
+   "sources": [
+    "anna-ead-2020"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2021-04-30"
+   ]
+  },
+  {
+   "question": "What's my I-94 number?",
+   "answer": "93847561020",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [
+    "anna-i94"
+   ],
+   "sensitive": true,
+   "accept": [
+    "93847561020"
+   ]
+  },
+  {
+   "question": "When did I last enter the US?",
+   "answer": "2025-03-22",
+   "kind": "aggregate",
+   "person": "anna",
+   "sources": [
+    "anna-i94"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2025-03-22"
+   ]
+  },
+  {
+   "question": "How many days was I outside the US in 2024?",
+   "answer": "16",
+   "kind": "aggregate",
+   "person": "anna",
+   "sources": [
+    "anna-i94"
+   ],
+   "sensitive": false,
+   "accept": [
+    "16",
+    "15",
+    "17"
+   ]
+  },
+  {
+   "question": "How many trips abroad have I taken since 2021?",
+   "answer": "4",
+   "kind": "aggregate",
+   "person": "anna",
+   "sources": [
+    "anna-i94"
+   ],
+   "sensitive": false,
+   "accept": [
+    "4"
+   ]
+  },
+  {
+   "question": "What's my current address?",
+   "answer": "1720 NW Lovejoy St, Apt 210, Portland, OR 97209",
+   "kind": "conflict",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "1720 NW Lovejoy"
+   ]
+  },
+  {
+   "question": "Where did I live in 2021?",
+   "answer": "412 Alder St, Apt 3B, Seattle, WA 98101",
+   "kind": "temporal",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "412 Alder"
+   ]
+  },
+  {
+   "question": "Where did we live in 2024?",
+   "answer": "88 Pine Ave, Portland, OR 97205",
+   "kind": "temporal",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "88 Pine"
+   ]
+  },
+  {
+   "question": "When does my lease end?",
+   "answer": "2027-06-30",
+   "kind": "lookup+current",
+   "person": "anna",
+   "sources": [
+    "lease-2026-lovejoy"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2027-06-30"
+   ]
+  },
+  {
+   "question": "How much is my rent?",
+   "answer": "$2,950.00",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "lease-2026-lovejoy"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2,950",
+    "2950"
+   ]
+  },
+  {
+   "question": "What was my rent at Pine Ave?",
+   "answer": "$2,480.00",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "lease-2023-pine"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2,480",
+    "2480"
+   ]
+  },
+  {
+   "question": "Who is my landlord?",
+   "answer": "Lovejoy Lofts LLC",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "lease-2026-lovejoy"
+   ],
+   "sensitive": false,
+   "accept": [
+    "Lovejoy Lofts"
+   ]
+  },
+  {
+   "question": "When did we move out of Pine Ave?",
+   "answer": "2026-06-30",
+   "kind": "conflict",
+   "person": "anna",
+   "sources": [
+    "lease-2023-pine-termination"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2026-06-30"
+   ]
+  },
+  {
+   "question": "What's my parking space?",
+   "answer": "G-07",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "lease-2026-lovejoy"
+   ],
+   "sensitive": false,
+   "accept": [
+    "G-07"
+   ]
+  },
+  {
+   "question": "How much was my security deposit at Lovejoy?",
+   "answer": "$2,950.00",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "lease-2026-lovejoy"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2,950",
+    "2950"
+   ]
+  },
+  {
+   "question": "What's my phone number?",
+   "answer": "(503) 555-0188",
+   "kind": "conflict",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "555-0188"
+   ]
+  },
+  {
+   "question": "What's my email?",
+   "answer": "anna.eriksson@example.com",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "anna.eriksson@example.com"
+   ]
+  },
+  {
+   "question": "When was my last tetanus shot?",
+   "answer": "2020-02-20",
+   "kind": "events",
+   "person": "anna",
+   "sources": [
+    "anna-i693"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2020-02-20"
+   ]
+  },
+  {
+   "question": "When did I get my COVID booster?",
+   "answer": "2023-10-02",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-vaccination-card"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2023-10-02"
+   ]
+  },
+  {
+   "question": "When did I last get a flu shot?",
+   "answer": "2025-10-12",
+   "kind": "events",
+   "person": "anna",
+   "sources": [
+    "anna-vaccination-card"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2025-10-12"
+   ]
+  },
+  {
+   "question": "How many hepatitis B doses have I had?",
+   "answer": "3",
+   "kind": "aggregate",
+   "person": "anna",
+   "sources": [
+    "anna-vaccination-card"
+   ],
+   "sensitive": false,
+   "accept": [
+    "3"
+   ]
+  },
+  {
+   "question": "Was my TB test negative?",
+   "answer": "Yes, QuantiFERON negative on 2020-02-20",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-i693"
+   ],
+   "sensitive": false,
+   "accept": [
+    "negative"
+   ]
+  },
+  {
+   "question": "Who did my immigration medical exam?",
+   "answer": "Dr. Priya Raman",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-i693"
+   ],
+   "sensitive": false,
+   "accept": [
+    "Raman"
+   ]
+  },
+  {
+   "question": "What was my vitamin D level?",
+   "answer": "32 ng/mL",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-labs-2026"
+   ],
+   "sensitive": false,
+   "accept": [
+    "32"
+   ]
+  },
+  {
+   "question": "What's my A1C?",
+   "answer": "5.4%",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-labs-2026"
+   ],
+   "sensitive": false,
+   "accept": [
+    "5.4"
+   ]
+  },
+  {
+   "question": "Was my LDL high?",
+   "answer": "Yes, 104 mg/dL (reference under 100)",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-labs-2026"
+   ],
+   "sensitive": false,
+   "accept": [
+    "104"
+   ]
+  },
+  {
+   "question": "What's my health insurance member ID?",
+   "answer": "ZXA884512703",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-insurance-card"
+   ],
+   "sensitive": true,
+   "accept": [
+    "ZXA884512703"
+   ]
+  },
+  {
+   "question": "What's my insurance group number?",
+   "answer": "0047731",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-insurance-card"
+   ],
+   "sensitive": false,
+   "accept": [
+    "0047731"
+   ]
+  },
+  {
+   "question": "What's my specialist copay?",
+   "answer": "$50",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-insurance-card"
+   ],
+   "sensitive": false,
+   "accept": [
+    "50"
+   ]
+  },
+  {
+   "question": "How much did I earn in 2025?",
+   "answer": "$148,250.00",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-w2-2025"
+   ],
+   "sensitive": false,
+   "accept": [
+    "148,250",
+    "148250"
+   ]
+  },
+  {
+   "question": "How much federal tax was withheld in 2025?",
+   "answer": "$27,410.55",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-w2-2025"
+   ],
+   "sensitive": false,
+   "accept": [
+    "27,410.55"
+   ]
+  },
+  {
+   "question": "Who is my employer?",
+   "answer": "Brightwater Analytics LLC",
+   "kind": "lookup",
+   "person": "anna",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "Brightwater"
+   ]
+  },
+  {
+   "question": "What's my employer's EIN?",
+   "answer": "98-7654321",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "anna-w2-2025"
+   ],
+   "sensitive": false,
+   "accept": [
+    "98-7654321"
+   ]
+  },
+  {
+   "question": "When did I get married?",
+   "answer": "2018-06-23",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "marriage-certificate"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2018-06-23"
+   ]
+  },
+  {
+   "question": "What's my mother's maiden name?",
+   "answer": "Holm",
+   "kind": "lookup-family",
+   "person": "anna",
+   "sources": [
+    "marriage-certificate"
+   ],
+   "sensitive": false,
+   "accept": [
+    "Holm"
+   ]
+  },
+  {
+   "question": "What's my father's name?",
+   "answer": "Lars Eriksson",
+   "kind": "lookup-family",
+   "person": "anna",
+   "sources": [
+    "marriage-certificate"
+   ],
+   "sensitive": false,
+   "accept": [
+    "Lars Eriksson"
+   ]
+  },
+  {
+   "question": "What's my marriage certificate number?",
+   "answer": "2018-MC-031557",
+   "kind": "lookup-contents",
+   "person": "anna",
+   "sources": [
+    "marriage-certificate"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2018-MC-031557"
+   ]
+  },
+  {
+   "question": "When does David's passport expire?",
+   "answer": "2027-06-30",
+   "kind": "lookup",
+   "person": "david",
+   "sources": [
+    "david-passport-2017"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2027-06-30"
+   ]
+  },
+  {
+   "question": "What's David's passport number?",
+   "answer": "PY5512093",
+   "kind": "lookup",
+   "person": "david",
+   "sources": [
+    "david-passport-2017"
+   ],
+   "sensitive": true,
+   "accept": [
+    "PY5512093"
+   ]
+  },
+  {
+   "question": "What's my husband's A-number?",
+   "answer": "204815977",
+   "kind": "lookup",
+   "person": "david",
+   "sources": [
+    "david-greencard"
+   ],
+   "sensitive": true,
+   "accept": [
+    "204815977",
+    "204-815-977"
+   ]
+  },
+  {
+   "question": "When is David's birthday?",
+   "answer": "1988-03-05",
+   "kind": "lookup",
+   "person": "david",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "1988-03-05"
+   ]
+  },
+  {
+   "question": "When was Emma born?",
+   "answer": "2021-11-03",
+   "kind": "lookup",
+   "person": "emma",
+   "sources": [
+    "emma-birth-certificate"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2021-11-03"
+   ]
+  },
+  {
+   "question": "What time was Emma born?",
+   "answer": "4:12 PM",
+   "kind": "lookup-contents",
+   "person": "emma",
+   "sources": [
+    "emma-birth-certificate"
+   ],
+   "sensitive": false,
+   "accept": [
+    "4:12 PM"
+   ]
+  },
+  {
+   "question": "Which hospital was Emma born in?",
+   "answer": "Lakeview Medical Center",
+   "kind": "lookup-contents",
+   "person": "emma",
+   "sources": [
+    "emma-birth-certificate"
+   ],
+   "sensitive": false,
+   "accept": [
+    "Lakeview Medical Center"
+   ]
+  },
+  {
+   "question": "What's Emma's birth certificate number?",
+   "answer": "2021-0047182",
+   "kind": "lookup",
+   "person": "emma",
+   "sources": [
+    "emma-birth-certificate"
+   ],
+   "sensitive": true,
+   "accept": [
+    "2021-0047182"
+   ]
+  },
+  {
+   "question": "When was Emma's last DTaP shot?",
+   "answer": "2023-02-14",
+   "kind": "events",
+   "person": "emma",
+   "sources": [
+    "emma-immunizations"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2023-02-14"
+   ]
+  },
+  {
+   "question": "How many DTaP doses has Emma had?",
+   "answer": "4",
+   "kind": "aggregate",
+   "person": "emma",
+   "sources": [
+    "emma-immunizations"
+   ],
+   "sensitive": false,
+   "accept": [
+    "4"
+   ]
+  },
+  {
+   "question": "Has Emma had her second MMR?",
+   "answer": "Yes, on 2026-09-02",
+   "kind": "events",
+   "person": "emma",
+   "sources": [
+    "emma-immunizations"
+   ],
+   "sensitive": false,
+   "accept": [
+    "2026-09-02"
+   ]
+  },
+  {
+   "question": "Who is Emma's pediatrician?",
+   "answer": "Dr. Alicia Moreno",
+   "kind": "lookup-contents",
+   "person": "emma",
+   "sources": [
+    "emma-immunizations"
+   ],
+   "sensitive": false,
+   "accept": [
+    "Moreno"
+   ]
+  },
+  {
+   "question": "Which of our documents expire before the end of 2027?",
+   "answer": "David's passport (2027-06-30) and the Lovejoy lease (2027-06-30)",
+   "kind": "aggregate",
+   "person": "household",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "David",
+    "passport",
+    "2027-06-30"
+   ]
+  },
+  {
+   "question": "Whose documents expire next?",
+   "answer": "David's passport, 2027-06-30",
+   "kind": "aggregate",
+   "person": "household",
+   "sources": [],
+   "sensitive": false,
+   "accept": [
+    "David",
+    "2027-06-30"
+   ]
+  }
+ ]
+}

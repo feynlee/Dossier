@@ -85,6 +85,28 @@ struct VerifierTests {
         #expect(results.count == 1)
         #expect(results.first?.value == "Eriksson")
     }
+
+    // Slips the on-device model made on the made-up household's documents.
+    @Test func repairsTheModelsUsualSlips() {
+        let pages = [["Surname ERIKSSON", "Given names ANNA MARIA", "3 DOB 4b EXP 4a ISS", "08/12/1990 08/12/2031 03/20/2023"]]
+        let results = Verifier.verify([
+            .init(key: .surname, value: "Eriksen", page: 1),
+            .init(key: .dateOfBirth, value: "08/12/1990", page: 1),
+            .init(key: .issueDate, value: "1990-08-12", page: 1),
+            .init(key: .expiryDate, value: "2031-08-12", page: 1),
+        ], pages: pages, mrz: nil, license: nil, kind: .driversLicense)
+        #expect(results.first { $0.key == .surname }?.value == "Eriksson")
+        #expect(results.first { $0.key == .dateOfBirth }?.value == "1990-08-12")
+        #expect(!results.contains { $0.key == .issueDate })
+    }
+
+    @Test func swapsIssueAndExpiryWhenBackwards() {
+        let results = Verifier.verify([
+            .init(key: .issueDate, value: "2026-08-12", page: 1), .init(key: .expiryDate, value: "2020-09-01", page: 1),
+        ], pages: [[]], mrz: nil, license: nil)
+        #expect(results.first { $0.key == .issueDate }?.value == "2020-09-01")
+        #expect(results.first { $0.key == .expiryDate }?.value == "2026-08-12")
+    }
 }
 
 struct SealerTests {

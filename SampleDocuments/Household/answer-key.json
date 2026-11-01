@@ -1,0 +1,1735 @@
+{
+ "today": "2026-10-31",
+ "people": {
+  "anna": {
+   "name": "Anna Maria Eriksson",
+   "relation": "self",
+   "dob": "1990-08-12"
+  },
+  "david": {
+   "name": "David Lee Chen",
+   "relation": "spouse",
+   "dob": "1988-03-05"
+  },
+  "emma": {
+   "name": "Emma Lin Chen",
+   "relation": "child",
+   "dob": "2021-11-03"
+  }
+ },
+ "documents": [
+  {
+   "id": "anna-passport-2009",
+   "holder": "anna",
+   "kind": "passport",
+   "files": [
+    {
+     "path": "Anna · Passport 2009 (expired).jpg",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "nationality": "UTOPIAN",
+    "dateOfBirth": "1990-08-12",
+    "placeOfBirth": "LUMEN CITY",
+    "sex": "F",
+    "documentNumber": "PX1938457",
+    "issueDate": "2009-03-16",
+    "expiryDate": "2019-03-15",
+    "issuingAuthority": "PASSPORT OFFICE UTOPIA"
+   },
+   "contents": [],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Height",
+     "value": "168 cm",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "anna-passport-2019",
+   "holder": "anna",
+   "kind": "passport",
+   "files": [
+    {
+     "path": "Anna · Passport 2019.jpg",
+     "variant": "clean"
+    },
+    {
+     "path": "Anna · Passport 2019 (photo).jpg",
+     "variant": "photo"
+    },
+    {
+     "path": "Anna · Passport 2019 (lowres).jpg",
+     "variant": "lowres"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "nationality": "UTOPIAN",
+    "dateOfBirth": "1990-08-12",
+    "placeOfBirth": "LUMEN CITY",
+    "sex": "F",
+    "documentNumber": "PX7204821",
+    "issueDate": "2019-03-15",
+    "expiryDate": "2029-03-14",
+    "issuingAuthority": "PASSPORT OFFICE UTOPIA"
+   },
+   "contents": [],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Height",
+     "value": "168 cm",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "anna-ead-2020",
+   "holder": "anna",
+   "kind": "employmentAuthorization",
+   "files": [
+    {
+     "path": "Anna · EAD card 2020.jpg",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "dateOfBirth": "1990-08-12",
+    "placeOfBirth": "UTOPIA",
+    "sex": "F",
+    "alienNumber": "204-815-962",
+    "uscisCategory": "C09",
+    "documentNumber": "SRC2090123456",
+    "validFrom": "2020-05-01",
+    "validUntil": "2021-04-30",
+    "expiryDate": "2021-04-30"
+   },
+   "contents": [],
+   "details": [],
+   "travel": []
+  },
+  {
+   "id": "anna-greencard",
+   "holder": "anna",
+   "kind": "greenCard",
+   "files": [
+    {
+     "path": "Anna · Green card.jpg",
+     "variant": "clean"
+    },
+    {
+     "path": "Anna · Green card (photo).jpg",
+     "variant": "photo"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "dateOfBirth": "1990-08-12",
+    "placeOfBirth": "UTOPIA",
+    "sex": "F",
+    "alienNumber": "204-815-962",
+    "uscisCategory": "E21",
+    "residentSince": "2021-03-02",
+    "documentNumber": "SRC2190456789",
+    "expiryDate": "2031-03-01"
+   },
+   "contents": [],
+   "details": [],
+   "travel": []
+  },
+  {
+   "id": "anna-i797-i485",
+   "holder": "anna",
+   "kind": "uscisNotice",
+   "files": [
+    {
+     "path": "Anna · I-485 approval notice.pdf",
+     "variant": "clean"
+    },
+    {
+     "path": "Anna · I-485 approval notice (scan).pdf",
+     "variant": "scan"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "dateOfBirth": "1990-08-12",
+    "alienNumber": "A204815962",
+    "formType": "I-485",
+    "receiptNumber": "MSC2190312345",
+    "noticeDate": "2021-03-05",
+    "uscisCategory": "E21"
+   },
+   "contents": [
+    {
+     "section": "Notice",
+     "label": "Notice type",
+     "value": "Approval Notice",
+     "important": true
+    },
+    {
+     "section": "Notice",
+     "label": "Received date",
+     "value": "2020-03-10",
+     "important": true
+    },
+    {
+     "section": "Notice",
+     "label": "Priority date",
+     "value": "2019-11-04",
+     "important": true
+    },
+    {
+     "section": "Notice",
+     "label": "Case type",
+     "value": "I-485 Application to Register Permanent Residence or Adjust Status",
+     "important": false
+    },
+    {
+     "section": "Notice",
+     "label": "Section",
+     "value": "Employment-based second preference (E21)",
+     "important": false
+    },
+    {
+     "section": "Notice",
+     "label": "Valid from",
+     "value": "2021-03-02",
+     "important": false
+    },
+    {
+     "section": "Notice",
+     "label": "Service center",
+     "value": "National Benefits Center",
+     "important": false
+    }
+   ],
+   "details": [],
+   "travel": []
+  },
+  {
+   "id": "anna-i94",
+   "holder": "anna",
+   "kind": "i94",
+   "files": [
+    {
+     "path": "Anna · I-94 travel history.pdf",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "dateOfBirth": "1990-08-12",
+    "i94Number": "93847561020",
+    "classOfAdmission": "H1B",
+    "admitUntil": "2022-09-30",
+    "documentNumber": "PX7204821"
+   },
+   "contents": [
+    {
+     "section": "Most recent I-94",
+     "label": "Most recent date of entry",
+     "value": "2019-10-02",
+     "important": true
+    }
+   ],
+   "details": [],
+   "travel": [
+    {
+     "date": "2025-03-22",
+     "kind": "arrival",
+     "port": "SEA"
+    },
+    {
+     "date": "2025-03-10",
+     "kind": "departure",
+     "port": "PDX"
+    },
+    {
+     "date": "2024-08-25",
+     "kind": "arrival",
+     "port": "SEA"
+    },
+    {
+     "date": "2024-08-09",
+     "kind": "departure",
+     "port": "SEA"
+    },
+    {
+     "date": "2023-04-16",
+     "kind": "arrival",
+     "port": "PDX"
+    },
+    {
+     "date": "2023-04-07",
+     "kind": "departure",
+     "port": "PDX"
+    },
+    {
+     "date": "2021-07-03",
+     "kind": "arrival",
+     "port": "SEA"
+    },
+    {
+     "date": "2021-06-12",
+     "kind": "departure",
+     "port": "SEA"
+    },
+    {
+     "date": "2019-10-02",
+     "kind": "arrival",
+     "port": "SEA"
+    }
+   ]
+  },
+  {
+   "id": "anna-dl-wa-2020",
+   "holder": "anna",
+   "kind": "driversLicense",
+   "files": [
+    {
+     "path": "Anna · Washington driver's licence 2020.jpg",
+     "variant": "clean"
+    },
+    {
+     "path": "Anna · Washington driver's licence 2020 (photo).jpg",
+     "variant": "photo"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA M",
+    "dateOfBirth": "1990-08-12",
+    "sex": "F",
+    "address": "412 ALDER ST APT 3B, SEATTLE, WA 98101",
+    "documentNumber": "WDLERIKSA902",
+    "licenseClass": "C",
+    "issueDate": "2020-09-01",
+    "expiryDate": "2026-08-12"
+   },
+   "contents": [],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Height",
+     "value": "5'-06\"",
+     "important": true
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Eye colour",
+     "value": "BRN",
+     "important": true
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Weight",
+     "value": "135 lb",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "anna-dl-or-2023",
+   "holder": "anna",
+   "kind": "driversLicense",
+   "files": [
+    {
+     "path": "Anna · Oregon driver's licence 2023.jpg",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "dateOfBirth": "1990-08-12",
+    "sex": "F",
+    "address": "88 PINE AVE, PORTLAND, OR 97205",
+    "documentNumber": "7812345",
+    "licenseClass": "C",
+    "issueDate": "2023-03-20",
+    "expiryDate": "2031-08-12"
+   },
+   "contents": [],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Height",
+     "value": "5'-06\"",
+     "important": true
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Eye colour",
+     "value": "BRN",
+     "important": true
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Weight",
+     "value": "135 lb",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "anna-ssn-card",
+   "holder": "anna",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Anna · Social Security card (photo).jpg",
+     "variant": "photo"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "documentNumber": "987-65-4321"
+   },
+   "contents": [
+    {
+     "section": "Card",
+     "label": "Social Security number",
+     "value": "987-65-4321",
+     "important": true
+    }
+   ],
+   "details": [],
+   "travel": []
+  },
+  {
+   "id": "lease-2020-alder",
+   "holder": "anna",
+   "kind": "lease",
+   "files": [
+    {
+     "path": "Lease 2020 · 412 Alder St.pdf",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "address": "412 Alder St, Apt 3B, Seattle, WA 98101",
+    "leaseStartDate": "2020-08-01",
+    "leaseEndDate": "2022-07-31"
+   },
+   "contents": [
+    {
+     "section": "Rent",
+     "label": "Monthly rent",
+     "value": "$2,150.00",
+     "important": true
+    },
+    {
+     "section": "Rent",
+     "label": "Security deposit",
+     "value": "$2,150.00",
+     "important": true
+    },
+    {
+     "section": "Parties",
+     "label": "Landlord",
+     "value": "Alder Street Apartments LLC",
+     "important": true
+    },
+    {
+     "section": "Parties",
+     "label": "Tenant",
+     "value": "Anna Maria Eriksson",
+     "important": false
+    },
+    {
+     "section": "Signatures",
+     "label": "Signed",
+     "value": "2020-07-15",
+     "important": false
+    }
+   ],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Phone",
+     "value": "(206) 555-0142",
+     "important": true
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Email",
+     "value": "anna.eriksson@example.com",
+     "important": true
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "lease-2023-pine",
+   "holder": "anna",
+   "kind": "lease",
+   "files": [
+    {
+     "path": "Lease 2023 · 88 Pine Ave.pdf",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "address": "88 Pine Ave, Portland, OR 97205",
+    "leaseStartDate": "2023-01-01",
+    "leaseEndDate": "2027-12-31"
+   },
+   "contents": [
+    {
+     "section": "Rent",
+     "label": "Monthly rent",
+     "value": "$2,480.00",
+     "important": true
+    },
+    {
+     "section": "Rent",
+     "label": "Security deposit",
+     "value": "$3,000.00",
+     "important": true
+    },
+    {
+     "section": "Parties",
+     "label": "Landlord",
+     "value": "Pine Avenue Homes",
+     "important": true
+    },
+    {
+     "section": "Parties",
+     "label": "Tenant",
+     "value": "Anna Maria Eriksson",
+     "important": false
+    },
+    {
+     "section": "Parties",
+     "label": "Tenant",
+     "value": "David Lee Chen",
+     "important": false
+    },
+    {
+     "section": "Terms",
+     "label": "Parking",
+     "value": "One assigned space, #14",
+     "important": false
+    },
+    {
+     "section": "Terms",
+     "label": "Pets",
+     "value": "One cat permitted",
+     "important": false
+    },
+    {
+     "section": "Signatures",
+     "label": "Signed",
+     "value": "2022-12-02",
+     "important": false
+    }
+   ],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Phone",
+     "value": "(503) 555-0188",
+     "important": true
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Email",
+     "value": "anna.eriksson@example.com",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "lease-2023-pine-termination",
+   "holder": "anna",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Lease 2023 · early termination addendum (scan).pdf",
+     "variant": "scan"
+    }
+   ],
+   "fields": {
+    "address": "88 Pine Ave, Portland, OR 97205",
+    "issueDate": "2026-05-15"
+   },
+   "contents": [
+    {
+     "section": "Termination",
+     "label": "Lease ends early on",
+     "value": "2026-06-30",
+     "important": true
+    },
+    {
+     "section": "Termination",
+     "label": "Original lease end",
+     "value": "2027-12-31",
+     "important": false
+    },
+    {
+     "section": "Termination",
+     "label": "Termination fee",
+     "value": "$2,480.00",
+     "important": false
+    },
+    {
+     "section": "Parties",
+     "label": "Landlord",
+     "value": "Pine Avenue Homes",
+     "important": false
+    }
+   ],
+   "details": [],
+   "travel": []
+  },
+  {
+   "id": "lease-2026-lovejoy",
+   "holder": "anna",
+   "kind": "lease",
+   "files": [
+    {
+     "path": "Lease 2026 · 1720 NW Lovejoy St.pdf",
+     "variant": "clean"
+    },
+    {
+     "path": "Lease 2026 · 1720 NW Lovejoy St (scan).pdf",
+     "variant": "scan"
+    }
+   ],
+   "fields": {
+    "address": "1720 NW Lovejoy St, Apt 210, Portland, OR 97209",
+    "leaseStartDate": "2026-07-01",
+    "leaseEndDate": "2027-06-30"
+   },
+   "contents": [
+    {
+     "section": "Rent",
+     "label": "Monthly rent",
+     "value": "$2,950.00",
+     "important": true
+    },
+    {
+     "section": "Rent",
+     "label": "Security deposit",
+     "value": "$2,950.00",
+     "important": true
+    },
+    {
+     "section": "Parties",
+     "label": "Landlord",
+     "value": "Lovejoy Lofts LLC",
+     "important": true
+    },
+    {
+     "section": "Parties",
+     "label": "Tenant",
+     "value": "Anna Maria Eriksson",
+     "important": false
+    },
+    {
+     "section": "Parties",
+     "label": "Tenant",
+     "value": "David Lee Chen",
+     "important": false
+    },
+    {
+     "section": "Terms",
+     "label": "Parking",
+     "value": "Garage space G-07, $150.00 per month",
+     "important": true
+    },
+    {
+     "section": "Terms",
+     "label": "Pets",
+     "value": "One cat permitted, pet rent $35.00 per month",
+     "important": false
+    },
+    {
+     "section": "Signatures",
+     "label": "Signed",
+     "value": "2026-06-04",
+     "important": false
+    }
+   ],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Phone",
+     "value": "(503) 555-0188",
+     "important": true
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Email",
+     "value": "anna.eriksson@example.com",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "anna-vaccination-card",
+   "holder": "anna",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Anna · Vaccination record.pdf",
+     "variant": "clean"
+    },
+    {
+     "path": "Anna · Vaccination record (photo).jpg",
+     "variant": "photo"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "dateOfBirth": "1990-08-12"
+   },
+   "contents": [
+    {
+     "section": "Vaccinations",
+     "label": "MMR · dose 1",
+     "value": "1991-09-02 · Lot M1123 · Lumen City Health Office",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "MMR · dose 2",
+     "value": "1995-08-20 · Lot M2290 · Lumen City Health Office",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Hepatitis B · dose 1",
+     "value": "2008-01-15 · Lot HB301 · Lumen City Health Office",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Hepatitis B · dose 2",
+     "value": "2008-02-19 · Lot HB377 · Lumen City Health Office",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Hepatitis B · dose 3",
+     "value": "2008-07-14 · Lot HB415 · Lumen City Health Office",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Tdap",
+     "value": "2015-09-14 · Lot TD4471 · Lumen City Health Office",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "COVID-19 (Moderna) · dose 1",
+     "value": "2021-04-10 · Lot MD0391 · Seattle Mass Vaccination Site",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "COVID-19 (Moderna) · dose 2",
+     "value": "2021-05-08 · Lot MD0457 · Seattle Mass Vaccination Site",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "COVID-19 (Moderna) · booster",
+     "value": "2023-10-02 · Lot MD2210 · Pine Pharmacy",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Influenza",
+     "value": "2025-10-12 · Lot FL2581 · Pine Pharmacy",
+     "important": true
+    }
+   ],
+   "details": [],
+   "travel": []
+  },
+  {
+   "id": "anna-i693",
+   "holder": "anna",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Anna · Medical exam I-693.pdf",
+     "variant": "clean"
+    },
+    {
+     "path": "Anna · Medical exam I-693 (scan).pdf",
+     "variant": "scan"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA MARIA",
+    "dateOfBirth": "1990-08-12",
+    "formType": "I-693",
+    "issueDate": "2020-02-20"
+   },
+   "contents": [
+    {
+     "section": "Civil surgeon",
+     "label": "Name",
+     "value": "Dr. Priya Raman, MD",
+     "important": true
+    },
+    {
+     "section": "Civil surgeon",
+     "label": "Practice",
+     "value": "Harbor Civil Surgeon Clinic, 220 Elliott Ave W, Seattle, WA 98119",
+     "important": false
+    },
+    {
+     "section": "Tuberculosis",
+     "label": "IGRA test",
+     "value": "QuantiFERON · 2020-02-20 · Negative",
+     "important": true
+    },
+    {
+     "section": "Tuberculosis",
+     "label": "Chest X-ray",
+     "value": "Not required",
+     "important": false
+    },
+    {
+     "section": "Syphilis",
+     "label": "Screening test",
+     "value": "RPR · 2020-02-20 · Nonreactive",
+     "important": true
+    },
+    {
+     "section": "Gonorrhea",
+     "label": "NAAT",
+     "value": "2020-02-20 · Negative",
+     "important": false
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Td/Tdap",
+     "value": "2020-02-20 · Lot TD8812 · Given today",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "MMR",
+     "value": "Documented · 1995-08-20",
+     "important": false
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Hepatitis B",
+     "value": "Documented · 2008-07-14",
+     "important": false
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Varicella",
+     "value": "Immune · titer 2020-02-20",
+     "important": false
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Influenza",
+     "value": "Not in season · waived",
+     "important": false
+    },
+    {
+     "section": "Exam",
+     "label": "Exam date",
+     "value": "2020-02-20",
+     "important": true
+    }
+   ],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Phone",
+     "value": "(206) 555-0142",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "anna-labs-2026",
+   "holder": "anna",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Anna · Lab results April 2026.pdf",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA",
+    "dateOfBirth": "1990-08-21",
+    "issueDate": "2026-04-18"
+   },
+   "contents": [
+    {
+     "section": "Report",
+     "label": "Collected",
+     "value": "2026-04-18",
+     "important": true
+    },
+    {
+     "section": "Report",
+     "label": "Ordering provider",
+     "value": "Dr. Marcus Webb, MD",
+     "important": true
+    },
+    {
+     "section": "Report",
+     "label": "Clinic",
+     "value": "Northwest Family Medicine",
+     "important": false
+    },
+    {
+     "section": "Lipid panel",
+     "label": "Total cholesterol",
+     "value": "182 mg/dL · <200",
+     "important": true
+    },
+    {
+     "section": "Lipid panel",
+     "label": "LDL cholesterol",
+     "value": "104 mg/dL · <100 · High",
+     "important": true
+    },
+    {
+     "section": "Lipid panel",
+     "label": "HDL cholesterol",
+     "value": "61 mg/dL · >39",
+     "important": true
+    },
+    {
+     "section": "Lipid panel",
+     "label": "Triglycerides",
+     "value": "86 mg/dL · <150",
+     "important": false
+    },
+    {
+     "section": "Diabetes",
+     "label": "Hemoglobin A1c",
+     "value": "5.4 % · <5.7",
+     "important": true
+    },
+    {
+     "section": "Vitamins",
+     "label": "Vitamin D, 25-OH",
+     "value": "32 ng/mL · 30-100",
+     "important": true
+    },
+    {
+     "section": "Thyroid",
+     "label": "TSH",
+     "value": "1.9 mIU/L · 0.4-4.0",
+     "important": false
+    },
+    {
+     "section": "Blood count",
+     "label": "Hemoglobin",
+     "value": "13.2 g/dL · 12.0-15.5",
+     "important": false
+    }
+   ],
+   "details": [],
+   "travel": []
+  },
+  {
+   "id": "anna-insurance-card",
+   "holder": "anna",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Anna · Health insurance card.jpg",
+     "variant": "clean"
+    },
+    {
+     "path": "Anna · Health insurance card (photo).jpg",
+     "variant": "photo"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON-CHEN",
+    "givenNames": "ANNA",
+    "documentNumber": "ZXA884512703",
+    "issueDate": "2026-01-01"
+   },
+   "contents": [
+    {
+     "section": "Card",
+     "label": "Member ID",
+     "value": "ZXA884512703",
+     "important": true
+    },
+    {
+     "section": "Card",
+     "label": "Group number",
+     "value": "0047731",
+     "important": true
+    },
+    {
+     "section": "Card",
+     "label": "Plan",
+     "value": "Evergreen PPO",
+     "important": true
+    },
+    {
+     "section": "Card",
+     "label": "Insurer",
+     "value": "Cascade Mutual Health",
+     "important": true
+    },
+    {
+     "section": "Card",
+     "label": "Effective date",
+     "value": "2026-01-01",
+     "important": false
+    },
+    {
+     "section": "Card",
+     "label": "Rx BIN",
+     "value": "999001",
+     "important": false
+    },
+    {
+     "section": "Card",
+     "label": "Rx PCN",
+     "value": "CMHRX",
+     "important": false
+    },
+    {
+     "section": "Copays",
+     "label": "Primary care",
+     "value": "$25",
+     "important": false
+    },
+    {
+     "section": "Copays",
+     "label": "Specialist",
+     "value": "$50",
+     "important": false
+    },
+    {
+     "section": "Copays",
+     "label": "Emergency room",
+     "value": "$250",
+     "important": false
+    },
+    {
+     "section": "Contacts",
+     "label": "Member services",
+     "value": "1-800-555-0199",
+     "important": false
+    },
+    {
+     "section": "Dependents",
+     "label": "Dependent",
+     "value": "David Chen",
+     "important": false
+    },
+    {
+     "section": "Dependents",
+     "label": "Dependent",
+     "value": "Emma Chen",
+     "important": false
+    }
+   ],
+   "details": [],
+   "travel": []
+  },
+  {
+   "id": "anna-w2-2025",
+   "holder": "anna",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Anna · W-2 2025.pdf",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "ERIKSSON",
+    "givenNames": "ANNA M",
+    "address": "88 Pine Ave, Portland, OR 97205",
+    "formType": "W-2"
+   },
+   "contents": [
+    {
+     "section": "Employee",
+     "label": "Social Security number",
+     "value": "987-65-4321",
+     "important": true
+    },
+    {
+     "section": "Employer",
+     "label": "Employer",
+     "value": "Brightwater Analytics LLC",
+     "important": true
+    },
+    {
+     "section": "Employer",
+     "label": "Employer ID number (EIN)",
+     "value": "98-7654321",
+     "important": true
+    },
+    {
+     "section": "Employer",
+     "label": "Employer address",
+     "value": "500 SW Morrison St, Suite 900, Portland, OR 97204",
+     "important": false
+    },
+    {
+     "section": "Income",
+     "label": "Box 1 · Wages, tips, other compensation",
+     "value": "148,250.00",
+     "important": true
+    },
+    {
+     "section": "Income",
+     "label": "Box 2 · Federal income tax withheld",
+     "value": "27,410.55",
+     "important": true
+    },
+    {
+     "section": "Income",
+     "label": "Box 3 · Social security wages",
+     "value": "148,250.00",
+     "important": false
+    },
+    {
+     "section": "Income",
+     "label": "Box 4 · Social security tax withheld",
+     "value": "9,191.50",
+     "important": false
+    },
+    {
+     "section": "Income",
+     "label": "Box 5 · Medicare wages and tips",
+     "value": "148,250.00",
+     "important": false
+    },
+    {
+     "section": "Income",
+     "label": "Box 6 · Medicare tax withheld",
+     "value": "2,149.63",
+     "important": false
+    },
+    {
+     "section": "Income",
+     "label": "Box 12a · Code D",
+     "value": "23,000.00",
+     "important": false
+    },
+    {
+     "section": "State",
+     "label": "Box 16 · State wages",
+     "value": "148,250.00",
+     "important": false
+    },
+    {
+     "section": "State",
+     "label": "Box 17 · State income tax",
+     "value": "12,601.25",
+     "important": true
+    },
+    {
+     "section": "Form",
+     "label": "Tax year",
+     "value": "2025",
+     "important": true
+    }
+   ],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Employer",
+     "value": "Brightwater Analytics LLC",
+     "important": true
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "marriage-certificate",
+   "holder": "anna",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Marriage certificate 2018 (scan).pdf",
+     "variant": "scan"
+    }
+   ],
+   "fields": {
+    "issueDate": "2018-07-02"
+   },
+   "contents": [
+    {
+     "section": "Marriage",
+     "label": "Date of marriage",
+     "value": "2018-06-23",
+     "important": true
+    },
+    {
+     "section": "Marriage",
+     "label": "Place of marriage",
+     "value": "Seattle, Kingsley County, Washington",
+     "important": true
+    },
+    {
+     "section": "Marriage",
+     "label": "Officiant",
+     "value": "Rev. Thomas Okafor",
+     "important": false
+    },
+    {
+     "section": "Marriage",
+     "label": "Certificate number",
+     "value": "2018-MC-031557",
+     "important": true
+    },
+    {
+     "section": "Witnesses",
+     "label": "Witness",
+     "value": "Sofia Lindqvist",
+     "important": false
+    },
+    {
+     "section": "Witnesses",
+     "label": "Witness",
+     "value": "Kevin Park",
+     "important": false
+    }
+   ],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Name",
+     "value": "Anna Maria Eriksson",
+     "important": false
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Date of birth",
+     "value": "1990-08-12",
+     "important": false
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Place of birth",
+     "value": "Lumen City, Utopia",
+     "important": false
+    },
+    {
+     "person": "spouse",
+     "personName": "David Lee Chen",
+     "label": "Name",
+     "value": "David Lee Chen",
+     "important": true
+    },
+    {
+     "person": "spouse",
+     "personName": "David Lee Chen",
+     "label": "Date of birth",
+     "value": "1988-03-05",
+     "important": false
+    },
+    {
+     "person": "spouse",
+     "personName": "David Lee Chen",
+     "label": "Place of birth",
+     "value": "Harbor Town, Utopia",
+     "important": false
+    },
+    {
+     "person": "father",
+     "personName": "Lars Eriksson",
+     "label": "Name",
+     "value": "Lars Eriksson",
+     "important": true
+    },
+    {
+     "person": "mother",
+     "personName": "Ingrid Eriksson",
+     "label": "Name",
+     "value": "Ingrid Eriksson (born Holm)",
+     "important": true
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "david-passport-2017",
+   "holder": "david",
+   "kind": "passport",
+   "files": [
+    {
+     "path": "David · Passport 2017.jpg",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "CHEN",
+    "givenNames": "DAVID LEE",
+    "nationality": "UTOPIAN",
+    "dateOfBirth": "1988-03-05",
+    "placeOfBirth": "HARBOR TOWN",
+    "sex": "M",
+    "documentNumber": "PY5512093",
+    "issueDate": "2017-07-01",
+    "expiryDate": "2027-06-30",
+    "issuingAuthority": "PASSPORT OFFICE UTOPIA"
+   },
+   "contents": [],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Height",
+     "value": "180 cm",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "david-greencard",
+   "holder": "david",
+   "kind": "greenCard",
+   "files": [
+    {
+     "path": "David · Green card.jpg",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "CHEN",
+    "givenNames": "DAVID LEE",
+    "dateOfBirth": "1988-03-05",
+    "placeOfBirth": "UTOPIA",
+    "sex": "M",
+    "alienNumber": "204-815-977",
+    "uscisCategory": "E22",
+    "residentSince": "2021-03-02",
+    "documentNumber": "SRC2190456801",
+    "expiryDate": "2031-03-01"
+   },
+   "contents": [],
+   "details": [],
+   "travel": []
+  },
+  {
+   "id": "david-dl-or-2023",
+   "holder": "david",
+   "kind": "driversLicense",
+   "files": [
+    {
+     "path": "David · Oregon driver's licence 2023.jpg",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "CHEN",
+    "givenNames": "DAVID LEE",
+    "dateOfBirth": "1988-03-05",
+    "sex": "M",
+    "address": "88 PINE AVE, PORTLAND, OR 97205",
+    "documentNumber": "7812399",
+    "licenseClass": "C",
+    "issueDate": "2023-03-20",
+    "expiryDate": "2031-03-05"
+   },
+   "contents": [],
+   "details": [
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Height",
+     "value": "5'-11\"",
+     "important": true
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Eye colour",
+     "value": "BLK",
+     "important": true
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Weight",
+     "value": "172 lb",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "emma-birth-certificate",
+   "holder": "emma",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Emma · Birth certificate.pdf",
+     "variant": "clean"
+    },
+    {
+     "path": "Emma · Birth certificate (scan).pdf",
+     "variant": "scan"
+    }
+   ],
+   "fields": {
+    "surname": "CHEN",
+    "givenNames": "EMMA LIN",
+    "dateOfBirth": "2021-11-03",
+    "placeOfBirth": "Seattle, Washington",
+    "sex": "F",
+    "documentNumber": "2021-0047182",
+    "issueDate": "2021-11-20"
+   },
+   "contents": [
+    {
+     "section": "Birth",
+     "label": "Time of birth",
+     "value": "4:12 PM",
+     "important": true
+    },
+    {
+     "section": "Birth",
+     "label": "Facility",
+     "value": "Lakeview Medical Center",
+     "important": true
+    },
+    {
+     "section": "Birth",
+     "label": "County",
+     "value": "Kingsley",
+     "important": false
+    },
+    {
+     "section": "Birth",
+     "label": "Certificate number",
+     "value": "2021-0047182",
+     "important": true
+    },
+    {
+     "section": "Registrar",
+     "label": "Local registrar",
+     "value": "Helen Marsh",
+     "important": false
+    },
+    {
+     "section": "Registrar",
+     "label": "Date filed",
+     "value": "2021-11-09",
+     "important": false
+    }
+   ],
+   "details": [
+    {
+     "person": "mother",
+     "personName": "Anna Maria Eriksson",
+     "label": "Name",
+     "value": "Anna Maria Eriksson",
+     "important": true
+    },
+    {
+     "person": "mother",
+     "personName": "Anna Maria Eriksson",
+     "label": "Date of birth",
+     "value": "1990-08-12",
+     "important": false
+    },
+    {
+     "person": "mother",
+     "personName": "Anna Maria Eriksson",
+     "label": "Place of birth",
+     "value": "Utopia",
+     "important": false
+    },
+    {
+     "person": "father",
+     "personName": "David Lee Chen",
+     "label": "Name",
+     "value": "David Lee Chen",
+     "important": true
+    },
+    {
+     "person": "father",
+     "personName": "David Lee Chen",
+     "label": "Date of birth",
+     "value": "1988-03-05",
+     "important": false
+    },
+    {
+     "person": "father",
+     "personName": "David Lee Chen",
+     "label": "Place of birth",
+     "value": "Utopia",
+     "important": false
+    },
+    {
+     "person": "holder",
+     "personName": "",
+     "label": "Mother's address at birth",
+     "value": "412 Alder St, Apt 3B, Seattle, WA 98101",
+     "important": false
+    }
+   ],
+   "travel": []
+  },
+  {
+   "id": "emma-immunizations",
+   "holder": "emma",
+   "kind": "other",
+   "files": [
+    {
+     "path": "Emma · Immunization record.pdf",
+     "variant": "clean"
+    }
+   ],
+   "fields": {
+    "surname": "CHEN",
+    "givenNames": "EMMA LIN",
+    "dateOfBirth": "2021-11-03",
+    "issueDate": "2026-09-02"
+   },
+   "contents": [
+    {
+     "section": "Vaccinations",
+     "label": "Hepatitis B · dose 1",
+     "value": "2021-11-04 · Lot HB8810 · Lakeview Medical Center",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Hepatitis B · dose 2",
+     "value": "2022-01-05 · Lot HB9021 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "DTaP · dose 1",
+     "value": "2022-01-05 · Lot DT1102 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "DTaP · dose 2",
+     "value": "2022-03-07 · Lot DT1188 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "DTaP · dose 3",
+     "value": "2022-05-09 · Lot DT1250 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Hepatitis B · dose 3",
+     "value": "2022-05-09 · Lot HB9133 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "MMR · dose 1",
+     "value": "2022-11-07 · Lot MR4410 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Varicella · dose 1",
+     "value": "2022-11-07 · Lot VR2203 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "DTaP · dose 4",
+     "value": "2023-02-14 · Lot DT1391 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Influenza",
+     "value": "2025-10-12 · Lot FL2581 · Pine Pharmacy",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "MMR · dose 2",
+     "value": "2026-09-02 · Lot MR5127 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Vaccinations",
+     "label": "Varicella · dose 2",
+     "value": "2026-09-02 · Lot VR2390 · Rose City Pediatrics",
+     "important": true
+    },
+    {
+     "section": "Clinic",
+     "label": "Pediatrician",
+     "value": "Dr. Alicia Moreno",
+     "important": true
+    }
+   ],
+   "details": [],
+   "travel": []
+  }
+ ],
+ "conflicts": [
+  {
+   "id": "current-passport",
+   "kind": "superseded document",
+   "facts": [
+    "anna-passport-2009.documentNumber",
+    "anna-passport-2019.documentNumber"
+   ],
+   "answer": "PX7204821",
+   "rule": "Two passports: the one valid today (latest expiry, not expired) is current; the other is history."
+  },
+  {
+   "id": "current-address",
+   "kind": "newer evidence",
+   "facts": [
+    "anna-dl-or-2023.address",
+    "lease-2023-pine.address",
+    "lease-2023-pine-termination",
+    "lease-2026-lovejoy.address"
+   ],
+   "answer": "1720 NW Lovejoy St, Apt 210, Portland, OR 97209",
+   "rule": "The driver's licence (2023) and the 2023 lease (to 2027-12-31) say 88 Pine Ave, but the termination addendum ends that lease on 2026-06-30 and the 2026 lease starts 2026-07-01. Evidence dated later wins; a licence address is only as current as its issue date."
+  },
+  {
+   "id": "lease-2023-end",
+   "kind": "amendment",
+   "facts": [
+    "lease-2023-pine.leaseEndDate",
+    "lease-2023-pine-termination"
+   ],
+   "answer": "2026-06-30",
+   "rule": "An addendum changes the lease it amends."
+  },
+  {
+   "id": "anna-dob",
+   "kind": "typo",
+   "facts": [
+    "anna-passport-2019.dateOfBirth",
+    "anna-greencard.dateOfBirth",
+    "anna-labs-2026.dateOfBirth"
+   ],
+   "answer": "1990-08-12",
+   "rule": "Six documents (two with machine-checked MRZ) say 1990-08-12; one lab report says 1990-08-21. Checked and majority values win; the outlier is flagged, not silently dropped."
+  },
+  {
+   "id": "anna-surname",
+   "kind": "name variant",
+   "facts": [
+    "anna-passport-2019.surname",
+    "anna-insurance-card.surname"
+   ],
+   "answer": "ERIKSSON",
+   "rule": "ERIKSSON-CHEN on the insurance card is another name used, not a conflict: identity documents give the legal name; keep the variant as an alias."
+  },
+  {
+   "id": "anna-given-names",
+   "kind": "abbreviation",
+   "facts": [
+    "anna-passport-2019.givenNames",
+    "anna-dl-wa-2020.givenNames",
+    "anna-labs-2026.givenNames"
+   ],
+   "answer": "ANNA MARIA",
+   "rule": "ANNA M and ANNA are compatible shortenings of ANNA MARIA."
+  },
+  {
+   "id": "anna-phone",
+   "kind": "changed over time",
+   "facts": [
+    "lease-2020-alder.phone",
+    "lease-2026-lovejoy.phone"
+   ],
+   "answer": "(503) 555-0188",
+   "rule": "Contact details change: the most recent document wins; older numbers are history."
+  },
+  {
+   "id": "anna-licence",
+   "kind": "superseded document",
+   "facts": [
+    "anna-dl-wa-2020.documentNumber",
+    "anna-dl-or-2023.documentNumber"
+   ],
+   "answer": "7812345",
+   "rule": "The Washington licence expired 2026-08-12 and the Oregon one was issued later: Oregon is current."
+  },
+  {
+   "id": "anna-tetanus",
+   "kind": "events, not a conflict",
+   "facts": [
+    "anna-vaccination-card",
+    "anna-i693"
+   ],
+   "answer": "2020-02-20",
+   "rule": "Doses on different documents are separate events; the latest tetanus-containing dose (Tdap on the I-693) is the last shot."
+  },
+  {
+   "id": "anna-status",
+   "kind": "status history",
+   "facts": [
+    "anna-ead-2020.uscisCategory",
+    "anna-greencard.uscisCategory",
+    "anna-i94.classOfAdmission"
+   ],
+   "answer": "Permanent resident (E21) since 2021-03-02",
+   "rule": "H1B (I-94), then C09 (EAD, pending adjustment), then E21 green card: the latest status is current; earlier ones are history."
+  }
+ ]
+}
