@@ -36,5 +36,18 @@
 	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<!-- iCloud Drive › Dossier: scans and copies of shared files are kept here, filed by the library. -->
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.liziyue.Dossier</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Dossier</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

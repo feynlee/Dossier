@@ -7,6 +7,11 @@ nonisolated enum FolderAccess {
     /// "iCloud Drive › Documents › Personal"-style path for display.
     static func displayPath(for url: URL) -> String {
         let components = url.standardizedFileURL.pathComponents
+        // Dossier's own folder in iCloud Drive: …/iCloud~liziyue~Dossier/Documents/…
+        if let index = components.firstIndex(where: { $0.hasPrefix("iCloud~") }) {
+            let rest = components[(index + 1)...].drop { $0 == "Documents" }
+            return (["iCloud Drive", "Dossier"] + rest).joined(separator: " › ")
+        }
         if let index = components.firstIndex(of: "com~apple~CloudDocs") {
             return (["iCloud Drive"] + components[(index + 1)...]).joined(separator: " › ")
         }

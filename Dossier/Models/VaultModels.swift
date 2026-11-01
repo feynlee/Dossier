@@ -44,6 +44,16 @@ final class SourceDocument {
     /// Fields you deleted (`Fact.fieldID`), left out when the document is read again.
     var dismissedFields: [String] = []
     @Relationship(deleteRule: .cascade, inverse: \TravelEvent.document) var travel: [TravelEvent] = []
+    /// Where the document sits in the library and what it's called there. Set by `LibraryOrganizer`, or by
+    /// you, in which case Dossier never changes it.
+    var libraryPerson: String?
+    var libraryCategory: String?
+    var libraryFolder: String?
+    var libraryName: String?
+    var placementIsYours: Bool = false
+    /// `DocumentExtractor.readingVersion` when the document was read with Private Cloud Compute, one less
+    /// when it was read on this iPhone; 0 for documents read before versions were kept.
+    var readVersion: Int = 0
 
     init(contentHash: String, fileName: String, relativePath: String = "", folderID: String = "", kind: DocumentKind, title: String, engine: ExtractionEngine, pageCount: Int) {
         self.contentHash = contentHash
@@ -57,10 +67,13 @@ final class SourceDocument {
         self.pageCount = pageCount
     }
 
+    /// The start of a content hash for a file that hasn't been read yet.
+    static let pendingPrefix = "pending-"
+
     /// A file you just added, waiting to be read.
     static func pending(fileName: String, bookmark: Data) -> SourceDocument {
         let document = SourceDocument(
-            contentHash: "pending-\(UUID().uuidString)", fileName: fileName, kind: .other,
+            contentHash: "\(pendingPrefix)\(UUID().uuidString)", fileName: fileName, kind: .other,
             title: (fileName as NSString).deletingPathExtension, engine: .privateCloudCompute, pageCount: 0
         )
         document.bookmark = bookmark
@@ -69,6 +82,19 @@ final class SourceDocument {
     }
 
     var kind: DocumentKind { DocumentKind(rawValue: kindRaw) ?? .other }
+
+    var placement: LibraryPlacement? {
+        get {
+            guard let libraryPerson, let libraryCategory, let libraryFolder, let libraryName else { return nil }
+            return LibraryPlacement(person: libraryPerson, category: libraryCategory, folder: libraryFolder, name: libraryName)
+        }
+        set {
+            libraryPerson = newValue?.person
+            libraryCategory = newValue?.category
+            libraryFolder = newValue?.folder
+            libraryName = newValue?.name
+        }
+    }
     var engine: ExtractionEngine { ExtractionEngine(rawValue: engineRaw) ?? .onDevice }
 
     var state: DocumentState {
@@ -154,6 +180,11 @@ final class Fact {
     var relationRaw: String?
     /// For a family member's detail: their name, sealed under the vault key.
     var sealedPersonName: Data?
+    /// For something the document records (a test result, a vaccine dose): the document's section it's in,
+    /// such as "Vaccinations". Nil for facts and details.
+    var section: String?
+    /// Its place in the document's reading order.
+    var position: Int = 0
     var document: SourceDocument?
 
     var relation: Relation? { relationRaw.flatMap(Relation.init(rawValue:)) }
@@ -173,7 +204,12 @@ final class Fact {
     /// fingerprints, not text.
     var fieldID: String {
         guard key == .detail else { return keyRaw }
+        if let section { return Self.entryID(section: section, label: label ?? "") }
         return Self.detailID(label: label ?? "", relation: relationRaw, personName: personName)
+    }
+
+    static func entryID(section: String, label: String) -> String {
+        "entry|\(section.lowercased())|\(label.lowercased())"
     }
 
     static func detailID(label: String, relation: String?, personName: String?) -> String {

@@ -7,6 +7,12 @@ struct DossierApp: App {
     @State private var importer = ImportCoordinator()
     @State private var appLock = AppLock()
 
+    init() {
+        #if DEBUG
+        if SampleVault.isRequested { SampleVault.load(into: VaultStore.container) }
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -35,7 +41,9 @@ enum VaultStore {
         values.isExcludedFromBackup = true
         try? directory.setResourceValues(values)
 
-        let configuration = ModelConfiguration(url: directory.appending(path: "vault.store"))
+        // Never synced: the app's iCloud container is for files in iCloud Drive › Dossier, and without
+        // `.none` SwiftData would try to mirror the vault to CloudKit.
+        let configuration = ModelConfiguration(url: directory.appending(path: "vault.store"), cloudKitDatabase: .none)
         do {
             return try ModelContainer(for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self, configurations: configuration)
         } catch {

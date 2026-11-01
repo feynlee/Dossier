@@ -26,6 +26,7 @@ struct DocumentDetailView: View {
     @State private var showingMissing = false
     @State private var showingDecision = false
     @State private var removing: [SourceDocument] = []
+    @State private var isPlacing = false
     @State private var isEditingPages = false
     @State private var isScanningReplacement = false
     @State private var isChoosingReplacement = false
@@ -42,7 +43,20 @@ struct DocumentDetailView: View {
     /// The document's own fields, then other details about its holder, then each family member's.
     private var mainFacts: [Fact] { facts.filter { $0.key != .detail } }
     private var holderDetails: [Fact] {
-        facts.filter { $0.key == .detail && $0.relation == nil }.sorted { ($0.label ?? "") < ($1.label ?? "") }
+        facts.filter { $0.key == .detail && $0.section == nil && $0.relation == nil }.sorted { ($0.label ?? "") < ($1.label ?? "") }
+    }
+
+    /// What the document records, under its own section headings, in the document's order.
+    private var contentGroups: [(section: String, facts: [Fact])] {
+        let entries = facts.filter { $0.section != nil }.sorted { $0.position < $1.position }
+        var order: [String] = []
+        var grouped: [String: [Fact]] = [:]
+        for fact in entries {
+            let section = fact.section ?? "Other"
+            if grouped[section] == nil { order.append(section) }
+            grouped[section, default: []].append(fact)
+        }
+        return order.map { ($0, grouped[$0] ?? []) }
     }
 
     private struct FamilyGroup {
@@ -52,7 +66,7 @@ struct DocumentDetailView: View {
     }
 
     private var familyGroups: [FamilyGroup] {
-        let details = facts.filter { $0.key == .detail && $0.relation != nil }
+        let details = facts.filter { $0.key == .detail && $0.section == nil && $0.relation != nil }
         let grouped = Dictionary(grouping: details) { "\($0.relationRaw ?? "")|\(($0.personName ?? "").uppercased())" }
         return grouped.map { id, facts in
             let first = facts[0]
@@ -150,6 +164,8 @@ struct DocumentDetailView: View {
         }
         .navigationTitle(document.title)
         .navigationBarTitleDisplayMode(.inline)
+        // The file and its fields fill the screen; the tab bar would cover the end of the list.
+        .toolbar(.hidden, for: .tabBar)
         // Opening a document asks for Face ID once, which shows the file and every number together. They stay
         // shown until you leave the page or Dossier locks; editing or scanning from here isn't leaving.
         .task { unlockAutomatically() }
@@ -267,6 +283,7 @@ struct DocumentDetailView: View {
         }
         .sheet(isPresented: $showingMissing) { MissingSourceSheet(document: document) }
         .sheet(isPresented: $showingDecision) { DocumentDecisionSheet(document: document) }
+        .sheet(isPresented: $isPlacing) { LibraryPlacementSheet(document: document) }
     }
 
     private var factList: some View {
@@ -300,6 +317,14 @@ struct DocumentDetailView: View {
                 }
             }
 
+            ForEach(contentGroups, id: \.section) { group in
+                if !shown(group.facts).isEmpty {
+                    Section(group.section) {
+                        ForEach(shown(group.facts)) { factRow($0) }
+                    }
+                }
+            }
+
             if !shown(holderDetails).isEmpty {
                 Section("More details") {
                     ForEach(shown(holderDetails)) { factRow($0) }
@@ -311,6 +336,20 @@ struct DocumentDetailView: View {
                     Section(group.title) {
                         ForEach(shown(group.facts)) { factRow($0) }
                     }
+                }
+            }
+
+            if let placement = document.placement {
+                Section {
+                    LabeledContent("Name", value: placement.name)
+                    LabeledContent("Folder", value: ([placement.person, placement.category, placement.folder]).joined(separator: " › "))
+                    Button("Rename or Move", systemImage: "folder") { isPlacing = true }
+                } header: {
+                    Text("In your library")
+                } footer: {
+                    Text(document.placementIsYours
+                        ? "You chose this name and folder, so Dossier keeps them."
+                        : "Dossier chose this name and folder from what it read. Your file isn’t renamed or moved.")
                 }
             }
 
@@ -402,6 +441,10 @@ struct DocumentDetailView: View {
 
     private func unlockAutomatically() {
         guard needsFaceID, !reveal.isUnlocked, !askedToUnlock, !appLock.isLocked else { return }
+        #if DEBUG
+        // UI tests run on simulators without Face ID, where the prompt is a passcode sheet over the app.
+        if SampleVault.isRequested { return }
+        #endif
         askedToUnlock = true
         reveal.reveal(facts, reason: "Unlock \(document.title)", reusing: appLock.recentUnlock())
     }

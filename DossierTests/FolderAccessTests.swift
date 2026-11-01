@@ -162,6 +162,14 @@ struct DocumentIdentityTests {
         #expect(DocumentIdentity.match(keys(.driversLicense, renewed), against: keys(.driversLicense, old)) == .newVersion)
     }
 
+    @Test func anEADCardForTheNextPeriodIsASeparateDocument() {
+        let old: [FactKey: String] = [.documentNumber: "SRC1234567890", .uscisCategory: "C09", .validFrom: "2022-05-01", .validUntil: "2024-04-30"]
+        var next = old
+        next[.validFrom] = "2024-05-01"
+        next[.validUntil] = "2026-04-30"
+        #expect(DocumentIdentity.match(keys(.employmentAuthorization, next), against: keys(.employmentAuthorization, old)) == .newVersion)
+    }
+
     @Test func differentDocumentsDontMatch() {
         var other = passport
         other[.documentNumber] = "PX9999999"
@@ -218,7 +226,7 @@ struct RemovingTests {
     func context() throws -> ModelContext {
         let container = try ModelContainer(
             for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )
         return ModelContext(container)
     }
@@ -270,7 +278,7 @@ struct SharedConfirmationTests {
     init() throws {
         let container = try ModelContainer(
             for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )
         context = ModelContext(container)
     }
@@ -457,7 +465,7 @@ struct DetailExtractionTests {
         #expect(text.contains("Family members of the holder"))
         #expect(text.contains("\"Height\", \"Employer\""))
         let none = DocumentExtractor.instructions(for: DetailRequest(findsUsefulDetails: false, requested: []))
-        #expect(none.hasSuffix("Leave details empty."))
+        #expect(none.hasSuffix("Leave details empty; put everything in fields and contents."))
     }
 
     @Test func detailsAreCheckedAgainstThePageText() {
@@ -481,7 +489,7 @@ struct ProfileDetailsTests {
     init() throws {
         let container = try ModelContainer(
             for: SourceDocument.self, Fact.self, TravelEvent.self, ProfileOverride.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )
         context = ModelContext(container)
     }

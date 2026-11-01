@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Home: your compiled personal information, what needs review, and every document you added.
 struct VaultView: View {
@@ -9,7 +10,10 @@ struct VaultView: View {
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
-    @State private var isPicking = false
+    @State private var isPickingFolder = false
+    /// A folder to choose files from: picked, or dropped on the Vault.
+    @State private var pickedFolder: URL?
+    @Environment(IncomingFiles.self) private var incoming
     @State private var isScanning = false
     @State private var profile = Profile(entries: [])
     /// Documents waiting for you to confirm removing them.
@@ -21,6 +25,10 @@ struct VaultView: View {
     @State private var rereadingSelected: [SourceDocument] = []
     @State private var editMode: EditMode = .inactive
     @State private var selection = Set<PersistentIdentifier>()
+    /// The person whose documents the Vault shows; nil for everyone.
+    @State private var person: String?
+    /// What's open on top of the Vault, kept here so Back always returns one screen.
+    @State private var path: [VaultRoute] = []
 
     private var isSelecting: Bool { editMode.isEditing }
 
@@ -39,14 +47,22 @@ struct VaultView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List(selection: $selection) {
-                if searchText.isEmpty, !isSelecting, documents.contains(where: \.isReady) {
+        NavigationStack(path: $path) {
+            // Rows are selectable only in Select mode. A list that can select treats a tap on a row as a
+            // selection as well as the link's push, so a folder row (which has no selection tag) opened twice
+            // and the stack got out of step with the path: Back then did nothing.
+            List(selection: isSelecting ? $selection : nil) {
+                // Rows above the documents stay put while documents are read, so a tap lands on the row you
+                // aimed at: Personal information is there from the first document, and reading progress is
+                // shown at the end of the list.
+                if searchText.isEmpty, !isSelecting, !documents.isEmpty {
                     Section {
-                        NavigationLink {
-                            ProfileView()
-                        } label: {
-                            TileRow(symbol: "person.crop.circle", badge: profile.conflicts.isEmpty ? .verified : .review, title: "Personal information", subtitle: profileSummary)
+                        NavigationLink(value: VaultRoute.profile) {
+                            TileRow(
+                                symbol: "person.crop.circle",
+                                badge: !documents.contains(where: \.isReady) ? .reading : profile.conflicts.isEmpty ? .verified : .review,
+                                title: "Personal information", subtitle: profileSummary
+                            )
                         }
                     }
                 }
@@ -55,15 +71,13 @@ struct VaultView: View {
                     AttentionSection(documents: documents)
                 }
 
-                if !isSelecting {
-                    ImportStatusSection()
-                }
-
                 if documents.isEmpty {
                     Section {
-                        EmptyVault(isPicking: $isPicking, isScanning: $isScanning)
+                        EmptyVault(isPicking: $isPickingFolder, isScanning: $isScanning)
                     }
                     .listRowBackground(Color.clear)
+                } else if searchText.isEmpty, !isSelecting, !placed.isEmpty {
+                    librarySections
                 } else {
                     Section {
                         if filtered.isEmpty {
@@ -94,10 +108,27 @@ struct VaultView: View {
                         }
                     }
                 }
+
+                if !isSelecting {
+                    ImportStatusSection()
+                }
             }
             .environment(\.editMode, $editMode)
             .navigationTitle(isSelecting ? selectionTitle : "Vault")
-            .navigationDestination(for: SourceDocument.self) { DocumentDetailView(document: $0) }
+            // Every link in the Vault pushes a value, so the stack stays in step: a link that pushes a view
+            // directly can't sit under a link that pushes a value.
+            .navigationDestination(for: VaultRoute.self) { route in
+                switch route {
+                case .profile: ProfileView()
+                case .folder(let folder): LibraryFolderView(folder: folder)
+                case .document(let id):
+                    if let document = documents.first(where: { $0.persistentModelID == id }) {
+                        DocumentDetailView(document: document)
+                    } else {
+                        ContentUnavailableView("Document removed", systemImage: "doc")
+                    }
+                }
+            }
             .searchable(text: $searchText, prompt: "Search")
             .toolbar {
                 if isSelecting {
@@ -125,7 +156,7 @@ struct VaultView: View {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Button("Scan Documents", systemImage: "doc.viewfinder") { isScanning = true }
-                            Button("Choose Files", systemImage: "folder") { isPicking = true }
+                            Button("Choose Files", systemImage: "folder") { isPickingFolder = true }
                         } label: {
                             Label("Add Documents", systemImage: "plus")
                         }
@@ -138,7 +169,11 @@ struct VaultView: View {
                 }
             }
             .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
-            .addDocuments(isPresented: $isPicking)
+            .chooseFromFolder(isPresented: $isPickingFolder, folder: $pickedFolder)
+            .onDrop(of: [.item], isTargeted: nil) { providers in
+                Task { await receive(providers) }
+                return true
+            }
             .fullScreenCover(isPresented: $isScanning) { DocumentScanner() }
             .removeDocuments($removing) { endSelecting() }
             .onChange(of: documents.count) { _, count in
@@ -148,6 +183,21 @@ struct VaultView: View {
                 profile = Profile.build(documents: documents, overrides: overrides)
             }
         }
+    }
+
+    /// Files dropped on the Vault are added where they are; a folder opens so you can choose files in it.
+    /// Copies (from Mail, say) are handled like files shared to Dossier.
+    private func receive(_ providers: [NSItemProvider]) async {
+        var files: [URL] = []
+        for provider in providers {
+            switch await DroppedItem.load(provider) {
+            case .file(let url): files.append(url)
+            case .folder(let url): pickedFolder = url
+            case .copy(let url): incoming.receive(url)
+            case nil: break
+            }
+        }
+        if !files.isEmpty { importer.add(files, context: modelContext, preferPrivateCloud: usePrivateCloud) }
     }
 
     private var selected: [SourceDocument] {
@@ -170,14 +220,70 @@ struct VaultView: View {
         .removeDocuments($removingAll)
     }
 
+    // MARK: Library
+
+    /// Documents with a place in the library, and where.
+    private var placed: [(item: SourceDocument, placement: LibraryPlacement)] {
+        documents.compactMap { document in document.placement.map { (item: document, placement: $0) } }
+    }
+
+    private var people: [String] {
+        let placements = placed.map(\.placement)
+        return LibraryGroups.people(placements, owner: LibraryGroups.owner(placements))
+    }
+
+    /// The Vault laid out like the library: a person switcher when there's more than one person, then a
+    /// section per category. A folder with one document shows the document; one with several opens a list.
+    @ViewBuilder private var librarySections: some View {
+        let names = people
+        if names.count > 1 {
+            Section {
+                Picker("Person", selection: $person) {
+                    Text("Everyone").tag(String?.none)
+                    ForEach(names, id: \.self) { Text($0).tag(Optional($0)) }
+                }
+                .pickerStyle(.segmented)
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+        }
+        ForEach(LibraryGroups.sections(placed, person: names.count > 1 ? person : nil)) { section in
+            Section(section.isShared ? "\(section.category) · shared" : section.category) {
+                ForEach(section.folders) { folder in
+                    if folder.items.count == 1, let document = folder.items.first {
+                        row(document)
+                    } else {
+                        NavigationLink(value: VaultRoute.folder(LibraryFolderRoute(
+                            person: names.count > 1 ? person : nil, category: section.category, folder: folder.name, isShared: section.isShared
+                        ))) {
+                            LibraryFolderRow(name: folder.name, documents: folder.items)
+                        }
+                        .accessibilityIdentifier("folder \(folder.name)")
+                    }
+                }
+            }
+        }
+        let unplaced = documents.filter { $0.placement == nil }
+        if !unplaced.isEmpty {
+            Section {
+                ForEach(unplaced) { row($0) }
+            } header: {
+                Text("Not sorted yet")
+            } footer: {
+                Text("Dossier sorts documents into folders once it has read them.")
+            }
+        }
+    }
+
     /// Expired documents get their own section, below the current ones.
     private var expired: [SourceDocument] { filtered.filter(\.isExpired) }
     private var current: [SourceDocument] { filtered.filter { !$0.isExpired } }
 
     private func row(_ document: SourceDocument) -> some View {
-        NavigationLink(value: document) {
+        NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
             DocumentRow(document: document)
         }
+        .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
         .tag(document.persistentModelID)
         .swipeActions {
             Button("Remove", systemImage: "trash", role: .destructive) { removing = [document] }
@@ -246,6 +352,74 @@ struct DocumentRow: View {
             return (expiry < .now ? "Expired " : "Expires ") + SimpleDate(utc: expiry).display
         }
         return document.fileName
+    }
+}
+
+/// A folder of several documents: "I-20s · 3 documents · 2019 to 2022", badged with the one that most needs you.
+private struct LibraryFolderRow: View {
+    let name: String
+    let documents: [SourceDocument]
+
+    var body: some View {
+        let badges = documents.map(\.badge)
+        let badge: TileBadge = badges.contains(.review) ? .review : badges.contains(.expiring) ? .expiring : badges.contains(.reading) ? .reading : .verified
+        let dates = documents.flatMap { [$0.libraryFacts.from, $0.libraryFacts.until, $0.libraryFacts.date].compactMap { $0 } }
+        let subtitle = ["\(documents.count) documents", LibraryGroups.years(dates)].compactMap { $0 }.joined(separator: " · ")
+        TileRow(symbol: documents.first?.kind.symbol ?? "folder", badge: badge, title: name, subtitle: subtitle)
+    }
+}
+
+/// Where a link in the Vault goes.
+enum VaultRoute: Hashable {
+    case profile
+    case folder(LibraryFolderRoute)
+    case document(PersistentIdentifier)
+}
+
+/// One library folder, as a section of the Vault shows it.
+struct LibraryFolderRoute: Hashable {
+    /// The person the Vault was showing; nil for everyone.
+    var person: String?
+    var category: String
+    var folder: String
+    /// The folder of Household documents shown with one person's.
+    var isShared: Bool
+
+    func contains(_ placement: LibraryPlacement) -> Bool {
+        guard placement.category == category, placement.folder == folder else { return false }
+        guard let person else { return true }
+        return placement.person == (isShared ? LibraryPlacement.household : person)
+    }
+}
+
+/// The documents in one library folder. Reads them itself, so it stays current while it's open.
+struct LibraryFolderView: View {
+    let folder: LibraryFolderRoute
+
+    @Query private var documents: [SourceDocument]
+
+    private var shown: [SourceDocument] {
+        documents
+            .compactMap { document in document.placement.map { (document, $0) } }
+            .filter { folder.contains($0.1) }
+            .sorted { $0.1.name.localizedStandardCompare($1.1.name) == .orderedAscending }
+            .map(\.0)
+    }
+
+    var body: some View {
+        List {
+            ForEach(shown) { document in
+                NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
+                    DocumentRow(document: document)
+                }
+                .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
+            }
+        }
+        .overlay {
+            if shown.isEmpty { ContentUnavailableView("No documents here now", systemImage: "folder") }
+        }
+        .navigationTitle(folder.folder)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

@@ -22,16 +22,25 @@ struct ProfileView: View {
         ("Address", [.currentAddress]),
     ]
 
+    private func isShown(_ key: ProfileKey) -> Bool {
+        guard let entry = profile.entry(key) else { return false }
+        return entry.status != .missing || entry.override != nil
+    }
+
     var body: some View {
         List {
             ForEach(groups, id: \.0) { title, keys in
-                Section(title) {
-                    ForEach(keys, id: \.self) { key in
-                        if let entry = profile.entry(key), entry.status != .missing || entry.override != nil {
-                            Button { editing = key } label: {
-                                ProfileRow(entry: entry, profile: profile, unlocked: unlocked)
+                let shown = keys.filter(isShown)
+                // A group with nothing in it isn't shown, so no heading stands alone.
+                if !shown.isEmpty {
+                    Section(title) {
+                        ForEach(shown, id: \.self) { key in
+                            if let entry = profile.entry(key) {
+                                Button { editing = key } label: {
+                                    ProfileRow(entry: entry, profile: profile, unlocked: unlocked)
+                                }
+                                .foregroundStyle(.primary)
                             }
-                            .foregroundStyle(.primary)
                         }
                     }
                 }

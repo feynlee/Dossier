@@ -37,7 +37,8 @@ struct ProfileDetails {
         let facts = documents
             .filter { !$0.isGone && $0.isReady }
             .flatMap(\.facts)
-            .filter { $0.key == .detail && $0.status != .superseded }
+            // Details about people, not what a document records (test results, vaccine doses).
+            .filter { $0.key == .detail && $0.section == nil && $0.status != .superseded }
 
         let you = details(from: facts.filter { $0.relation == nil })
         let people = Dictionary(grouping: facts.filter { $0.relation != nil }) { fact in

@@ -42,13 +42,19 @@ actor DocumentExtractor {
     private static let onDeviceTextLimit = 12_000
     private static let privateCloudTextLimit = 90_000
 
+    /// Bumped when the instructions change enough that documents should be read again.
+    static let readingVersion = 3
+
     static let baseInstructions = """
         You read personal documents for their owner: passports, US immigration cards and notices, driver's \
-        licences, leases and travel records. You receive page images and the OCR text of the same pages. \
-        The images are the source of truth; the OCR text helps with hard-to-read characters but can contain \
-        mistakes.
+        licences, leases and travel records, and also medical exams, vaccination records, lab results, tax \
+        forms, school records, bank statements and anything else people keep. You receive page images and \
+        the OCR text of the same pages. The images are the source of truth; the OCR text helps with \
+        hard-to-read characters but can contain mistakes.
 
-        Report only the important facts for the document's kind:
+        Read the whole document, every page, and report three things.
+
+        1. fields: the standard facts for the document's kind.
         - passport: surname, givenNames, dateOfBirth, placeOfBirth, sex, nationality, documentNumber, issueDate, expiryDate, issuingAuthority
         - greenCard: surname, givenNames, dateOfBirth, placeOfBirth, sex, alienNumber, uscisCategory, residentSince, documentNumber, expiryDate
         - employmentAuthorization: surname, givenNames, dateOfBirth, placeOfBirth, sex, alienNumber, uscisCategory, documentNumber, validFrom, validUntil
@@ -57,21 +63,36 @@ actor DocumentExtractor {
         - lease: address, leaseStartDate, leaseEndDate
         - uscisNotice: surname, givenNames, dateOfBirth, alienNumber, formType, receiptNumber, noticeDate, uscisCategory, validFrom, validUntil
         - i94: surname, givenNames, dateOfBirth, i94Number, classOfAdmission, admitUntil, documentNumber, plus every travel row
-        - other: surname, givenNames, dateOfBirth, address, documentNumber, issueDate, expiryDate
+        - other: surname, givenNames, dateOfBirth, address, documentNumber, issueDate, expiryDate, and formType for a numbered form such as I-693
+
+        2. contents: everything else on the document that is relevant to it or could be useful to its \
+        owner later, especially anything another form might ask for. Decide what that is from the document \
+        itself; no list limits it. Report every filled-in field, every table row and every result, not a \
+        summary, in reading order, grouped by the document's own sections and labelled with its own words. \
+        For instance: each test and result on a medical exam, every dose on a vaccination record (date, \
+        lot, clinic), each box on a tax form, each course and grade on a transcript, a lease's rent and \
+        terms, the people the document names in a role (doctor, landlord, employer, school). Leave out \
+        blank fields, instructions, legal fine print and form boilerplate, and anything already reported \
+        in fields.
+
+        3. details: as described below.
 
         Rules:
-        - Report only facts printed on the document. Never infer, guess or fill in a value that is not printed.
-        - Report the document holder's facts only, not a landlord's, petitioner's, officer's or anyone else's.
+        - Report only what is printed or handwritten on the document. Never infer, guess or fill in a value \
+        that is not there.
+        - fields are the document holder's facts only, not a landlord's, petitioner's, doctor's or anyone \
+        else's. contents can include other people where the document names them, such as the examining \
+        doctor or the landlord.
         - Copy numbers exactly, character by character. Don't confuse 0 with O or 1 with I.
         - Write every date as YYYY-MM-DD. Read day-month order from the document's own convention.
         - For a machine-readable zone (lines of capital letters and < signs), prefer the printed fields above \
         it, but use the zone to resolve unclear characters.
-        - One field per fact. If a fact appears on several pages, report it once.
+        - Report each fact once, even if it appears on several pages.
         """
 
     /// The base instructions plus what to put in `details`: other useful details, and the ones you asked for.
     static func instructions(for request: DetailRequest) -> String {
-        guard !request.isEmpty else { return baseInstructions + "\nLeave details empty." }
+        guard !request.isEmpty else { return baseInstructions + "\nLeave details empty; put everything in fields and contents." }
         var lines = ["", "Details, besides the important facts above:"]
         if request.findsUsefulDetails {
             lines += [
@@ -83,7 +104,7 @@ actor DocumentExtractor {
             let list = request.requested.map { "\"\($0)\"" }.joined(separator: ", ")
             lines.append("- Always look for these, for the holder unless they clearly belong to a family member, and use exactly these names as labels: \(list).")
         }
-        lines.append("- Only details printed on the document; never guess. At most 30 details.")
+        lines.append("- Only details printed on the document; never guess. At most 30 details. Don't repeat contents.")
         return baseInstructions + lines.joined(separator: "\n")
     }
 

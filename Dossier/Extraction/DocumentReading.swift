@@ -3,24 +3,28 @@ import FoundationModels
 
 /// The schema the language model fills in for one document. Properties are generated in declaration
 /// order: first what the document is, then its fields.
-@Generable(description: "What one identity, immigration, travel or housing document says about its holder")
+@Generable(description: "What one personal document says: its standard facts, everything else it records, and details about its holder")
 nonisolated struct DocumentReading {
     @Guide(
         description: """
             The kind of document. passport: a national passport. greenCard: a US permanent resident card. \
             employmentAuthorization: a US EAD card. visa: a visa foil. driversLicense or stateID: a US or \
             Canadian card. lease: a residential lease. uscisNotice: an I-797 or other USCIS notice. i94: an \
-            I-94 arrival record or travel history. other: anything else.
+            I-94 arrival record or travel history. other: anything else, such as a medical exam, vaccination \
+            record, tax form, school record or bank statement.
             """,
         .anyOf(DocumentKind.allCases.filter { $0 != .addedByYou }.map(\.rawValue))
     )
     var kind: String
 
-    @Guide(description: "A short title in sentence case, such as \"Passport\", \"Green card\" or \"Lease for 88 Pine Ave\".")
+    @Guide(description: "A short title in sentence case naming what the document is, such as \"Passport\", \"Lease for 88 Pine Ave\", \"Report of medical examination (I-693)\" or \"International certificate of vaccination\".")
     var title: String
 
     @Guide(description: "The important facts printed on the document, as listed for its kind in the instructions. Omit facts that are not printed; never guess.")
     var fields: [ReadField]
+
+    @Guide(description: "Everything else the document records, section by section in reading order, as described in the instructions: every filled-in field, table row, result and record. Empty only for a document with nothing beyond its facts.")
+    var contents: [ReadEntry]
 
     @Guide(description: "Other details useful for filling in forms, about the holder and their family members, as described in the instructions. Empty if there are none.")
     var details: [ReadDetail]
@@ -70,6 +74,27 @@ nonisolated struct ReadField {
         .anyOf(["high", "low"])
     )
     var confidence: String
+}
+
+@Generable(description: "One thing the document records, such as a test result, a vaccine dose, a tax box or a course grade")
+nonisolated struct ReadEntry {
+    @Guide(description: "The section it's in, using the document's own heading in sentence case, such as Vaccinations, Chest X-ray, Blood tests, Income or Courses.")
+    var section: String
+
+    @Guide(description: "What it is, using the document's own label, made unique within its section, such as \"MMR · dose 1\", \"IGRA result\", \"Box 1 · Wages\" or \"Biology 101\".")
+    var label: String
+
+    @Guide(description: "The value as printed. For a table row, the row's other columns joined with \" · \", such as \"2019-04-02 · Lot AB123 · King County clinic\". Dates as YYYY-MM-DD. Units and reference ranges as printed.")
+    var value: String
+
+    @Guide(description: "The 1-based page the value is printed on.")
+    var page: Int
+
+    @Guide(description: "high when it is clearly printed and certainly this entry; low when any part is blurry, handwritten or cut off.", .anyOf(["high", "low"]))
+    var confidence: String
+
+    @Guide(description: "yes when the value is an identification number such as a Social Security, account, policy, case or lot number on its own; no otherwise.", .anyOf(["yes", "no"]))
+    var isNumber: String
 }
 
 @Generable(description: "A detail useful for filling in forms, about the holder or a family member of theirs")

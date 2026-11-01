@@ -147,10 +147,16 @@ struct WebFillView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .task {
+            UploadFiles.clear()
             catalog = FormCatalog.build(documents: documents, overrides: overrides)
             session.onPageLoaded = { Task { await session.countFillable(catalog: catalog) } }
             session.open(start.absoluteString)
         }
+        // A site's upload field opens Dossier's own picker.
+        .sheet(item: Binding(get: { session.upload }, set: { if $0 == nil { session.finishUpload(nil) } })) { request in
+            UploadPicker(request: request) { urls in session.finishUpload(urls) }
+        }
+        .onDisappear { session.finishUpload(nil) }
         .sheet(item: $review) { plan in
             WebFillReview(plan: plan, catalog: catalog) { chosen, attachments in
                 review = nil
@@ -286,7 +292,7 @@ struct WebFillView: View {
         for (token, document) in attachments {
             guard let url = document.bookmark.flatMap(FileAccess.resolve)?.url, let data = try? FileAccess.read(url) else { continue }
             let type = FileAccess.isPDF(url) ? "application/pdf" : "image/jpeg"
-            if await session.attach(data, name: document.fileName, type: type, to: token) { attached += 1 }
+            if await session.attach(data, name: document.uploadName, type: type, to: token) { attached += 1 }
         }
         let filled = results.values.filter { $0 }.count
         var message = filled == 1 ? "Filled 1 field." : "Filled \(filled) fields."

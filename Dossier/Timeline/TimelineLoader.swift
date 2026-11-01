@@ -11,7 +11,7 @@ enum TimelineLoader {
         var spans: [LifeTimeline.Span] = []
         var travel: [LifeTimeline.TravelRow] = []
 
-        for document in documents {
+        for document in documents.owners {
             let id = document.contentHash
             let review = document.needsReview
             let text = { (key: FactKey) -> String? in document.fact(key).flatMap { VaultReader.value(of: $0) } }

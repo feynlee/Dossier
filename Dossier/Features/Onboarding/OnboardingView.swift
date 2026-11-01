@@ -6,6 +6,7 @@ struct OnboardingView: View {
     let onFinish: () -> Void
 
     @State private var isPicking = false
+    @State private var folder: URL?
     @State private var isScanning = false
 
     var body: some View {
@@ -47,7 +48,7 @@ struct OnboardingView: View {
                 }
                 .padding()
             }
-            .addDocuments(isPresented: $isPicking, onAdded: onFinish)
+            .chooseFromFolder(isPresented: $isPicking, folder: $folder, onAdded: onFinish)
             .fullScreenCover(isPresented: $isScanning) { DocumentScanner(onSaved: onFinish) }
         }
     }

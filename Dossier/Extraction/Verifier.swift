@@ -97,6 +97,26 @@ nonisolated enum Verifier {
         )
     }
 
+    /// Checks something the document records, such as "2019-04-02 · Lot AB123 · King County clinic": each
+    /// part with a number or date has to be in the page text, or the model has to have been sure of it.
+    static func verifyEntry(_ value: String, isConfident: Bool, page: Int, pages: [[String]]) -> VerifiedFact? {
+        let parts = value.components(separatedBy: " · ").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return nil }
+        let checked = parts.map { part -> (value: String, location: LineLocation?, needsText: Bool) in
+            let date = SimpleDate(iso: part)
+            let normalized = date?.iso ?? part
+            return (normalized, locate(normalized, key: date != nil ? .issueDate : .detail, in: pages), normalized.contains(where: \.isNumber))
+        }
+        let location = checked.lazy.compactMap(\.location).first
+        let context = location.map { pages[$0.page][$0.line] }
+        let isUncertain = !isConfident || checked.contains { $0.needsText && $0.location == nil }
+        let check: FactCheck = isUncertain ? .unchecked : (context != nil ? .pageText : .model)
+        return VerifiedFact(
+            key: .detail, value: checked.map(\.value).joined(separator: " · "), page: page,
+            status: isUncertain ? .needsReview : .verified, check: check, context: context, location: location
+        )
+    }
+
     // MARK: References
 
     private struct Reference {
