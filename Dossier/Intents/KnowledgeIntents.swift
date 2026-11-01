@@ -1,5 +1,6 @@
 import AppIntents
 import CoreSpotlight
+import os
 import FoundationModels
 import SwiftData
 import SwiftUI
@@ -70,7 +71,9 @@ struct AskDossierIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let knowledge = try KnowledgeSnapshot.knowledge(in: VaultStore.container.mainContext)
+        SiriLog.asked("Ask Dossier", question, knowledge)
         let answer = await KnowledgeService.answer(question, knowledge: knowledge)
+        SiriLog.answered(answer)
         return .result(dialog: "\(answer.text)") { AnswerSnippet(answer: answer) }
     }
 }
@@ -145,6 +148,7 @@ struct KnowledgeEntityQuery: EntityStringQuery {
     @MainActor
     func entities(matching string: String) async throws -> [KnowledgeEntity] {
         let knowledge = try KnowledgeSnapshot.knowledge(in: VaultStore.container.mainContext)
+        SiriLog.asked("Fact search", string, knowledge)
         let question = KnowledgeQuestion(string, knowledge: knowledge)
         return KnowledgeSearch.search(question, in: knowledge, limit: 8).map { KnowledgeEntity($0.topic, knowledge: knowledge) }
     }
@@ -181,6 +185,7 @@ struct GetFactIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
+        SiriLog.logger.notice("Get a fact: \(fact.id, privacy: .public)")
         let spoken = "\(fact.name) is \(fact.value)."
         return .result(value: fact.value, dialog: "\(spoken)")
     }
@@ -202,6 +207,28 @@ enum KnowledgeIndexer {
         }
         let entities = knowledge.topics.map { KnowledgeEntity($0, knowledge: knowledge) }.filter { !$0.isSensitive }
         try? await index.deleteAppEntities(ofType: KnowledgeEntity.self)
-        try? await index.indexAppEntities(entities)
+        do {
+            try await index.indexAppEntities(entities)
+            SiriLog.logger.notice("Spotlight: indexed \(entities.count) facts")
+        } catch {
+            SiriLog.logger.error("Spotlight: indexing failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+}
+
+/// What Siri asked and what Dossier found, in the device log (Console › subsystem liziyue.Dossier, category Siri),
+/// to tell a question Dossier couldn't answer from one that never reached it. Names of facts only, never values.
+enum SiriLog {
+    static let logger = Logger(subsystem: "liziyue.Dossier", category: "Siri")
+
+    static func asked(_ route: String, _ text: String, _ knowledge: Knowledge) {
+        let question = KnowledgeQuestion(text, knowledge: knowledge)
+        let top = KnowledgeSearch.search(question, in: knowledge, limit: 5)
+            .map { "\($0.topic.person) · \($0.topic.name) (\(String(format: "%.1f", $0.score)))" }.joined(separator: "; ")
+        logger.notice("\(route, privacy: .public): \"\(text, privacy: .public)\" · owner \(knowledge.owner ?? "none", privacy: .public) · \(knowledge.topics.count) facts · about \(question.people.joined(separator: ","), privacy: .public) · top: \(top, privacy: .public)")
+    }
+
+    static func answered(_ answer: KnowledgeAnswer) {
+        logger.notice("Answered by \(answer.method.rawValue, privacy: .public), found \(answer.found) · \(answer.note ?? "", privacy: .public)")
     }
 }

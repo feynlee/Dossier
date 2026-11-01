@@ -96,6 +96,11 @@ struct SettingsView: View {
                     Toggle(isOn: $indexKnowledge) {
                         TileRow(symbol: "magnifyingglass", badge: nil, title: "Let Siri find facts", subtitle: "Without saying “Dossier”")
                     }
+                    NavigationLink {
+                        AskDossierTryView()
+                    } label: {
+                        TileRow(symbol: "text.bubble", badge: nil, title: "Try a question", subtitle: "See what Siri gets from Dossier")
+                    }
                 } header: {
                     Text("Siri")
                 } footer: {
