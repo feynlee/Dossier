@@ -320,7 +320,7 @@ nonisolated struct ModelAnswerer {
         case .onDevice:
             topics = KnowledgeSearch.search(question, in: knowledge, limit: 10).map(\.topic)
         case .privateCloud:
-            let relevant = question.isEveryone ? knowledge.topics : knowledge.topics.filter { question.people.contains($0.person) }
+            let relevant = question.isEveryone ? knowledge.topics : knowledge.topics.filter { question.people.contains($0.person) || question.maybeOwner.contains($0.person) }
             let found = KnowledgeSearch.search(question, in: knowledge, limit: 10).map(\.topic)
             topics = found + relevant.filter { topic in !found.contains { $0.id == topic.id } }
         }

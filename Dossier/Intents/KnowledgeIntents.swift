@@ -109,8 +109,11 @@ struct KnowledgeEntity: IndexedEntity {
     @Property(title: "Person") var person: String
     var isSensitive: Bool
 
+    /// "My blood type" for "Health summary · Blood type": what people say.
+    var shortName: String
+
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(name)", subtitle: "\(value)")
+        DisplayRepresentation(title: "\(name)", subtitle: "\(value)", image: nil, synonyms: ["\(shortName)"])
     }
 
     /// Sensitive values stay out of Spotlight even when indexing is on.
@@ -121,6 +124,8 @@ struct KnowledgeEntity: IndexedEntity {
         isSensitive = topic.current?.value.isSensitive ?? false
         let subject = topic.person == knowledge.owner ? "My" : topic.person.possessive
         name = "\(subject) \(topic.name.replacingOccurrences(of: " · ", with: " "))".lowercased().capitalizedFirst
+        let label = topic.name.components(separatedBy: " · ").last ?? topic.name
+        shortName = "\(subject) \(label)".lowercased().capitalizedFirst
         value = topic.current.map { claim in
             if topic.behavior == .event, let date = claim.date { return date.display + (claim.label.map { " · \($0)" } ?? "") }
             return claim.value.text.map { SimpleDate(iso: $0)?.display ?? $0 } ?? "ends in \(claim.value.hint ?? "····")"
@@ -146,11 +151,22 @@ struct KnowledgeEntityQuery: EntityStringQuery {
     @MainActor
     func suggestedEntities() async throws -> [KnowledgeEntity] {
         let knowledge = try KnowledgeSnapshot.knowledge(in: VaultStore.container.mainContext)
-        return knowledge.topics
-            .filter { $0.behavior != .event || $0.name.hasPrefix("Vaccinations") }
-            .prefix(60)
-            .map { KnowledgeEntity($0, knowledge: knowledge) }
+        return Self.suggested(knowledge).map { KnowledgeEntity($0, knowledge: knowledge) }
     }
+
+    /// The facts Siri can name in "What's … in Dossier": yours first, then the household's, then your
+    /// family's. Before, only the first 60 topics were offered, so in a full vault your blood type (read
+    /// late, from a health record) was never one Siri knew.
+    nonisolated static func suggested(_ knowledge: Knowledge) -> [KnowledgeTopic] {
+        let topics = knowledge.topics.filter { $0.behavior != .event || $0.name.hasPrefix("Vaccinations") }
+        func rank(_ topic: KnowledgeTopic) -> Int {
+            if topic.person == knowledge.owner { return 0 }
+            return topic.person == KnowledgeBuilder.household ? 1 : 2
+        }
+        return Array(topics.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element).prefix(limit))
+    }
+
+    nonisolated static let limit = 400
 }
 
 struct GetFactIntent: AppIntent {

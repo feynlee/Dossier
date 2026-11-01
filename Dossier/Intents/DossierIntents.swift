@@ -170,7 +170,10 @@ struct DossierShortcuts: AppShortcutsProvider {
             intent: GetFactIntent(),
             phrases: [
                 "What’s \(\.$fact) in \(.applicationName)",
+                "What is \(\.$fact) in \(.applicationName)",
                 "Get \(\.$fact) from \(.applicationName)",
+                "Find \(\.$fact) in \(.applicationName)",
+                "Look up \(\.$fact) in \(.applicationName)",
             ],
             shortTitle: "Look up a fact",
             systemImageName: "text.magnifyingglass"

@@ -12,7 +12,8 @@ nonisolated enum KnowledgeBuilder {
 
     static func build(_ documents: [KnowledgeDocument], today: SimpleDate) -> Knowledge {
         let documents = documents.map(cleaned)
-        let owner = ownerName(documents)
+        // Documents not yet placed in the library have no person: they're yours ("You") until they are.
+        let owner = ownerName(documents) ?? (documents.isEmpty ? nil : "You")
         var builder = Builder(documents: documents, owner: owner, today: today)
         builder.run()
         let topics = builder.topics.map(withSourceTerms)

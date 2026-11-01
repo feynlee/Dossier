@@ -319,7 +319,8 @@ final class ImportCoordinator {
     // MARK: Saving
 
     /// Replaces the document's result with this reading: one result per file.
-    private func save(
+    /// Not private: `HealthRecordEvaluation` saves its readings exactly as the app does.
+    func save(
         _ reading: DocumentReading, engine: ExtractionEngine, pages: [ReadPage], hash: String, info: FileAccess.Info?,
         into document: SourceDocument, context: ModelContext
     ) throws {
