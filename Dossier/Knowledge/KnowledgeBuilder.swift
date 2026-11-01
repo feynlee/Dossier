@@ -16,7 +16,10 @@ nonisolated enum KnowledgeBuilder {
         let owner = ownerName(documents) ?? (documents.isEmpty ? nil : "You")
         var builder = Builder(documents: documents, owner: owner, today: today)
         builder.run()
-        let topics = builder.topics.map(withSourceTerms)
+        // A notice is about the form its case is for: "my I-485 receipt number" is on the I-797 for the I-485.
+        let forms = Dictionary(documents.compactMap { document in document.fields[.formType]?.text.map { (document.id, $0) } },
+                               uniquingKeysWith: { first, _ in first })
+        let topics = builder.topics.map { withSourceTerms($0, forms: forms) }
         return Knowledge(today: today, owner: owner, people: builder.people, topics: topics, trips: builder.trips)
     }
 
@@ -35,10 +38,11 @@ nonisolated enum KnowledgeBuilder {
 
     /// A topic is also found by the documents behind each of its values ("rent at Pine Ave" finds the rent of
     /// the lease titled "Lease for 88 Pine Ave", even when today's lease is another one).
-    static func withSourceTerms(_ topic: KnowledgeTopic) -> KnowledgeTopic {
+    static func withSourceTerms(_ topic: KnowledgeTopic, forms: [String: String] = [:]) -> KnowledgeTopic {
         var topic = topic
         let claims = [topic.current].compactMap { $0 } + topic.others
-        let words = claims.flatMap { KnowledgeText.words($0.source.title) }.filter { $0.count > 2 && !$0.allSatisfy(\.isNumber) }
+        let words = claims.flatMap { KnowledgeText.words($0.source.title + " " + (forms[$0.source.documentID] ?? "")) }
+            .filter { $0.count > 2 && !$0.allSatisfy(\.isNumber) }
         topic.terms = Array(Set(topic.terms + words))
         return topic
     }

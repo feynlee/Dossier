@@ -6,8 +6,8 @@ import Foundation
 /// on-device model returned only a few holder details and never the blood type, primary care physician,
 /// allergies or emergency contact, although every one is printed as such a row.
 ///
-/// Only rows the model's reading doesn't already have are added, so the model's richer rows (tables joined
-/// with " · ") stay as they are.
+/// Tables (a header row of three or more columns, then rows of as many cells) are read the same way. Only rows
+/// the model's reading doesn't already have are added.
 nonisolated enum LabelValueParser {
     struct Row: Equatable {
         var section: String
@@ -28,13 +28,25 @@ nonisolated enum LabelValueParser {
                 .map { Box(text: $0.trimmingCharacters(in: .whitespaces), rect: $1) }
                 .filter { !$0.text.isEmpty }
             var section = "Other"
+            var header: [Box]?
             for row in rowsOf(boxes) {
                 if row.count == 1 {
-                    if isHeading(row[0].text) { section = sentenceCase(row[0].text) }
+                    if isHeading(row[0].text) {
+                        section = sentenceCase(row[0].text)
+                        header = nil
+                    }
                     continue
                 }
-                // Exactly a label and a value: a third column makes it a table row, which the model reads better.
-                guard row.count == 2 else { continue }
+                // A table: its first row names the columns; each later row with as many cells is an entry named by
+                // its first cell ("Penicillin" → "Hives · Moderate").
+                if row.count >= 3 {
+                    if let header, header.count == row.count {
+                        out.append(Row(section: section, label: row[0].text, value: row.dropFirst().map(\.text).joined(separator: " · "), page: index + 1))
+                    } else if row.allSatisfy({ isLabel($0.text) }) {
+                        header = row
+                    }
+                    continue
+                }
                 let (label, value) = (row[0], row[1])
                 guard isLabel(label.text), value.rect.minX - label.rect.maxX > 0.02, !value.text.isEmpty,
                       value.text.lowercased() != label.text.lowercased() else { continue }

@@ -96,8 +96,9 @@ struct LabelValueParserTests {
         #expect(rows.contains(.init(section: "Vitals and blood type", label: "Blood type", value: "O Rh positive (O+)", page: 1)))
         #expect(rows.contains(.init(section: "Patient", label: "Primary care physician", value: "Dr. Tomas Lind, MD", page: 1)))
         #expect(rows.contains(.init(section: "Emergency contact", label: "Emergency contact", value: "David Lee Chen (spouse)", page: 1)))
-        // Table rows (three columns) are left to the model.
-        #expect(!rows.contains { $0.label == "Penicillin" || $0.label == "Allergen" })
+        // A table: its header names the columns and isn't an entry.
+        #expect(rows.contains(.init(section: "Allergies", label: "Penicillin", value: "Hives · Moderate", page: 1)))
+        #expect(!rows.contains { $0.label == "Allergen" })
     }
 
     @Test func addsOnlyWhatTheModelMissed() {
