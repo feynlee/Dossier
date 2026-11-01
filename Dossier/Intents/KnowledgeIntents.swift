@@ -123,9 +123,10 @@ struct KnowledgeEntity: IndexedEntity {
         id = topic.id
         isSensitive = topic.current?.value.isSensitive ?? false
         let subject = topic.person == knowledge.owner ? "My" : topic.person.possessive
-        name = "\(subject) \(topic.name.replacingOccurrences(of: " · ", with: " "))".lowercased().capitalizedFirst
+        // Plain stored properties first: `name` is an @Property, and setting it uses self.
         let label = topic.name.components(separatedBy: " · ").last ?? topic.name
         shortName = "\(subject) \(label)".lowercased().capitalizedFirst
+        name = "\(subject) \(topic.name.replacingOccurrences(of: " · ", with: " "))".lowercased().capitalizedFirst
         value = topic.current.map { claim in
             if topic.behavior == .event, let date = claim.date { return date.display + (claim.label.map { " · \($0)" } ?? "") }
             return claim.value.text.map { SimpleDate(iso: $0)?.display ?? $0 } ?? "ends in \(claim.value.hint ?? "····")"

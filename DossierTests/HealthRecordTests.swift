@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Testing
 @testable import Dossier
@@ -65,5 +66,51 @@ struct HealthRecordTests {
         let blood = try #require(suggested.first { $0.name.hasSuffix("Blood type") })
         #expect(blood.person == "Anna")
         #expect(suggested.prefix(while: { $0.person == "Anna" }).contains { $0.id == blood.id })
+    }
+}
+
+/// The health summary's "label   value" rows, as Vision lays them out (top-left origin).
+struct LabelValueParserTests {
+    static func page() -> ReadPage {
+        // (text, x, y): labels at x 0.09, values at x 0.37, as on the generated PDF.
+        let boxes: [(String, CGFloat, CGFloat)] = [
+            ("PATIENT HEALTH SUMMARY", 0.09, 0.08),
+            ("Patient", 0.09, 0.14),
+            ("Patient name", 0.09, 0.17), ("Anna Maria Eriksson", 0.37, 0.17),
+            ("Primary care physician", 0.09, 0.20), ("Dr. Tomas Lind, MD", 0.37, 0.20),
+            ("Vitals and blood type", 0.09, 0.25),
+            ("Blood type", 0.09, 0.28), ("O Rh positive (O+)", 0.37, 0.28),
+            ("Blood pressure", 0.09, 0.31), ("116/74 mmHg", 0.37, 0.31),
+            ("Allergies", 0.09, 0.36),
+            ("Allergen", 0.09, 0.39), ("Reaction", 0.39, 0.39), ("Severity", 0.68, 0.39),
+            ("Penicillin", 0.09, 0.42), ("Hives", 0.39, 0.42), ("Moderate", 0.68, 0.42),
+            ("Emergency contact", 0.09, 0.47),
+            ("Emergency contact", 0.09, 0.50), ("David Lee Chen (spouse)", 0.37, 0.50),
+        ]
+        return ReadPage(image: nil, lines: boxes.map(\.0),
+                        boxes: boxes.map { CGRect(x: $0.1, y: $0.2, width: min(0.25, CGFloat($0.0.count) * 0.012), height: 0.018) }, barcodes: [])
+    }
+
+    @Test func readsLabelledRowsUnderTheirHeadings() {
+        let rows = LabelValueParser.rows(in: [Self.page()])
+        #expect(rows.contains(.init(section: "Vitals and blood type", label: "Blood type", value: "O Rh positive (O+)", page: 1)))
+        #expect(rows.contains(.init(section: "Patient", label: "Primary care physician", value: "Dr. Tomas Lind, MD", page: 1)))
+        #expect(rows.contains(.init(section: "Emergency contact", label: "Emergency contact", value: "David Lee Chen (spouse)", page: 1)))
+        // Table rows (three columns) are left to the model.
+        #expect(!rows.contains { $0.label == "Penicillin" || $0.label == "Allergen" })
+    }
+
+    @Test func addsOnlyWhatTheModelMissed() {
+        let reading = DocumentReading(
+            kind: DocumentKind.other.rawValue, title: "Patient health summary", fields: [],
+            contents: [ReadEntry(section: "Vitals", label: "Blood pressure", value: "116/74 mmHg", page: 1, confidence: "high", isNumber: "no")],
+            details: [], travel: []
+        )
+        let read = LabelValueParser.apply(to: reading, pages: [Self.page()])
+        #expect(read.contents.filter { $0.label == "Blood pressure" }.count == 1)
+        #expect(read.contents.contains { $0.label == "Blood type" && $0.value == "O Rh positive (O+)" })
+        var passport = reading
+        passport.kind = DocumentKind.passport.rawValue
+        #expect(LabelValueParser.apply(to: passport, pages: [Self.page()]).contents.count == 1)
     }
 }

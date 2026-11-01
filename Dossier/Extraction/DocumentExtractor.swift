@@ -123,7 +123,7 @@ actor DocumentExtractor {
     /// Facts printed under fixed labels as OCR shows them, and an I-94's travel rows when OCR finds at least as
     /// many as the model did.
     nonisolated static func withTravelRows(_ reading: DocumentReading, pages: [ReadPage]) -> DocumentReading {
-        var reading = CardFieldParser.apply(to: reading, pages: pages)
+        var reading = LabelValueParser.apply(to: CardFieldParser.apply(to: reading, pages: pages), pages: pages)
         guard reading.kind == DocumentKind.i94.rawValue else { return reading }
         let parsed = TravelHistoryParser.rows(in: pages)
         guard parsed.count >= reading.travel.count, !parsed.isEmpty else { return reading }
