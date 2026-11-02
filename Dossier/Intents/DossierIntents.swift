@@ -167,6 +167,16 @@ struct DossierShortcuts: AppShortcutsProvider {
             systemImageName: "questionmark.bubble"
         )
         AppShortcut(
+            intent: SearchDossierIntent(),
+            phrases: [
+                "Search \(.applicationName)",
+                "Search in \(.applicationName)",
+                "Find something in \(.applicationName)",
+            ],
+            shortTitle: "Search Dossier",
+            systemImageName: "magnifyingglass"
+        )
+        AppShortcut(
             intent: GetFactIntent(),
             phrases: [
                 "What’s \(\.$fact) in \(.applicationName)",

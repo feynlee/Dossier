@@ -98,6 +98,28 @@ struct AnswerSnippet: View {
     }
 }
 
+// MARK: Search
+
+/// Siri's own "search in Dossier for …": with Apple Intelligence, Siri looks for an app's search action when
+/// you ask it to find something in that app. Without one it said "I can't search within Dossier" on Li's
+/// iPhone, though Try a question answered the same question. Answers like Ask Dossier.
+@AppIntent(schema: .system.search)
+struct SearchDossierIntent: ShowInAppSearchResultsIntent {
+    static let searchScopes: [StringSearchScope] = [.general]
+    static let authenticationPolicy = IntentAuthenticationPolicy.requiresLocalDeviceAuthentication
+
+    var criteria: StringSearchCriteria
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+        let knowledge = try KnowledgeSnapshot.knowledge(in: VaultStore.container.mainContext)
+        SiriLog.asked("Search", criteria.term, knowledge)
+        let answer = await KnowledgeService.answer(criteria.term, knowledge: knowledge)
+        SiriLog.answered(answer)
+        return .result(dialog: "\(answer.text)") { AnswerSnippet(answer: answer) }
+    }
+}
+
 // MARK: Topics as entities
 
 struct KnowledgeEntity: IndexedEntity {
