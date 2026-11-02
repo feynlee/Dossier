@@ -1,3 +1,4 @@
+import AppIntents
 import AuthenticationServices
 import SwiftUI
 import UniformTypeIdentifiers
@@ -96,6 +97,8 @@ struct SettingsView: View {
                     Toggle(isOn: $indexKnowledge) {
                         TileRow(symbol: "magnifyingglass", badge: nil, title: "Let Siri find facts", subtitle: "Without saying “Dossier”")
                     }
+                    ShortcutsLink()
+                        .shortcutsLinkStyle(.automaticOutline)
                     NavigationLink {
                         AskDossierTryView()
                     } label: {
