@@ -110,6 +110,25 @@ nonisolated enum LibraryFolder {
         return target
     }
 
+    /// Removes every folder in the library that holds no files, deepest first: a person folder left behind
+    /// when the library went from several people to one (seen on a real vault: an empty Ziyue › Identity ›
+    /// Passports), or a folder a layout change emptied. Folders holding only hidden files count as empty.
+    static func removeEmptyFolders(in root: URL) {
+        let manager = FileManager.default
+        guard let walker = manager.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey]) else { return }
+        var folders: [URL] = []
+        for case let url as URL in walker where (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+            folders.append(url)
+        }
+        for folder in folders.sorted(by: { $0.pathComponents.count > $1.pathComponents.count }) {
+            guard let contents = try? manager.contentsOfDirectory(atPath: folder.path), contents.allSatisfy({ $0.hasPrefix(".") && !$0.hasSuffix(".icloud") }) else { continue }
+            var coordinationError: NSError?
+            NSFileCoordinator().coordinate(writingItemAt: folder, options: .forDeleting, error: &coordinationError) { url in
+                try? manager.removeItem(at: url)
+            }
+        }
+    }
+
     /// Cleans up folders a move left empty, up to the library's top.
     private static func removeEmptyFolders(above folder: URL, stoppingAt destination: URL) {
         guard let root = root() else { return }

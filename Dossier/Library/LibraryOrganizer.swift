@@ -134,6 +134,7 @@ final class LibraryOrganizer {
         }
         if copied > 0 { logger.info("Copied \(copied, privacy: .public) files into the Dossier folder") }
         try? context.save()
+        await Task.detached(priority: .utility) { LibraryFolder.removeEmptyFolders(in: root) }.value
     }
 
     /// Your own placement for a document. Dossier keeps it from now on.
