@@ -44,9 +44,11 @@ nonisolated enum LibraryPlanner {
         return people[entry.id] ?? owner ?? "Me"
     }
 
-    /// Whether the library has documents for more than one person, so the person level is shown.
+    /// Whether folders start with the person. Always, even for one person (Li's choice, 2026-11-03): the
+    /// layout then never changes when a second person's document arrives, so nothing is reshuffled under a
+    /// device that imported the folder.
     static func showsPeople(_ placements: some Collection<LibraryPlacement>) -> Bool {
-        Set(placements.map(\.person).filter { $0 != LibraryPlacement.household }).count > 1
+        !placements.isEmpty
     }
 
     /// Entries the model has to place: kinds without a rule that have no placement yet.
