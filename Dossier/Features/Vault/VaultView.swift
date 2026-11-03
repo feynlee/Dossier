@@ -79,13 +79,16 @@ struct VaultView: View {
                 } else if searchText.isEmpty, !isSelecting, !placed.isEmpty {
                     librarySections
                 } else {
+                    let statuses = lifecycle
+                    let current = currentDocuments(statuses)
+                    let expired = endedDocuments(statuses)
                     Section {
                         if filtered.isEmpty {
                             Text("No matches.").foregroundStyle(.secondary)
                         } else if current.isEmpty {
-                            Text("Every document here has expired.").foregroundStyle(.secondary)
+                            Text("Every document here has expired or been renewed.").foregroundStyle(.secondary)
                         }
-                        ForEach(current) { row($0) }
+                        ForEach(current) { row($0, status: statuses[$0.contentHash]) }
                     } header: {
                         Text("Documents")
                     } footer: {
@@ -100,9 +103,9 @@ struct VaultView: View {
 
                     if !expired.isEmpty {
                         Section {
-                            ForEach(expired) { row($0) }
+                            ForEach(expired) { row($0, status: statuses[$0.contentHash]) }
                         } header: {
-                            Text("Expired")
+                            Text("Expired and renewed")
                         } footer: {
                             Text("Kept for your records. They still count for your timeline, like past addresses and trips.")
                         }
@@ -247,16 +250,17 @@ struct VaultView: View {
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
         }
-        ForEach(LibraryGroups.sections(placed, person: names.count > 1 ? person : nil)) { section in
+        let statuses = lifecycle
+        ForEach(LibraryGroups.sections(placed, person: names.count > 1 ? person : nil, status: { statuses[$0.contentHash] ?? .current })) { section in
             Section(section.isShared ? "\(section.category) · shared" : section.category) {
                 ForEach(section.folders) { folder in
                     if folder.items.count == 1, let document = folder.items.first {
-                        row(document)
+                        row(document, status: statuses[document.contentHash])
                     } else {
                         NavigationLink(value: VaultRoute.folder(LibraryFolderRoute(
                             person: names.count > 1 ? person : nil, category: section.category, folder: folder.name, isShared: section.isShared
                         ))) {
-                            LibraryFolderRow(name: folder.name, documents: folder.items)
+                            LibraryFolderRow(name: folder.name, documents: folder.items, statuses: statuses)
                         }
                         .accessibilityIdentifier("folder \(folder.name)")
                     }
@@ -266,7 +270,7 @@ struct VaultView: View {
         let unplaced = documents.filter { $0.placement == nil }
         if !unplaced.isEmpty {
             Section {
-                ForEach(unplaced) { row($0) }
+                ForEach(unplaced) { row($0, status: statuses[$0.contentHash]) }
             } header: {
                 Text("Not sorted yet")
             } footer: {
@@ -275,13 +279,24 @@ struct VaultView: View {
         }
     }
 
-    /// Expired documents get their own section, below the current ones.
-    private var expired: [SourceDocument] { filtered.filter(\.isExpired) }
-    private var current: [SourceDocument] { filtered.filter { !$0.isExpired } }
+    /// Each document's status: in use, expired, or renewed by a newer version.
+    private var lifecycle: [String: DocumentLifecycle.Status] { documents.lifecycle() }
 
-    private func row(_ document: SourceDocument) -> some View {
+    /// Expired and renewed documents get their own section, below the current ones.
+    private func endedDocuments(_ statuses: [String: DocumentLifecycle.Status]) -> [SourceDocument] {
+        DocumentLifecycle.ordered(
+            filtered.filter { statuses[$0.contentHash]?.isEnded == true },
+            status: { statuses[$0.contentHash] ?? .current }, ended: { statuses[$0.contentHash]?.endedOn }
+        )
+    }
+
+    private func currentDocuments(_ statuses: [String: DocumentLifecycle.Status]) -> [SourceDocument] {
+        filtered.filter { statuses[$0.contentHash]?.isEnded != true }
+    }
+
+    private func row(_ document: SourceDocument, status: DocumentLifecycle.Status? = nil) -> some View {
         NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
-            DocumentRow(document: document)
+            DocumentRow(document: document, status: status)
         }
         .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
         .tag(document.persistentModelID)
@@ -323,49 +338,93 @@ struct VaultView: View {
 
 struct DocumentRow: View {
     let document: SourceDocument
+    /// Whether it's in use, expired or renewed; nil to go by its own expiry date alone.
+    var status: DocumentLifecycle.Status?
 
     var body: some View {
-        let badge = document.badge
+        let badge = document.badge(status ?? document.lifecycleStatus)
         TileRow(
             symbol: document.isReady || document.state == .awaitingDecision ? document.kind.symbol : "doc",
             badge: badge,
             title: document.title,
-            subtitle: subtitle,
-            subtitleIsWarning: badge == .expiring || document.state == .failed || (document.sourceMissing && document.isReady)
+            subtitle: subtitle.text,
+            subtitleTone: subtitle.tone
         )
     }
 
-    private var subtitle: String {
+    private var subtitle: (text: String, tone: SubtitleTone) {
         switch document.state {
-        case .queued: return "Waiting to be read"
-        case .downloading: return "Downloading from iCloud"
-        case .reading: return "Reading…"
-        case .failed: return "Couldn’t read: \(document.failureReason ?? "unknown error")"
+        case .queued: return ("Waiting to be read", .plain)
+        case .downloading: return ("Downloading from iCloud", .plain)
+        case .reading: return ("Reading…", .plain)
+        case .failed: return ("Couldn’t read: \(document.failureReason ?? "unknown error")", .warning)
         case .awaitingDecision:
-            return document.decision == .duplicate ? "Same as a document in your vault · choose a file" : "Updated version · replace the old one?"
+            return (document.decision == .duplicate ? "Same as a document in your vault · choose a file" : "Updated version · replace the old one?", .plain)
         case .ready: break
         }
-        if document.sourceMissing { return "File removed · attach a new one" }
+        if document.sourceMissing { return ("File removed · attach a new one", .warning) }
         let uncertain = document.facts.filter { $0.status == .needsReview }.count
-        if uncertain > 0 { return uncertain == 1 ? "1 field needs a look" : "\(uncertain) fields need a look" }
-        if let expiry = document.expiryDate {
-            return (expiry < .now ? "Expired " : "Expires ") + SimpleDate(utc: expiry).display
+        if uncertain > 0 { return (uncertain == 1 ? "1 field needs a look" : "\(uncertain) fields need a look", .plain) }
+        switch status ?? document.lifecycleStatus {
+        case .renewed(let ended):
+            // The end that counts is when the renewal started, not the date printed on this one.
+            return (ended.map { "Renewed · ended \($0.display)" } ?? "Renewed", .renewed)
+        case .expired(let date):
+            return (date.map { "Expired \($0.display)" } ?? "Expired", .expired)
+        case .renewing(let until):
+            return ("Until \(until.display) · renewal starts then", .plain)
+        case .current:
+            break
         }
-        return document.fileName
+        if let expiry = document.expiryDate {
+            return ("Expires \(SimpleDate(utc: expiry).display)", document.badge(.current) == .expiring ? .warning : .plain)
+        }
+        return (document.fileName, .plain)
+    }
+}
+
+extension SourceDocument {
+    /// The status from this document alone, without its renewals.
+    var lifecycleStatus: DocumentLifecycle.Status {
+        let entry = lifecycleEntry
+        return entry.isExpired ? .expired(on: entry.expiredOn) : .current
+    }
+
+    /// The badge for this document given its status: reading and review first, then renewed or expired,
+    /// then expiring soon. A document whose renewal is waiting doesn't warn that it's expiring.
+    func badge(_ status: DocumentLifecycle.Status) -> TileBadge {
+        let own = badge
+        guard own == .verified || own == .expiring else { return own }
+        switch status {
+        case .renewed: return .renewed
+        case .expired: return .expired
+        case .renewing: return .verified
+        case .current: return own
+        }
     }
 }
 
 /// A folder of several documents: "I-20s · 3 documents · 2019 to 2022", badged with the one that most needs you.
+/// Expired and renewed documents don't count toward its badge unless every document in it has ended.
 private struct LibraryFolderRow: View {
     let name: String
     let documents: [SourceDocument]
+    let statuses: [String: DocumentLifecycle.Status]
 
     var body: some View {
-        let badges = documents.map(\.badge)
-        let badge: TileBadge = badges.contains(.review) ? .review : badges.contains(.expiring) ? .expiring : badges.contains(.reading) ? .reading : .verified
+        let badges = documents.map { $0.badge(status($0)) }
+        let inUse = badges.filter { !$0.isEnded }
+        // When every one has ended, the badge says how the latest one ended.
+        let latestRenewed = documents.first.map { status($0).isRenewed } ?? false
+        let badge: TileBadge = inUse.isEmpty ? (latestRenewed ? .renewed : .expired)
+            : inUse.contains(.review) ? .review : inUse.contains(.expiring) ? .expiring : inUse.contains(.reading) ? .reading : .verified
         let dates = documents.flatMap { [$0.libraryFacts.from, $0.libraryFacts.until, $0.libraryFacts.date].compactMap { $0 } }
         let subtitle = ["\(documents.count) documents", LibraryGroups.years(dates)].compactMap { $0 }.joined(separator: " · ")
         TileRow(symbol: documents.first?.kind.symbol ?? "folder", badge: badge, title: name, subtitle: subtitle)
+    }
+
+    private func status(_ document: SourceDocument) -> DocumentLifecycle.Status {
+        statuses[document.contentHash] ?? document.lifecycleStatus
     }
 }
 
@@ -398,19 +457,22 @@ struct LibraryFolderView: View {
 
     @Query private var documents: [SourceDocument]
 
-    private var shown: [SourceDocument] {
-        documents
-            .compactMap { document in document.placement.map { (document, $0) } }
-            .filter { folder.contains($0.1) }
-            .sorted { $0.1.name.localizedStandardCompare($1.1.name) == .orderedAscending }
-            .map(\.0)
+    /// In use first, then expired and renewed ones.
+    private func documentsShown(_ statuses: [String: DocumentLifecycle.Status]) -> [SourceDocument] {
+        let placed = documents
+            .compactMap { document in document.placement.map { (item: document, placement: $0) } }
+            .filter { folder.contains($0.placement) }
+        return LibraryGroups.ordered(placed, status: { statuses[$0.contentHash] ?? .current })
     }
 
     var body: some View {
+        // Renewals are found across the whole vault, so a folder shows the same as the Vault does.
+        let statuses = documents.lifecycle()
+        let shown = documentsShown(statuses)
         List {
             ForEach(shown) { document in
                 NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
-                    DocumentRow(document: document)
+                    DocumentRow(document: document, status: statuses[document.contentHash])
                 }
                 .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
             }

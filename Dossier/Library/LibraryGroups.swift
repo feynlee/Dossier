@@ -34,8 +34,13 @@ nonisolated enum LibraryGroups {
         return names.contains(LibraryPlacement.household) ? people + [LibraryPlacement.household] : people
     }
 
-    /// Sections for one person (their documents, then shared ones) or for everyone (nil).
-    static func sections<Item>(_ items: [(item: Item, placement: LibraryPlacement)], person: String?) -> [Section<Item>] {
+    /// Sections for one person (their documents, then shared ones) or for everyone (nil). In each folder, the
+    /// documents in use come first by name, then expired and renewed ones, most recently ended first. Folders
+    /// where every document has ended go after the others.
+    static func sections<Item>(
+        _ items: [(item: Item, placement: LibraryPlacement)], person: String?,
+        status: (Item) -> DocumentLifecycle.Status = { _ in .current }
+    ) -> [Section<Item>] {
         let shown = items.filter { person == nil || $0.placement.person == person || $0.placement.person == LibraryPlacement.household }
         let isShared = { (placement: LibraryPlacement) in
             person != nil && person != LibraryPlacement.household && placement.person == LibraryPlacement.household
@@ -43,11 +48,21 @@ nonisolated enum LibraryGroups {
         let grouped = Dictionary(grouping: shown) { SectionKey(category: $0.placement.category, isShared: isShared($0.placement)) }
         return grouped.map { key, items in
             let folders = Dictionary(grouping: items, by: \.placement.folder)
-                .map { Folder(name: $0.key, items: $0.value.sorted { $0.placement.name.localizedStandardCompare($1.placement.name) == .orderedAscending }.map(\.item)) }
-                .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+                .map { Folder(name: $0.key, items: ordered($0.value, status: status)) }
+                .sorted { a, b in
+                    let x = a.items.allSatisfy { status($0).isEnded }, y = b.items.allSatisfy { status($0).isEnded }
+                    if x != y { return !x }
+                    return a.name.localizedStandardCompare(b.name) == .orderedAscending
+                }
             return Section(category: key.category, isShared: key.isShared, folders: folders)
         }
         .sorted { ($0.isShared ? 1 : 0, categoryOrder($0.category), $0.category) < ($1.isShared ? 1 : 0, categoryOrder($1.category), $1.category) }
+    }
+
+    /// One folder's documents: in use by name, then ended ones, most recently ended first.
+    static func ordered<Item>(_ items: [(item: Item, placement: LibraryPlacement)], status: (Item) -> DocumentLifecycle.Status) -> [Item] {
+        let byName = items.sorted { $0.placement.name.localizedStandardCompare($1.placement.name) == .orderedAscending }.map(\.item)
+        return DocumentLifecycle.ordered(byName, status: status, ended: { status($0).endedOn })
     }
 
     /// Starter categories in their usual order, any others after them, Other last.
