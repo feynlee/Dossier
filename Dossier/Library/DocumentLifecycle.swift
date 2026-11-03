@@ -10,7 +10,7 @@ nonisolated enum DocumentLifecycle {
     enum Status: Equatable, Sendable {
         /// In use.
         case current
-        /// In use until its renewal starts on this date.
+        /// In use until this date, when it ends or its renewal starts, whichever is first.
         case renewing(until: SimpleDate)
         /// Past the expiry date printed on it, with nothing newer to replace it.
         case expired(on: SimpleDate?)

@@ -48,7 +48,8 @@ struct DocumentLifecycleTests {
             entry("old", series: "Li|employmentAuthorization", from: "2024-12-01", until: "2026-11-30"),
             entry("new", series: "Li|employmentAuthorization", from: "2026-12-01", until: "2028-11-30"),
         ], today: today)
-        #expect(statuses["old"] == .renewing(until: SimpleDate(iso: "2026-12-01")!))
+        // It ends on its printed date, a day before the new card starts.
+        #expect(statuses["old"] == .renewing(until: SimpleDate(iso: "2026-11-30")!))
         #expect(statuses["old"]?.isEnded == false)
     }
 

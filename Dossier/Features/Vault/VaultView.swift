@@ -372,7 +372,7 @@ struct DocumentRow: View {
         case .expired(let date):
             return (date.map { "Expired \($0.display)" } ?? "Expired", .expired)
         case .renewing(let until):
-            return ("Until \(until.display) · renewal starts then", .plain)
+            return ("Until \(until.display) · renewal ready", .plain)
         case .current:
             break
         }
