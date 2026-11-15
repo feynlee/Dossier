@@ -1,9 +1,9 @@
 import Foundation
 import os
 
-/// iCloud Drive › Dossier: where files that have no home of their own are kept (scans, and copies of files
-/// shared to Dossier), sorted into the library's folders and named once Dossier has read them. Files you
-/// added from your own folders stay where they are.
+/// iCloud Drive › Dossier: a file for every document in the vault, sorted into the library's folders and
+/// named once Dossier has read them. Scans and files shared to Dossier are kept here from the start; a file
+/// you added from one of your own folders is copied in, and yours stays where it is.
 nonisolated enum LibraryFolder {
     static let containerIdentifier = "iCloud.liziyue.Dossier"
     private static let logger = Logger(subsystem: "liziyue.Dossier", category: "Library")
@@ -72,6 +72,61 @@ nonisolated enum LibraryFolder {
         }
         removeEmptyFolders(above: file.deletingLastPathComponent(), stoppingAt: destination)
         return target
+    }
+
+    /// Writes a copy of a file into the library. Returns where it went, or nil if it couldn't be written. A
+    /// file already at the destination is never replaced: when it holds the same bytes it is the copy (from
+    /// an earlier pass), otherwise the copy gets a number.
+    static func copy(_ data: Data, to destination: URL, modified: Date?) -> URL? {
+        let manager = FileManager.default
+        var target = destination
+        var number = 2
+        while manager.fileExists(atPath: target.path) {
+            if (try? Data(contentsOf: target, options: .mappedIfSafe)) == data { return target }
+            let base = destination.deletingPathExtension().lastPathComponent
+            target = destination.deletingLastPathComponent().appending(path: "\(base) (\(number)).\(destination.pathExtension)")
+            number += 1
+        }
+        do {
+            try manager.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        } catch {
+            logger.error("Couldn't make a library folder: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+        var coordinationError: NSError?
+        var writeError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: target, options: .forReplacing, error: &coordinationError) { url in
+            do {
+                try data.write(to: url, options: .atomic)
+                if let modified { try manager.setAttributes([.modificationDate: modified], ofItemAtPath: url.path) }
+            } catch {
+                writeError = error
+            }
+        }
+        if let error = coordinationError ?? writeError {
+            logger.error("Couldn't copy a file into the library: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+        return target
+    }
+
+    /// Removes every folder in the library that holds no files, deepest first: a person folder left behind
+    /// when the library went from several people to one (seen on a real vault: an empty Ziyue › Identity ›
+    /// Passports), or a folder a layout change emptied. Folders holding only hidden files count as empty.
+    static func removeEmptyFolders(in root: URL) {
+        let manager = FileManager.default
+        guard let walker = manager.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey]) else { return }
+        var folders: [URL] = []
+        for case let url as URL in walker where (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+            folders.append(url)
+        }
+        for folder in folders.sorted(by: { $0.pathComponents.count > $1.pathComponents.count }) {
+            guard let contents = try? manager.contentsOfDirectory(atPath: folder.path), contents.allSatisfy({ $0.hasPrefix(".") && !$0.hasSuffix(".icloud") }) else { continue }
+            var coordinationError: NSError?
+            NSFileCoordinator().coordinate(writingItemAt: folder, options: .forDeleting, error: &coordinationError) { url in
+                try? manager.removeItem(at: url)
+            }
+        }
     }
 
     /// Cleans up folders a move left empty, up to the library's top.

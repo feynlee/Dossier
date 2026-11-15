@@ -235,6 +235,8 @@ nonisolated enum KnowledgeText {
             .split { !($0.isLetter || $0.isNumber || $0 == "-" || $0 == "'") }
             .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "-'")) }
             .filter { !$0.isEmpty }
+            // USCIS form numbers as OCR reads them: "1-485" and "l-485" are the I-485.
+            .map { word in word.count == 5 && (word.hasPrefix("1-") || word.hasPrefix("l-")) && word.dropFirst(2).allSatisfy(\.isNumber) ? "i" + word.dropFirst() : word }
     }
 
     /// Letters and digits only, uppercased, for comparing values: "88 Pine Ave." and "88 PINE AVE" match.

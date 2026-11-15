@@ -1,3 +1,4 @@
+import AppIntents
 import AuthenticationServices
 import SwiftUI
 import UniformTypeIdentifiers
@@ -95,6 +96,13 @@ struct SettingsView: View {
                     TileRow(symbol: "questionmark.bubble", badge: nil, title: "Ask Dossier", subtitle: "“Ask Dossier when my lease ends”")
                     Toggle(isOn: $indexKnowledge) {
                         TileRow(symbol: "magnifyingglass", badge: nil, title: "Let Siri find facts", subtitle: "Without saying “Dossier”")
+                    }
+                    ShortcutsLink()
+                        .shortcutsLinkStyle(.automaticOutline)
+                    NavigationLink {
+                        AskDossierTryView()
+                    } label: {
+                        TileRow(symbol: "text.bubble", badge: nil, title: "Try a question", subtitle: "See what Siri gets from Dossier")
                     }
                 } header: {
                     Text("Siri")

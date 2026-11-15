@@ -35,6 +35,10 @@ struct CardFieldParserTests {
         #expect(found.first { $0.key == .receiptNumber }?.value == "MSC2190312345")
         #expect(found.first { $0.key == .formType }?.value == "I-485")
         #expect(found.first { $0.key == .alienNumber }?.value == "204-815-962")
+        let misread = Self.page([("Case Type", 0.10, 0.23), ("1-485 Application to Register Permanent Residence", 0.30, 0.23),
+                                 ("Phone", 0.10, 0.30), ("1-800-375-5283", 0.30, 0.30)])
+        #expect(CardFieldParser.fields(in: [misread], kind: .uscisNotice).first { $0.key == .formType }?.value == "I-485")
+        #expect(KnowledgeText.words("1-485 notice") == ["i-485", "notice"])
     }
 
     @Test func readsTravelRows() {

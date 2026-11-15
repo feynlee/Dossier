@@ -1,0 +1,95 @@
+{
+  "holder": "Anna",
+  "kind": "other",
+  "contents": [
+    {
+      "label": "Patient name",
+      "value": "Anna Maria Eriksson"
+    },
+    {
+      "label": "Date of birth",
+      "value": "August 12, 1990"
+    },
+    {
+      "label": "Sex",
+      "value": "Female"
+    },
+    {
+      "label": "Medical record number",
+      "value": "MRN 4471-2290"
+    },
+    {
+      "label": "Primary care physician",
+      "value": "Dr. Tomas Lind, MD"
+    },
+    {
+      "label": "Blood type",
+      "value": "O Rh positive (O+)"
+    },
+    {
+      "label": "Height",
+      "value": "5 ft 6 in (168 cm)"
+    },
+    {
+      "label": "Weight",
+      "value": "138 lb (62.6 kg)"
+    },
+    {
+      "label": "Blood pressure",
+      "value": "116/74 mmHg"
+    },
+    {
+      "label": "Emergency contact",
+      "value": "David Lee Chen (spouse)"
+    },
+    {
+      "label": "Contact phone",
+      "value": "(503) 555-0188"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What's my blood type?",
+      "accept": [
+        "O+",
+        "O positive",
+        "O Rh positive"
+      ]
+    },
+    {
+      "question": "Can you find my blood type in Dossier?",
+      "accept": [
+        "O+",
+        "O positive",
+        "O Rh positive"
+      ]
+    },
+    {
+      "question": "What's my blood group?",
+      "accept": [
+        "O+",
+        "O positive",
+        "O Rh positive"
+      ]
+    },
+    {
+      "question": "What am I allergic to?",
+      "accept": [
+        "Penicillin",
+        "Peanuts"
+      ]
+    },
+    {
+      "question": "Who is my primary care doctor?",
+      "accept": [
+        "Lind"
+      ]
+    },
+    {
+      "question": "Who's my emergency contact?",
+      "accept": [
+        "David"
+      ]
+    }
+  ]
+}

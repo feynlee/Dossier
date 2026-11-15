@@ -64,7 +64,7 @@ nonisolated enum RuleAnswerer {
 
     /// Words that say what kind of answer is wanted rather than what it's about.
     static let genericWords: Set<String> = ["when", "where", "who", "date", "day", "number", "last", "current", "new", "now", "today", "name",
-                                            "until", "valid", "s", "much", "long", "ago", "recent", "latest", "most", "kind", "type"]
+                                            "until", "valid", "s", "much", "long", "ago", "recent", "latest", "most", "kind"]
 
     /// Whether two values say the same thing: the same date in any spelling, or the same letters and digits.
     static func sameAnswer(_ a: KnowledgeValue?, _ b: KnowledgeValue?) -> Bool {
@@ -74,7 +74,9 @@ nonisolated enum RuleAnswerer {
         return KnowledgeText.compact(x) == KnowledgeText.compact(y)
     }
 
-    /// Whether a topic is about at least half of the question's specific words.
+    /// Whether a topic is about every specific word of the question (all but one in a long question). Seen in
+    /// testing with half: "blood type" was answered with the blood pressure, "primary care doctor" with the
+    /// insurance card's primary care copay, "emergency contact" with its emergency room copay.
     static func covers(_ topic: KnowledgeTopic, _ question: KnowledgeQuestion) -> Bool {
         // "My father's name", "my mother's maiden name": only a detail about that relative answers it, and only
         // one about the thing asked (not the father's phone).
@@ -94,7 +96,7 @@ nonisolated enum RuleAnswerer {
             terms.contains(word) || KnowledgeTerms.related(word).contains { terms.contains($0) }
                 || word.count >= 4 && terms.contains { $0.count >= 4 && ($0.hasPrefix(word) || word.hasPrefix($0)) }
         }
-        return covered.count * 2 >= specific.count
+        return specific.count - covered.count <= (specific.count >= 4 ? 1 : 0)
     }
 
     /// The value from the document the question names, when it names one other than today's ("rent at Pine Ave").
@@ -320,7 +322,7 @@ nonisolated struct ModelAnswerer {
         case .onDevice:
             topics = KnowledgeSearch.search(question, in: knowledge, limit: 10).map(\.topic)
         case .privateCloud:
-            let relevant = question.isEveryone ? knowledge.topics : knowledge.topics.filter { question.people.contains($0.person) }
+            let relevant = question.isEveryone ? knowledge.topics : knowledge.topics.filter { question.people.contains($0.person) || question.maybeOwner.contains($0.person) }
             let found = KnowledgeSearch.search(question, in: knowledge, limit: 10).map(\.topic)
             topics = found + relevant.filter { topic in !found.contains { $0.id == topic.id } }
         }

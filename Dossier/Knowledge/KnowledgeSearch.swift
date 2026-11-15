@@ -13,6 +13,10 @@ nonisolated enum KnowledgeTerms {
         "address": ["address", "live", "lived", "living", "home", "house", "reside", "residence", "moved", "move", "apartment", "where"],
         "lease": ["lease", "rent", "rental", "renting", "apartment", "landlord", "tenancy", "tenant", "flat"],
         "rent": ["rent", "pay", "monthly", "cost"],
+        "doctor": ["doctor", "physician", "dr", "pcp", "provider", "md"],
+        "allergy": ["allergy", "allergies", "allergic", "allergen", "allergens"],
+        "allergic": ["allergy", "allergies", "allergic", "allergen", "allergens"],
+        "physician": ["doctor", "physician", "dr", "pcp", "provider"],
         "start": ["start", "begin", "began", "moved", "move", "in"],
         "end": ["end", "ends", "ending", "over", "out", "expire", "expires"],
         "licence": ["license", "licence", "driver's", "drivers", "driver", "driving", "dl"],
@@ -106,6 +110,8 @@ nonisolated struct KnowledgeQuestion: Sendable {
     var text: String
     /// Whose information: one person, or everyone (for "our", "we", "whose").
     var people: [String]
+    /// People who may be the owner under another name, for questions about "my" anything.
+    var maybeOwner: [String]
     var isEveryone: Bool
     var words: [String]
     var year: Int?
@@ -122,11 +128,15 @@ nonisolated struct KnowledgeQuestion: Sendable {
                                          "was", "were", "are", "am", "have", "has", "had", "and", "it", "its", "it's", "at", "be", "been", "from", "with",
                                          "tell", "please", "dossier", "our", "we", "us", "you", "your", "which", "that", "this", "by", "how", "much", "many",
                                          "still", "there", "any", "can", "could", "would", "will", "shall", "ever", "her", "his", "their", "they", "she", "he",
-                                         "who's", "whose", "get", "got", "?"]
+                                         "who's", "whose", "get", "got", "find", "look", "up", "search", "show", "know", "see", "check", "?"]
+
+    /// Ways of saying the same thing that word matching can't see: "blood group" is the blood type.
+    static let phrases: [(String, String)] = [("blood group", "blood type"), ("abo group", "blood type"), ("rh factor", "blood type")]
 
     init(_ text: String, knowledge: Knowledge) {
         self.text = text
-        let lower = text.lowercased().replacingOccurrences(of: "’", with: "'")
+        var lower = text.lowercased().replacingOccurrences(of: "’", with: "'")
+        for (phrase, meaning) in Self.phrases { lower = lower.replacingOccurrences(of: phrase, with: meaning) }
         let raw = KnowledgeText.words(lower)
         var people: [String] = []
         for person in knowledge.people {
@@ -139,7 +149,14 @@ nonisolated struct KnowledgeQuestion: Sendable {
             people += knowledge.people.filter { $0.relation == relation }.map(\.name)
         }
         let everyone = raw.contains("our") || raw.contains("we") || raw.contains("whose") || raw.contains("everyone") || raw.contains("family")
-        if people.isEmpty, let owner = knowledge.owner { people = [owner] }
+        if people.isEmpty, let owner = knowledge.owner {
+            people = [owner]
+            // Someone Dossier can't relate to you may be you under another name (a document filed under
+            // "Ziyue" when the rest are under "Li"): searched too, after your own documents.
+            maybeOwner = knowledge.people.filter { !$0.isOwner && $0.relation == .other }.map(\.name)
+        } else {
+            maybeOwner = []
+        }
         self.people = Array(Set(people))
         self.isEveryone = everyone && people.count <= 1
         let names = Set(knowledge.people.flatMap { [$0.name.lowercased(), $0.name.lowercased() + "'s"] })
@@ -210,7 +227,9 @@ nonisolated enum KnowledgeSearch {
         let words = KnowledgeTerms.expand(question.words)
         let asked = Set(question.words)
         // Household documents (leases, the marriage certificate) are everyone's.
-        let pool = question.isEveryone ? knowledge.topics : knowledge.topics.filter { question.people.contains($0.person) || $0.person == KnowledgeBuilder.household }
+        let pool = question.isEveryone ? knowledge.topics : knowledge.topics.filter {
+            question.people.contains($0.person) || $0.person == KnowledgeBuilder.household || question.maybeOwner.contains($0.person)
+        }
         var matches: [KnowledgeMatch] = []
         for topic in pool {
             let terms = Set(topic.terms)
@@ -237,6 +256,7 @@ nonisolated enum KnowledgeSearch {
             if question.asksWhen { score *= isDate ? 1.3 : 0.8 }
             if question.asksWhere, isDate { score *= 0.7 }
             score *= KnowledgeSearch.hint(question, topic, isDate: isDate)
+            if question.maybeOwner.contains(topic.person) { score *= 0.6 }
             score /= (1 + Double(KnowledgeText.words(topic.name).count) * 0.05)
             matches.append(KnowledgeMatch(topic: topic, score: score))
         }

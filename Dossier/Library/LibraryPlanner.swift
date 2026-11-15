@@ -26,27 +26,29 @@ nonisolated struct FolderKey: Hashable, Sendable {
 /// Places and names documents. Pure: the model's answers come in as arguments, so this is what the tests
 /// cover.
 nonisolated enum LibraryPlanner {
-    /// Whose library this mainly is: the first name on the most documents. Documents with no name on them go
-    /// to this person.
-    static func owner(of entries: [LibraryEntry]) -> String? {
-        let names = entries.compactMap { LibraryNaming.isHousehold($0.facts.kind) ? nil : LibraryNaming.firstName($0.facts.givenNames) }
+    /// Whose library this mainly is: the person on the most documents. Documents with no name on them go to
+    /// this person.
+    static func owner(of entries: [LibraryEntry], people: [String: String]? = nil) -> String? {
+        let people = people ?? PersonResolver.names(for: PersonResolver.groups(entries))
+        let names = entries.compactMap { people[$0.id] }
         let counts = Dictionary(names.map { ($0, 1) }, uniquingKeysWith: +)
         return counts.max { ($0.value, $1.key) < ($1.value, $0.key) }?.key
     }
 
-    /// The person folder: the holder's first name, the owner's for a document without a name, Household for a
-    /// lease. Two people with the same first name are told apart by the initial of their surname.
-    static func person(for entry: LibraryEntry, owner: String?, among entries: [LibraryEntry]) -> String {
+    /// The person folder: the holder's first name as `PersonResolver` settles it across all their documents,
+    /// the owner's for a document without a name, Household for a lease. Two people with the same first name
+    /// are told apart by the initial of their surname.
+    static func person(for entry: LibraryEntry, owner: String?, among entries: [LibraryEntry], people: [String: String]? = nil) -> String {
         if LibraryNaming.isHousehold(entry.facts.kind) { return LibraryPlacement.household }
-        guard let first = LibraryNaming.firstName(entry.facts.givenNames) else { return owner ?? "Me" }
-        let surnames = Set(entries.filter { LibraryNaming.firstName($0.facts.givenNames) == first }.compactMap { $0.facts.surname?.uppercased() })
-        guard surnames.count > 1, let initial = entry.facts.surname?.first else { return first }
-        return "\(first) \(initial.uppercased())"
+        let people = people ?? PersonResolver.names(for: PersonResolver.groups(entries))
+        return people[entry.id] ?? owner ?? "Me"
     }
 
-    /// Whether the library has documents for more than one person, so the person level is shown.
+    /// Whether folders start with the person. Always, even for one person (Li's choice, 2026-11-03): the
+    /// layout then never changes when a second person's document arrives, so nothing is reshuffled under a
+    /// device that imported the folder.
     static func showsPeople(_ placements: some Collection<LibraryPlacement>) -> Bool {
-        Set(placements.map(\.person).filter { $0 != LibraryPlacement.household }).count > 1
+        !placements.isEmpty
     }
 
     /// Entries the model has to place: kinds without a rule that have no placement yet.
@@ -59,9 +61,11 @@ nonisolated enum LibraryPlanner {
     static func plan(
         _ entries: [LibraryEntry],
         model: [String: ModelPlacement],
-        moves: [FolderKey: FolderKey] = [:]
+        moves: [FolderKey: FolderKey] = [:],
+        people: [String: String]? = nil
     ) -> [String: LibraryPlacement] {
-        let mainPerson = owner(of: entries)
+        let people = people ?? PersonResolver.names(for: PersonResolver.groups(entries))
+        let mainPerson = owner(of: entries, people: people)
         var result: [String: LibraryPlacement] = [:]
         var taken: [FolderKey: Set<String>] = [:]
 
@@ -72,7 +76,7 @@ nonisolated enum LibraryPlanner {
         }
 
         for entry in entries where !entry.isYours {
-            let holder = person(for: entry, owner: mainPerson, among: entries)
+            let holder = person(for: entry, owner: mainPerson, among: entries, people: people)
             var key: FolderKey
             var baseName: String
             if let rule = LibraryNaming.rule(for: entry.facts.kind) {

@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -7,6 +8,8 @@ struct VaultView: View {
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
+    /// Siri's tip ("Ask Dossier…") under Personal information until you close it: nobody guesses Siri phrases.
+    @AppStorage("showsSiriTip") private var showsSiriTip = true
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
@@ -65,6 +68,16 @@ struct VaultView: View {
                             )
                         }
                     }
+                }
+
+                if searchText.isEmpty, !isSelecting, showsSiriTip, documents.contains(where: \.isReady) {
+                    Section {
+                        SiriTipView(intent: AskDossierIntent(), isVisible: $showsSiriTip)
+                    } footer: {
+                        Text("Or ask Siri to “find my blood type in Dossier”.")
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
 
                 if searchText.isEmpty, !isSelecting {

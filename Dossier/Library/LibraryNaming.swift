@@ -19,8 +19,9 @@ nonisolated struct LibraryPlacement: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-/// What the library needs to know about a document to place and name it. Never holds numbers or other
-/// sensitive values: names are visible in Files and to every site you upload to.
+/// What the library needs to know about a document to place and name it. Names are visible in Files and to
+/// every site you upload to, so they're made only from the non-sensitive facts here. The birth date and
+/// identity keys only tell people apart and never appear in a name.
 nonisolated struct LibraryFacts: Equatable, Sendable {
     var kind: DocumentKind
     var title: String
@@ -38,6 +39,11 @@ nonisolated struct LibraryFacts: Equatable, Sendable {
     /// "back" for the back of a card stored as its own file.
     var side: String?
     var fileExtension: String
+    /// The holder's birth date, to tell whether two documents are about the same person.
+    var dateOfBirth: SimpleDate? = nil
+    /// Keyed hashes of numbers that belong to one person for life (the A-Number): documents that share one
+    /// are about the same person. Never the numbers themselves.
+    var identityKeys: [String] = []
 }
 
 nonisolated enum LibraryNaming {

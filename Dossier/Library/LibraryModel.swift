@@ -35,6 +35,21 @@ nonisolated struct FolderMoveReading {
     var folder: String
 }
 
+@Generable(description: "The real people behind a list of people found in a household's documents")
+nonisolated struct PeopleReading {
+    @Guide(description: "One entry for each real person. Every listed number goes in exactly one entry.")
+    var people: [PersonReading]
+}
+
+@Generable(description: "One real person")
+nonisolated struct PersonReading {
+    @Guide(description: "The numbers of the listed people who are this one person.")
+    var numbers: [Int]
+
+    @Guide(description: "The first name to file their documents under, in Latin letters, without the family name. A Chinese given name in pinyin is one name: Zi Yue is \"Ziyue\".")
+    var firstName: String
+}
+
 /// Asks Apple's on-device model where documents go. It sees each document's kind, title and type of dates,
 /// and the folders already in use, never the facts read from it.
 actor LibraryModel {
@@ -67,6 +82,42 @@ actor LibraryModel {
             return ModelPlacement(category: reading.category, folder: reading.folder, type: reading.type, detail: detail.isEmpty ? nil : detail)
         } catch {
             logger.error("Couldn't place a document: \(String(describing: error), privacy: .public)")
+            return nil
+        }
+    }
+
+    static let peopleInstructions = """
+        You work out who is who in a household's documents. The same person's name is often written \
+        differently on different documents: in Chinese characters or in pinyin, with or without spaces between \
+        the syllables of one name, with or without middle names, in capitals or not. Decide which of the listed \
+        people are really the same person, from their names, family names, birth dates and documents. People \
+        with different birth dates are never the same person. When you are not sure, keep them apart. For each \
+        person, give the first name their documents agree on, as written on their identity documents.
+        """
+
+    /// The model's review of the people the rules found: which are the same person, and their first names.
+    /// Runs on the device only; nothing leaves it.
+    func people(_ groups: [PersonGroup]) async -> [PersonDecision]? {
+        guard model.isAvailable, groups.count > 1 else { return nil }
+        let list = groups.enumerated().map { index, group in
+            var lines = ["\(index + 1). Given names as printed: \(Set(group.printedNames).sorted().map { "\"\($0)\"" }.joined(separator: ", "))"]
+            if let surname = group.surname { lines.append("   Family name: \(surname)") }
+            if !group.datesOfBirth.isEmpty { lines.append("   Born: \(group.datesOfBirth.map(\.iso).sorted().joined(separator: ", "))") }
+            let documents = zip(group.kinds, group.titles).map { kind, title in kind == .other ? title : kind.displayName }
+            lines.append("   Documents: \(Array(Set(documents)).sorted().prefix(8).joined(separator: "; "))")
+            lines.append("   Filed as: \(group.firstName)")
+            return lines.joined(separator: "\n")
+        }.joined(separator: "\n")
+        let session = LanguageModelSession(model: model, instructions: Self.peopleInstructions)
+        do {
+            let response = try await session.respond(
+                to: "People found in the documents:\n\(list)\n\nWho is the same person, and what is each person's first name?",
+                generating: PeopleReading.self,
+                options: GenerationOptions(samplingMode: .greedy)
+            )
+            return response.content.people.map { PersonDecision(numbers: $0.numbers, firstName: $0.firstName) }
+        } catch {
+            logger.error("Couldn't review the people: \(String(describing: error), privacy: .public)")
             return nil
         }
     }

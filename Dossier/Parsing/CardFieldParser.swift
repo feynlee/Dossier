@@ -47,7 +47,8 @@ nonisolated enum CardFieldParser {
                 if let match = line.text.uppercased().firstMatch(of: #/\b(IOE|MSC|EAC|WAC|LIN|SRC|NBC|YSC)\s?(\d{10})\b/#) {
                     add(.receiptNumber, String(match.1) + String(match.2), page: line.page)
                 }
-                if let match = line.text.uppercased().firstMatch(of: #/\bI-?\s?(\d{3})\b/#), !["797"].contains(String(match.1)) {
+                // OCR often reads the I as a one: "1-485 Application to Register…".
+                if let match = line.text.uppercased().firstMatch(of: #/\b(?:I-?|[1L]-)\s?(\d{3})\b(?!-)/#), !["797"].contains(String(match.1)) {
                     add(.formType, "I-" + String(match.1), page: line.page)
                 }
             }
