@@ -90,7 +90,7 @@ final class VaultNavigationTests: XCTestCase {
         let surname = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Surname'")).firstMatch
         XCTAssertTrue(surname.waitForExistence(timeout: 5), "No surname row")
         surname.tap()
-        XCTAssertTrue(app.staticTexts["Surname copied"].waitForExistence(timeout: 3), "No sign the surname was copied")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Surname copied'")).firstMatch.waitForExistence(timeout: 3), "No sign the surname was copied")
         keepScreenshot("Surname copied")
 
         // The document button opens the document the value comes from, or a menu of them.
