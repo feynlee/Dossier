@@ -6,6 +6,9 @@ import SwiftUI
 /// in their row; confirming a name or birth date here confirms the same reading on your other documents.
 struct DocumentDetailView: View {
     let document: SourceDocument
+    /// A field to show when the document opens (from Personal information): it's scrolled to and selected, so
+    /// its row is highlighted and the page shows where it was read.
+    var focus: PersistentIdentifier? = nil
 
     @Environment(\.modelContext) private var modelContext
     @Environment(ImportCoordinator.self) private var importer
@@ -287,6 +290,21 @@ struct DocumentDetailView: View {
     }
 
     private var factList: some View {
+        ScrollViewReader { proxy in
+            factListContent
+                .task(id: focus) {
+                    guard let focus, let fact = facts.first(where: { $0.persistentModelID == focus }) else { return }
+                    onlyUncertain = false
+                    selected = fact
+                    if previewSize == .collapsed, fact.cropRect != nil { previewSize = .medium }
+                    // Let the list lay out its rows before scrolling to one.
+                    try? await Task.sleep(for: .milliseconds(350))
+                    withAnimation(.snappy) { proxy.scrollTo(fact.persistentModelID, anchor: .center) }
+                }
+        }
+    }
+
+    private var factListContent: some View {
         List {
             if document.state != .ready || document.sourceMissing {
                 Section {
@@ -517,7 +535,7 @@ struct DocumentDetailView: View {
 
     private func copy(_ fact: Fact) {
         guard let value = fact.isSensitive ? reveal.value(for: fact) : VaultReader.value(of: fact) else { return }
-        VaultReader.copy(value)
+        VaultReader.copy(value, sensitive: fact.isSensitive)
         copied = true
     }
 }

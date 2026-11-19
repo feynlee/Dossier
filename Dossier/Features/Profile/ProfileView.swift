@@ -2,9 +2,13 @@ import LocalAuthentication
 import SwiftData
 import SwiftUI
 
-/// Your personal information, compiled from all your documents. Values the documents agree on are filled in
-/// automatically; you can edit any of them, and choose when documents disagree.
+/// Your personal information, compiled from all your documents. Tap a value to copy it; the document button
+/// beside it opens the document it comes from (or, when several show it, lets you choose one). Press and hold a
+/// value, or swipe it, to edit it.
 struct ProfileView: View {
+    /// Opens a document, on the given field when there is one.
+    var open: (SourceDocument, Fact?) -> Void = { _, _ in }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query private var documents: [SourceDocument]
@@ -15,6 +19,17 @@ struct ProfileView: View {
     @State private var details = ProfileDetails(you: [], family: [])
     @State private var editingDetail: (detail: ProfileDetails.Detail, value: String)?
     @State private var deletingDetail: ProfileDetails.Detail?
+    /// The row just copied: it reads "Copied" for a moment.
+    @State private var copiedRow: String?
+    /// What was copied, shown at the bottom of the screen for a moment.
+    @State private var copyNote: CopyNote?
+    @State private var copyCount = 0
+
+    struct CopyNote: Equatable {
+        var title: String
+        /// Numbers are cleared from the clipboard after a minute.
+        var clears: Bool
+    }
 
     private let groups: [(String, [ProfileKey])] = [
         ("Identity", [.surname, .givenNames, .dateOfBirth, .sex, .placeOfBirth, .nationality]),
@@ -27,20 +42,23 @@ struct ProfileView: View {
         return entry.status != .missing || entry.override != nil
     }
 
+    private var firstGroup: String? { groups.first { !$0.1.filter(isShown).isEmpty }?.0 }
+
     var body: some View {
         List {
             ForEach(groups, id: \.0) { title, keys in
                 let shown = keys.filter(isShown)
                 // A group with nothing in it isn't shown, so no heading stands alone.
                 if !shown.isEmpty {
-                    Section(title) {
+                    Section {
                         ForEach(shown, id: \.self) { key in
-                            if let entry = profile.entry(key) {
-                                Button { editing = key } label: {
-                                    ProfileRow(entry: entry, profile: profile, unlocked: unlocked)
-                                }
-                                .foregroundStyle(.primary)
-                            }
+                            if let entry = profile.entry(key) { entryRow(entry) }
+                        }
+                    } header: {
+                        Text(title)
+                    } footer: {
+                        if title == firstGroup {
+                            Text("Tap a value to copy it. The document button shows where it comes from.")
                         }
                     }
                 }
@@ -82,6 +100,22 @@ struct ProfileView: View {
             if phase == .background { unlocked.lock() }
         }
         .onDisappear { unlocked.lock() }
+        .sensoryFeedback(.success, trigger: copyCount)
+        .task(id: copyCount) {
+            guard copyCount > 0 else { return }
+            try? await Task.sleep(for: .seconds(1.2))
+            withAnimation(.snappy) { copiedRow = nil }
+            try? await Task.sleep(for: .seconds(1.8))
+            withAnimation(.snappy) { copyNote = nil }
+        }
+        .overlay(alignment: .bottom) {
+            if let copyNote {
+                CopyToast(note: copyNote)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .sheet(isPresented: Binding(get: { editingDetail != nil }, set: { if !$0 { editingDetail = nil } })) {
             if let editingDetail {
                 FactEditSheet(fact: editingDetail.detail.fact, value: editingDetail.value) { value in
@@ -116,12 +150,50 @@ struct ProfileView: View {
             || details.family.contains { $0.details.contains(where: \.isSensitive) }
     }
 
+    // MARK: Rows
+
+    private func entryRow(_ entry: Profile.Entry) -> some View {
+        let row = entry.key.rawValue
+        return HStack(spacing: 4) {
+            Button { tap(entry) } label: {
+                ProfileRow(entry: entry, profile: profile, unlocked: unlocked, copied: copiedRow == row)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.primary)
+            .accessibilityHint(entry.needsAttention ? "Choose the right value" : "Copies the value")
+            SourceButton(references: entry.references, open: open)
+        }
+        .listRowBackground(copiedRow == row ? Color.dsTintSoft : nil)
+        .swipeActions {
+            Button("Edit", systemImage: "pencil") { editing = entry.key }
+                .tint(Color.dsTintFill)
+        }
+        .contextMenu {
+            if !entry.needsAttention, entry.key.isSensitive || entry.value != nil {
+                Button("Copy", systemImage: "doc.on.doc") { tap(entry) }
+            }
+            if entry.key.isDate, let us = entry.value.flatMap(SimpleDate.init(iso:))?.usDisplay {
+                Button("Copy as \(us)", systemImage: "calendar") {
+                    copy(us, row: row, label: entry.key.label, sensitive: false)
+                }
+            }
+            SourceMenu(references: entry.references, open: open)
+            Button("Edit", systemImage: "pencil") { editing = entry.key }
+        }
+    }
+
     private func detailRow(_ detail: ProfileDetails.Detail) -> some View {
-        Button { edit(detail) } label: {
-            HStack(spacing: 12) {
+        let row = "detail|\(detail.id)|\(detail.fact.persistentModelID.hashValue)"
+        let references = detail.references
+        return HStack(spacing: 4) {
+            Button { copy(detail, row: row) } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(detail.label).font(.footnote).foregroundStyle(.secondary)
-                    if detail.isSensitive {
+                    if copiedRow == row {
+                        CopiedLabel()
+                    } else if detail.isSensitive {
                         Text(unlocked.context.flatMap { try? VaultReader.reveal(detail.fact, context: $0) } ?? VaultReader.masked(detail.fact))
                             .font(.dsFieldValue)
                     } else {
@@ -136,20 +208,77 @@ struct ProfileView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 2)
+            .buttonStyle(.borderless)
+            .foregroundStyle(.primary)
+            .accessibilityHint("Copies the value")
+            SourceButton(references: references, open: open)
         }
-        .foregroundStyle(.primary)
+        .listRowBackground(copiedRow == row ? Color.dsTintSoft : nil)
         .swipeActions {
             Button("Delete", systemImage: "trash", role: .destructive) { deletingDetail = detail }
+            Button("Edit", systemImage: "pencil") { edit(detail) }
+                .tint(Color.dsTintFill)
         }
         .contextMenu {
+            Button("Copy", systemImage: "doc.on.doc") { copy(detail, row: row) }
+            if !detail.isSensitive, let us = detail.value.flatMap(SimpleDate.init(iso:))?.usDisplay {
+                Button("Copy as \(us)", systemImage: "calendar") { copy(us, row: row, label: detail.label, sensitive: false) }
+            }
+            SourceMenu(references: references, open: open)
             Button("Edit", systemImage: "pencil") { edit(detail) }
             Button("Delete", systemImage: "trash", role: .destructive) { deletingDetail = detail }
         }
     }
+
+    // MARK: Copying
+
+    /// Copies the value, after Face ID for a number. A value the documents disagree on, or one Dossier
+    /// doesn't have yet, opens the editor instead: there's nothing to copy.
+    private func tap(_ entry: Profile.Entry) {
+        let row = entry.key.rawValue
+        if entry.needsAttention {
+            editing = entry.key
+        } else if entry.key.isSensitive {
+            guard entry.fact != nil || entry.override != nil else { editing = entry.key; return }
+            unlocked.unlock { context in
+                if let value = profile.value(entry.key, context: context) {
+                    copy(value, row: row, label: entry.key.label, sensitive: true)
+                }
+            }
+        } else if let value = profile.value(entry.key, context: nil) {
+            let shown = entry.key.isDate ? (SimpleDate(iso: value)?.display ?? value) : value
+            copy(shown, row: row, label: entry.key.label, sensitive: false)
+        } else {
+            editing = entry.key
+        }
+    }
+
+    private func copy(_ detail: ProfileDetails.Detail, row: String) {
+        if detail.isSensitive {
+            unlocked.unlock { context in
+                if let value = try? VaultReader.reveal(detail.fact, context: context) {
+                    copy(value, row: row, label: detail.label, sensitive: true)
+                }
+            }
+        } else if let value = detail.value {
+            copy(VaultReader.display(value, for: .detail), row: row, label: detail.label, sensitive: false)
+        }
+    }
+
+    private func copy(_ value: String, row: String, label: String, sensitive: Bool) {
+        VaultReader.copy(value, sensitive: sensitive)
+        withAnimation(.snappy) {
+            copiedRow = row
+            copyNote = CopyNote(title: "\(label) copied", clears: sensitive)
+        }
+        copyCount += 1
+    }
+
+    // MARK: Editing
 
     private func edit(_ detail: ProfileDetails.Detail) {
         if detail.isSensitive {
@@ -171,6 +300,157 @@ struct ProfileView: View {
         }
         try? modelContext.save()
         details = ProfileDetails.build(documents: documents)
+    }
+}
+
+extension ProfileDetails.Detail {
+    /// The documents that show this detail, one row each; those that say something else last.
+    var references: [Profile.Reference] {
+        var seen = Set<PersistentIdentifier>()
+        let first = fact
+        let firstValue = VaultReader.value(of: first).map(ProfileDetails.normalize)
+        let references = facts.compactMap { fact -> Profile.Reference? in
+            guard let document = fact.document, seen.insert(document.persistentModelID).inserted else { return nil }
+            let agrees = fact.isSensitive
+                ? (fact.fingerprint == nil || fact.fingerprint == first.fingerprint)
+                : VaultReader.value(of: fact).map(ProfileDetails.normalize) == firstValue
+            return Profile.Reference(document: document, fact: fact, agrees: agrees)
+        }
+        return references.filter(\.agrees) + references.filter { !$0.agrees }
+    }
+}
+
+extension SimpleDate {
+    /// "03/14/1988", the way US forms ask for a date.
+    var usDisplay: String { String(format: "%02d/%02d/%04d", month, day, year) }
+}
+
+/// The document button at the end of a row: one document opens straight away; several open a menu to choose.
+private struct SourceButton: View {
+    let references: [Profile.Reference]
+    let open: (SourceDocument, Fact?) -> Void
+
+    var body: some View {
+        if references.count == 1, let reference = references.first {
+            Button { open(reference.document, reference.fact) } label: {
+                chip(symbol: reference.document.kind.symbol, count: nil)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Open \(reference.document.title)")
+        } else if references.count > 1 {
+            Menu {
+                SourceMenuItems(references: references, open: open)
+            } label: {
+                chip(symbol: "doc.on.doc", count: references.count)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Sources: \(references.count) documents")
+        }
+    }
+
+    private func chip(symbol: String, count: Int?) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: symbol)
+            if let count { Text("\(count)").monospacedDigit() }
+        }
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(Color.dsTint)
+        .padding(.horizontal, 7)
+        .frame(minWidth: 32, minHeight: 28)
+        .background(Color.dsTintSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+    }
+}
+
+/// "Open Source" in a row's press-and-hold menu.
+private struct SourceMenu: View {
+    let references: [Profile.Reference]
+    let open: (SourceDocument, Fact?) -> Void
+
+    var body: some View {
+        if references.count == 1, let reference = references.first {
+            Button("Open \(reference.document.title)", systemImage: reference.document.kind.symbol) {
+                open(reference.document, reference.fact)
+            }
+        } else if references.count > 1 {
+            Menu("Open Source", systemImage: "doc.on.doc") {
+                SourceMenuItems(references: references, open: open)
+            }
+        }
+    }
+}
+
+/// Each document with what it says, so you can tell them apart before opening one.
+private struct SourceMenuItems: View {
+    let references: [Profile.Reference]
+    let open: (SourceDocument, Fact?) -> Void
+
+    var body: some View {
+        let agreeing = references.filter(\.agrees), other = references.filter { !$0.agrees }
+        Section(other.isEmpty ? "Open the document that shows it" : "Show this value") {
+            ForEach(agreeing) { item($0) }
+        }
+        if !other.isEmpty {
+            Section("Show something else") {
+                ForEach(other) { item($0) }
+            }
+        }
+    }
+
+    private func item(_ reference: Profile.Reference) -> some View {
+        Button { open(reference.document, reference.fact) } label: {
+            Text(reference.document.title)
+            if let subtitle = subtitle(reference) { Text(subtitle) }
+            Image(systemName: reference.document.kind.symbol)
+        }
+    }
+
+    private func subtitle(_ reference: Profile.Reference) -> String? {
+        var parts: [String] = []
+        if let fact = reference.fact {
+            if fact.isSensitive {
+                parts.append(VaultReader.masked(fact))
+            } else if let value = VaultReader.value(of: fact) {
+                parts.append(VaultReader.display(value, for: fact.key))
+            }
+        }
+        if let issued = reference.document.fact(.issueDate).flatMap(VaultReader.value(of:)).flatMap(SimpleDate.init(iso:)) {
+            parts.append("Issued \(issued.display)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+private struct CopiedLabel: View {
+    var body: some View {
+        Label("Copied", systemImage: "checkmark")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(Color.dsTint)
+            .transition(.opacity)
+    }
+}
+
+/// "Given names copied", for a moment at the bottom of the screen.
+private struct CopyToast: View {
+    let note: ProfileView.CopyNote
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(Color.dsTint)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(note.title).font(.subheadline.weight(.semibold))
+                if note.clears {
+                    Text("Clears from the clipboard in 1 min").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 11)
+        .background(.regularMaterial, in: Capsule())
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -209,33 +489,32 @@ private struct ProfileRow: View {
     let entry: Profile.Entry
     let profile: Profile
     let unlocked: UnlockState
+    var copied = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.key.label).font(.footnote).foregroundStyle(.secondary)
-                if entry.status == .conflict, entry.override == nil {
-                    Text("Choose the right value").foregroundStyle(Color.dsTint)
-                } else if entry.key.isSensitive {
-                    Text(unlocked.context.flatMap { profile.value(entry.key, context: $0) } ?? profile.masked(entry.key) ?? "—")
-                        .font(.dsFieldValue)
-                } else {
-                    Text(display(entry.value))
-                        .font(entry.key.isDate ? .dsFieldValue : .body)
-                }
-                HStack(spacing: 4) {
-                    if entry.needsAttention || entry.status == .uncertain {
-                        Image(systemName: "questionmark.circle.fill").foregroundStyle(Color.dsBadgeNeutral)
-                    } else if entry.override == nil, case .agreed = entry.status {
-                        Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.dsTint)
-                    }
-                    Text(entry.status.summary(sources: entry.sources, edited: entry.override != nil))
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 3) {
+            Text(entry.key.label).font(.footnote).foregroundStyle(.secondary)
+            if copied {
+                CopiedLabel()
+            } else if entry.status == .conflict, entry.override == nil {
+                Text("Choose the right value").foregroundStyle(Color.dsTint)
+            } else if entry.key.isSensitive {
+                Text(unlocked.context.flatMap { profile.value(entry.key, context: $0) } ?? profile.masked(entry.key) ?? "—")
+                    .font(.dsFieldValue)
+            } else {
+                Text(display(entry.value))
+                    .font(entry.key.isDate ? .dsFieldValue : .body)
             }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+            HStack(spacing: 4) {
+                if entry.needsAttention || entry.status == .uncertain {
+                    Image(systemName: "questionmark.circle.fill").foregroundStyle(Color.dsBadgeNeutral)
+                } else if entry.override == nil, case .agreed = entry.status {
+                    Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.dsTint)
+                }
+                Text(entry.status.summary(sources: entry.sources, edited: entry.override != nil))
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
     }

@@ -18,6 +18,8 @@ struct Profile {
         var sources: [String]
         /// For a conflict: each distinct reading with the documents that show it.
         var options: [Option]
+        /// Every document that shows this value, the ones it's taken from first.
+        var references: [Reference] = []
 
         var needsAttention: Bool { override == nil && (status == .conflict) }
     }
@@ -27,6 +29,16 @@ struct Profile {
         var fact: Fact
         var value: String?
         var sources: [String]
+    }
+
+    /// One document that shows a value, for opening it on the field.
+    struct Reference: Identifiable {
+        var id: PersistentIdentifier { document.persistentModelID }
+        var document: SourceDocument
+        /// The field on the document, to scroll to.
+        var fact: Fact?
+        /// False when the document says something else than the value shown.
+        var agrees = true
     }
 
     var entries: [Entry]
@@ -59,6 +71,7 @@ struct Profile {
                     entry.fact = fact
                     entry.status = fact.status == .needsReview ? .uncertain : .single
                     entry.sources = [document.title]
+                    entry.references = [Reference(document: document, fact: fact)]
                 }
             case .currentAddress:
                 let timeline = timeline ?? TimelineLoader.timeline(from: ready)
@@ -66,14 +79,17 @@ struct Profile {
                     entry.value = home.address
                     entry.status = home.needsReview ? .uncertain : .single
                     entry.sources = [home.source]
+                    entry.references = addressReferences(home.address, source: home.source, in: ready)
                 }
             default:
                 guard let factKey = key.factKey else { break }
                 var candidates: [ProfileCandidate] = []
+                var documentsByID: [String: SourceDocument] = [:]
                 for document in ready {
                     guard let priority = key.sources.firstIndex(of: document.kind), let fact = document.fact(factKey) else { continue }
                     let id = "\(document.contentHash)#\(factKey.rawValue)"
                     factsByID[id] = fact
+                    documentsByID[id] = document
                     let value = fact.isSensitive ? nil : VaultReader.value(of: fact)
                     let matchKey: String
                     if fact.isSensitive {
@@ -97,6 +113,14 @@ struct Profile {
                     entry.value = key.isSensitive ? nil : chosen.value
                     entry.sources = result.groups.first?.map(\.sourceTitle) ?? []
                 }
+                // The group the value is taken from first, then documents that say something else.
+                let chosenGroup = Set(result.chosen.flatMap { chosen in result.groups.first { $0.contains(chosen) } }?.map(\.id) ?? [])
+                let ranked = result.groups.flatMap { $0 } + candidates.filter { candidate in !result.groups.contains { $0.contains(candidate) } }
+                entry.references = ranked.compactMap { candidate in
+                    documentsByID[candidate.id].map {
+                        Reference(document: $0, fact: factsByID[candidate.id], agrees: chosenGroup.isEmpty || chosenGroup.contains(candidate.id))
+                    }
+                }
                 if result.status == .conflict {
                     entry.options = result.groups.compactMap { group in
                         factsByID[group[0].id].map { Option(fact: $0, value: key.isSensitive ? nil : group[0].value, sources: group.map(\.sourceTitle)) }
@@ -110,6 +134,30 @@ struct Profile {
             entries.append(entry)
         }
         return Profile(entries: entries)
+    }
+
+    /// The documents that show your current address: the one it's taken from, then others with the same
+    /// address (a licence and a lease spell it differently, so letters and digits are compared).
+    private static func addressReferences(_ address: String, source: String, in documents: [SourceDocument]) -> [Reference] {
+        let target = Reconciler.normalize(address, for: .currentAddress)
+        return documents
+            .compactMap { document -> (SourceDocument, Fact)? in
+                guard let fact = document.fact(.address), let value = VaultReader.value(of: fact) else { return nil }
+                let same = Reconciler.normalize(value, for: .currentAddress)
+                guard document.title == source || same == target || sameStreet(same, target) else { return nil }
+                return (document, fact)
+            }
+            .sorted { a, b in
+                let ai = a.0.title == source, bi = b.0.title == source
+                return ai != bi ? ai : a.0.ingestedAt > b.0.ingestedAt
+            }
+            .map { Reference(document: $0.0, fact: $0.1) }
+    }
+
+    /// "1420PINESTAPT5SEATTLE…" and "1420PINEST5SEATTLE…": the same house number and street name.
+    private static func sameStreet(_ lhs: String, _ rhs: String) -> Bool {
+        let prefix = { (value: String) in String(value.prefix(8)) }
+        return lhs.count >= 8 && rhs.count >= 8 && prefix(lhs) == prefix(rhs) && lhs.first?.isNumber == true
     }
 
     // MARK: Values
