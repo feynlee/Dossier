@@ -82,6 +82,34 @@ final class VaultNavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
     }
 
+    func testPersonalInformationCopiesAndOpensTheSource() {
+        tap(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Personal information'")).firstMatch)
+        XCTAssertTrue(app.navigationBars["Personal information"].waitForExistence(timeout: 5))
+
+        // Tapping a value copies it: the row reads "Copied" for a moment.
+        let surname = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Surname'")).firstMatch
+        XCTAssertTrue(surname.waitForExistence(timeout: 5), "No surname row")
+        surname.tap()
+        XCTAssertTrue(app.staticTexts["Surname copied"].waitForExistence(timeout: 3), "No sign the surname was copied")
+        keepScreenshot("Surname copied")
+
+        // The document button opens the document the value comes from, or a menu of them.
+        let source = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Open ' OR label BEGINSWITH 'Sources:'")).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 5), "No document button")
+        let isMenu = source.label.hasPrefix("Sources:")
+        source.tap()
+        if isMenu {
+            keepScreenshot("Source menu")
+            let item = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Passport'")).firstMatch
+            XCTAssertTrue(item.waitForExistence(timeout: 3), "The menu doesn't list the passport")
+            item.tap()
+        }
+        XCTAssertTrue(app.navigationBars["Personal information"].waitForNonExistence(timeout: 5), "The document didn't open")
+        keepScreenshot("Source document on the field")
+        goBack()
+        XCTAssertTrue(app.navigationBars["Personal information"].waitForExistence(timeout: 5), "Back didn't return to Personal information")
+    }
+
     func testSearchResultsAndExpiredDocumentsOpen() {
         let search = app.searchFields.firstMatch
         if !search.waitForExistence(timeout: 3) { app.swipeDown() }

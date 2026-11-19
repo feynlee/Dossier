@@ -40,11 +40,19 @@ enum VaultReader {
         return value
     }
 
-    /// Copies to this device's clipboard only, and clears it after 60 seconds.
-    static func copy(_ value: String) {
-        UIPasteboard.general.setItems(
-            [[UTType.plainText.identifier: value]],
-            options: [.localOnly: true, .expirationDate: Date.now.addingTimeInterval(60)]
-        )
+    /// How long a copied number stays on the clipboard.
+    static let sensitiveCopyLifetime: TimeInterval = 60
+
+    /// Copies a value. Numbers stay on this device's clipboard only and are cleared after a minute; other
+    /// values are an ordinary copy.
+    static func copy(_ value: String, sensitive: Bool = true) {
+        if sensitive {
+            UIPasteboard.general.setItems(
+                [[UTType.plainText.identifier: value]],
+                options: [.localOnly: true, .expirationDate: Date.now.addingTimeInterval(sensitiveCopyLifetime)]
+            )
+        } else {
+            UIPasteboard.general.string = value
+        }
     }
 }

@@ -132,11 +132,24 @@ struct VaultView: View {
             // directly can't sit under a link that pushes a value.
             .navigationDestination(for: VaultRoute.self) { route in
                 switch route {
-                case .profile: ProfileView()
+                case .profile:
+                    ProfileView { document, fact in
+                        if let fact {
+                            path.append(.field(document: document.persistentModelID, fact: fact.persistentModelID))
+                        } else {
+                            path.append(.document(document.persistentModelID))
+                        }
+                    }
                 case .folder(let folder): LibraryFolderView(folder: folder)
                 case .document(let id):
                     if let document = documents.first(where: { $0.persistentModelID == id }) {
                         DocumentDetailView(document: document)
+                    } else {
+                        ContentUnavailableView("Document removed", systemImage: "doc")
+                    }
+                case .field(let id, let fact):
+                    if let document = documents.first(where: { $0.persistentModelID == id }) {
+                        DocumentDetailView(document: document, focus: fact)
                     } else {
                         ContentUnavailableView("Document removed", systemImage: "doc")
                     }
@@ -387,6 +400,8 @@ enum VaultRoute: Hashable {
     case profile
     case folder(LibraryFolderRoute)
     case document(PersistentIdentifier)
+    /// A document opened on one of its fields, from Personal information.
+    case field(document: PersistentIdentifier, fact: PersistentIdentifier)
 }
 
 /// One library folder, as a section of the Vault shows it.
