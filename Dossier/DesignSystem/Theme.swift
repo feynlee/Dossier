@@ -13,6 +13,10 @@ extension Color {
     /// Expiring soon and gaps in history only, always with a clock or warning symbol.
     static let dsWarning = Color(light: 0xB25000, dark: 0xFF9F0A)
     static let dsOnWarning = Color(light: 0xFFFFFF, dark: 0x000000)
+    /// Expired documents only, always with an xmark.
+    static let dsExpired = Color(light: 0xC4302B, dark: 0xFF6961)
+    /// Documents replaced by a renewal only, always with the renew arrows.
+    static let dsRenewed = Color(light: 0x0E7C86, dark: 0x5AC8D8)
     /// The "needs review" badge disc.
     static let dsBadgeNeutral = Color(light: 0x6E6E73, dark: 0x98989F)
     /// Cells and cards, for the ring around badges.
