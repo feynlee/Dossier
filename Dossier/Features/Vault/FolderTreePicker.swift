@@ -259,18 +259,14 @@ private struct SelectionBar: View {
     }
 }
 
-/// The two ways to add files you already have.
+/// Adding files you already have. Choose Files opens the Files picker: tapping a file adds it straight away;
+/// tap Select (top right) to pick several, then Open.
 ///
-/// - Choose Files opens the Files picker. Tapping a file adds it straight away; tap Select (top right) to
-///   pick several, then Open.
-/// - Choose from a Folder opens Dossier's own list, `FolderTreePicker`, starting in the folder you chose
-///   files from last time, to tick files across its subfolders. The Files picker opens only to choose that
-///   folder: the first time, or when you tap Change.
-///
-/// Both share one Files picker: two `fileImporter`s on one view can stop each other from opening.
+/// A folder dropped on the Vault opens Dossier's own list, `FolderTreePicker`, to tick files across its
+/// subfolders; its Change button opens the Files picker to choose another folder. Both share one Files
+/// picker: two `fileImporter`s on one view can stop each other from opening.
 struct AddDocumentsModifier: ViewModifier {
     @Binding var isChoosingFiles: Bool
-    @Binding var isChoosingFromFolder: Bool
     /// Set to open the tree straight away, for a folder you dropped on the Vault.
     @Binding var folder: URL?
     var onAdded: () -> Void = {}
@@ -291,11 +287,6 @@ struct AddDocumentsModifier: ViewModifier {
                 isChoosingFiles = false
                 openFilesPicker(forFolder: false)
             }
-            .onChange(of: isChoosingFromFolder) { _, presented in
-                guard presented else { return }
-                isChoosingFromFolder = false
-                if let last = LastFolder.url { folder = last } else { openFilesPicker(forFolder: true) }
-            }
             .fileImporter(
                 isPresented: $isImporting,
                 allowedContentTypes: pickingFolder ? [.folder] : FileAccess.readableTypes,
@@ -305,7 +296,6 @@ struct AddDocumentsModifier: ViewModifier {
                 case .success(let urls):
                     if pickingFolder {
                         guard let url = urls.first else { return }
-                        LastFolder.remember(url)
                         folder = url
                     } else {
                         let added = importer.add(urls, context: modelContext, preferPrivateCloud: usePrivateCloud)
@@ -359,42 +349,18 @@ struct AddDocumentsModifier: ViewModifier {
     }
 }
 
-/// The folder you last chose files from, kept as a bookmark so Dossier can open it again.
-nonisolated enum LastFolder {
-    private static let key = "lastChosenFolder"
-
-    static var url: URL? {
-        guard let data = UserDefaults.standard.data(forKey: key), let resolved = FileAccess.resolve(data) else { return nil }
-        guard FileAccess.exists(resolved.url) else {
-            forget()
-            return nil
-        }
-        if let refreshed = resolved.refreshed { UserDefaults.standard.set(refreshed, forKey: key) }
-        return resolved.url
-    }
-
-    static func remember(_ folder: URL) {
-        guard let data = try? FileAccess.bookmark(for: folder) else { return }
-        UserDefaults.standard.set(data, forKey: key)
-    }
-
-    static func forget() {
-        UserDefaults.standard.removeObject(forKey: key)
-    }
-}
-
 private struct PickedFolder: Identifiable {
     let url: URL
     var id: URL { url }
 }
 
 extension View {
-    /// Choose Files (the Files picker, one tap or several with Select) and Choose from a Folder (Dossier's
-    /// list of a folder and its subfolders).
+    /// Choose Files: the Files picker, one tap or several with Select. Set `folder` to a folder dropped on the
+    /// Vault to tick files in it.
     func addDocuments(
-        choosingFiles: Binding<Bool>, choosingFromFolder: Binding<Bool>, folder: Binding<URL?>, onAdded: @escaping () -> Void = {}
+        choosingFiles: Binding<Bool>, folder: Binding<URL?> = .constant(nil), onAdded: @escaping () -> Void = {}
     ) -> some View {
-        modifier(AddDocumentsModifier(isChoosingFiles: choosingFiles, isChoosingFromFolder: choosingFromFolder, folder: folder, onAdded: onAdded))
+        modifier(AddDocumentsModifier(isChoosingFiles: choosingFiles, folder: folder, onAdded: onAdded))
     }
 }
 
