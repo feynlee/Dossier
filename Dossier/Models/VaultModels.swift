@@ -54,6 +54,20 @@ final class SourceDocument {
     /// `DocumentExtractor.readingVersion` when the document was read with Private Cloud Compute, one less
     /// when it was read on this iPhone; 0 for documents read before versions were kept.
     var readVersion: Int = 0
+    /// The fields you set for this document (`ReadingFields` as JSON). Nil when it uses its category's rule
+    /// or the default.
+    var customFieldsJSON: String?
+    /// The fields it was last read with, and where they came from ("own", "rule:Housing" or "default").
+    var askedFieldsJSON: String?
+    var fieldSourceRaw: String?
+    /// What it is and where it belongs, guessed on this iPhone before it was read, so its category's rule
+    /// can be used on the first read.
+    var guessedType: String?
+    var guessedCategory: String?
+    /// Why it was read on this iPhone instead of with Private Cloud Compute.
+    var engineNote: String?
+    /// You chose to wait for Private Cloud Compute instead of reading it on this iPhone now.
+    var waitsForCloud: Bool = false
 
     init(contentHash: String, fileName: String, relativePath: String = "", folderID: String = "", kind: DocumentKind, title: String, engine: ExtractionEngine, pageCount: Int) {
         self.contentHash = contentHash
@@ -82,6 +96,21 @@ final class SourceDocument {
     }
 
     var kind: DocumentKind { DocumentKind(rawValue: kindRaw) ?? .other }
+
+    /// The fields you set for this document.
+    var ownFields: ReadingFields? {
+        get { ReadingFields(json: customFieldsJSON) }
+        set { customFieldsJSON = newValue?.json }
+    }
+
+    /// The fields it was last read with.
+    var askedFields: ReadingFields? { ReadingFields(json: askedFieldsJSON) }
+
+    /// The category used to pick a rule: where it is in the library, else the guess made before reading.
+    var ruleCategory: String? { libraryCategory ?? guessedCategory }
+
+    /// Which fields it's read with now: its own, else its category's rule, else the default.
+    var fieldSource: FieldSource { FieldRules.source(own: ownFields, category: ruleCategory) }
 
     var placement: LibraryPlacement? {
         get {

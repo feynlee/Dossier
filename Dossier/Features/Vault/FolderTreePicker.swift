@@ -279,6 +279,8 @@ struct AddDocumentsModifier: ViewModifier {
     /// What the Files picker is open for. Kept after it closes, because the result arrives after that.
     @State private var pickingFolder = false
     @State private var errorMessage: String?
+    /// Files you picked, waiting in the add sheet before they're read.
+    @State private var picked: PickedFiles?
 
     func body(content: Content) -> some View {
         content
@@ -297,11 +299,25 @@ struct AddDocumentsModifier: ViewModifier {
                     if pickingFolder {
                         guard let url = urls.first else { return }
                         folder = url
+                    } else if FieldRules.asksWhenAdding, !urls.isEmpty {
+                        // Ask for fields before anything is read, so nothing is read twice.
+                        picked = PickedFiles(urls: urls)
                     } else {
                         let added = importer.add(urls, context: modelContext, preferPrivateCloud: usePrivateCloud)
                         announce(added: added, of: urls)
                     }
                 case .failure(let error): errorMessage = error.localizedDescription
+                }
+            }
+            .sheet(item: $picked) { files in
+                AddFieldsSheet(urls: files.urls) { options, waitForCloud in
+                    let added = importer.add(files.urls, options: options, waitForCloud: waitForCloud, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                    announce(added: added, of: files.urls)
+                    if waitForCloud, added > 0 {
+                        incoming.notice = added == 1
+                            ? "Added 1 file. It’s read when Private Cloud Compute is back."
+                            : "Added \(added) files. They’re read when Private Cloud Compute is back."
+                    }
                 }
             }
             .sheet(item: Binding(get: { folder.map(PickedFolder.init) }, set: { if $0 == nil { folder = nil } })) { picked in
@@ -347,6 +363,11 @@ struct AddDocumentsModifier: ViewModifier {
             openFilesPicker(forFolder: true)
         }
     }
+}
+
+private struct PickedFiles: Identifiable {
+    let id = UUID()
+    let urls: [URL]
 }
 
 private struct PickedFolder: Identifiable {

@@ -16,6 +16,9 @@ final class ImportCoordinator {
     /// Files you added that were already in the vault, from the last add.
     private(set) var duplicates: [String] = []
     private(set) var lastEngine: ExtractionEngine?
+    /// Files you chose to read with Private Cloud Compute when it's back, and when it said it would be.
+    private(set) var waitingForCloud = 0
+    private(set) var cloudStatus: String?
 
     @ObservationIgnored private let extractor = DocumentExtractor()
     /// Places and names documents in the library after each pass.
@@ -36,8 +39,19 @@ final class ImportCoordinator {
 
     /// Adds files you picked and starts reading them. Pass the folder when the files came from a folder you
     /// picked. Returns how many were added.
+    /// What you chose for a file in the add sheet before it's read.
+    struct AddOptions {
+        /// Fields for the file; nil uses its category's rule or the default.
+        var fields: ReadingFields?
+        /// What it seemed to be before reading.
+        var guess: FileGuess?
+    }
+
     @discardableResult
-    func add(_ urls: [URL], within folder: URL? = nil, context: ModelContext, preferPrivateCloud: Bool) -> Int {
+    func add(
+        _ urls: [URL], within folder: URL? = nil, options: [URL: AddOptions] = [:], waitForCloud: Bool = false,
+        context: ModelContext, preferPrivateCloud: Bool
+    ) -> Int {
         let existing = (try? context.fetch(FetchDescriptor<SourceDocument>())) ?? []
         let existingPaths = Set(existing.compactMap { $0.bookmark.flatMap(FileAccess.resolve)?.url.standardizedFileURL.path })
         unsupportedFiles = []
@@ -54,7 +68,14 @@ final class ImportCoordinator {
             }
             do {
                 let bookmark = try FileAccess.bookmark(for: url, within: folder)
-                context.insert(SourceDocument.pending(fileName: url.lastPathComponent, bookmark: bookmark))
+                let document = SourceDocument.pending(fileName: url.lastPathComponent, bookmark: bookmark)
+                if let chosen = options[url] {
+                    document.ownFields = chosen.fields
+                    document.guessedType = chosen.guess?.type
+                    document.guessedCategory = chosen.guess?.category
+                }
+                document.waitsForCloud = waitForCloud && preferPrivateCloud
+                context.insert(document)
                 added += 1
             } catch {
                 logger.error("Couldn't bookmark a file: \(error.localizedDescription, privacy: .public)")
@@ -82,6 +103,36 @@ final class ImportCoordinator {
         start(context: context, preferPrivateCloud: preferPrivateCloud)
     }
 
+    /// How Read Again chooses fields for each document.
+    enum FieldChoice {
+        /// Each keeps its own fields, its category's rule or the default.
+        case same
+        /// These fields become each document's own.
+        case own(ReadingFields)
+        /// Each uses its category's rule: its own fields are removed.
+        case categoryRule
+        /// What Dossier thinks is important: own fields are removed and rules aren't used.
+        case standard
+    }
+
+    /// Reads documents again with the fields you chose.
+    func reread(_ documents: [SourceDocument], fields choice: FieldChoice, context: ModelContext, preferPrivateCloud: Bool) {
+        for document in documents where document.bookmark != nil {
+            switch choice {
+            case .same: break
+            case .own(let fields): document.ownFields = fields
+            case .categoryRule: document.ownFields = nil
+            // An empty set of own fields that reads everything useful: the default, even in a category with a rule.
+            case .standard: document.ownFields = ReadingFields()
+            }
+            document.state = .queued
+            document.failureReason = nil
+            document.waitsForCloud = false
+        }
+        try? context.save()
+        start(context: context, preferPrivateCloud: preferPrivateCloud)
+    }
+
     // MARK: Processing
 
     func start(context: ModelContext, preferPrivateCloud: Bool) {
@@ -98,9 +149,10 @@ final class ImportCoordinator {
                 needsAnotherPass = false
                 let waiting = await run(context: context, preferPrivateCloud: preferPrivateCloud)
                 if needsAnotherPass { continue }
-                guard waiting > 0 else { break }
-                // Files still downloading from iCloud: look again until they arrive.
-                try? await Task.sleep(for: Self.recheckDelay(after: rechecks))
+                guard waiting > 0 || waitingForCloud > 0 else { break }
+                // Files still downloading from iCloud: look again until they arrive. Files waiting for Private
+                // Cloud Compute: look every two minutes until it can be used.
+                try? await Task.sleep(for: waiting > 0 ? Self.recheckDelay(after: rechecks) : .seconds(120))
                 rechecks += 1
             }
         }
@@ -126,7 +178,14 @@ final class ImportCoordinator {
         await checkSources(documents)
         markChangedFiles(documents)
         queueOutdated(documents, preferPrivateCloud: preferPrivateCloud)
-        var queue = documents.filter { [.queued, .downloading, .reading].contains($0.state) }
+        // Files waiting for Private Cloud Compute stay queued until it can be used.
+        let status = preferPrivateCloud ? DocumentExtractor.privateCloudStatus() : nil
+        cloudStatus = status
+        for document in documents where document.waitsForCloud && (status == nil || !preferPrivateCloud) {
+            document.waitsForCloud = false
+        }
+        waitingForCloud = documents.filter { $0.waitsForCloud && !$0.isGone }.count
+        var queue = documents.filter { [.queued, .downloading, .reading].contains($0.state) && !$0.waitsForCloud }
         var waiting = 0
 
         while !queue.isEmpty, !Task.isCancelled {
@@ -170,9 +229,17 @@ final class ImportCoordinator {
                 }
                 let pages = try await PageReader.read(loaded.data, fileName: document.fileName)
                 guard !pages.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
-                let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud, request: .current)
+                let source = await fieldSource(for: document, pages: pages)
+                let (reading, engine) = try await extractor.extract(pages: pages, preferPrivateCloud: preferPrivateCloud, request: .reading(source.fields))
                 lastEngine = engine
                 if preferPrivateCloud, engine == .onDevice { privateCloudFailed = true }
+                document.askedFieldsJSON = source.fields?.json
+                document.fieldSourceRaw = source.raw
+                document.engineNote = engine == .onDevice
+                    ? (preferPrivateCloud
+                        ? (DocumentExtractor.privateCloudStatus() ?? "Private Cloud Compute couldn’t read it right now.")
+                        : "Private Cloud Compute is off in Settings.")
+                    : nil
                 // Removed from the vault while it was being read: drop the result.
                 guard !document.isGone else { continue }
                 // A document already in the vault that's read again (after an update, or Read Again) stays
@@ -193,6 +260,27 @@ final class ImportCoordinator {
         // Every pass ends with the library up to date, including documents from before it existed.
         if !Task.isCancelled { await organizer.organize(context: context) }
         return waiting
+    }
+
+    /// The fields to read a document with. A new file in a category that has a rule is identified from its
+    /// first page first, unless that was done before it was added, so the rule applies on its first read.
+    private func fieldSource(for document: SourceDocument, pages: [ReadPage]) async -> FieldSource {
+        if document.ownFields == nil, document.ruleCategory == nil, !FieldRules.all.isEmpty,
+           let guess = await FileIdentifier.identify(fileName: document.fileName, pages: pages) {
+            document.guessedType = guess.type
+            document.guessedCategory = guess.category
+        }
+        return document.fieldSource
+    }
+
+    /// Reads the files waiting for Private Cloud Compute on this iPhone now.
+    func readWaitingNow(context: ModelContext, preferPrivateCloud: Bool) {
+        let documents = (try? context.fetch(FetchDescriptor<SourceDocument>())) ?? []
+        for document in documents where document.waitsForCloud { document.waitsForCloud = false }
+        waitingForCloud = 0
+        try? context.save()
+        // Private Cloud Compute is unavailable, so these are read on this iPhone and again with it later.
+        start(context: context, preferPrivateCloud: preferPrivateCloud)
     }
 
     /// Saves the other useful details: the holder's (height, phone…) and their family's. Each is checked

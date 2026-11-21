@@ -130,6 +130,10 @@ nonisolated struct DetailRequest: Sendable, Equatable {
     var findsUsefulDetails = true
     /// Details you asked for by name, such as "Height" or "Employer".
     var requested: [String] = []
+    /// Fields asked for this document, by its own fields or its category's rule.
+    var asked: [AskedField] = []
+    /// Also read everything else the document records (contents). Off when you asked for only your fields.
+    var readsContents = true
 
     static let findsUsefulDetailsKey = "extractUsefulDetails"
     static let requestedKey = "extractRequestedDetails"
@@ -142,5 +146,19 @@ nonisolated struct DetailRequest: Sendable, Equatable {
         )
     }
 
-    var isEmpty: Bool { !findsUsefulDetails && requested.isEmpty }
+    var isEmpty: Bool { !findsUsefulDetails && requested.isEmpty && asked.isEmpty }
+
+    /// The request for a document read with these fields: the fields, and either everything useful as usual
+    /// or only the fields and the kind's standard facts.
+    static func reading(_ fields: ReadingFields?) -> DetailRequest {
+        var request = current
+        guard let fields else { return request }
+        request.asked = fields.fields
+        if !fields.readsUseful {
+            request.findsUsefulDetails = false
+            request.requested = []
+            request.readsContents = false
+        }
+        return request
+    }
 }

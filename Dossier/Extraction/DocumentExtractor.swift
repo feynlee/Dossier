@@ -92,7 +92,10 @@ actor DocumentExtractor {
 
     /// The base instructions plus what to put in `details`: other useful details, and the ones you asked for.
     static func instructions(for request: DetailRequest) -> String {
-        guard !request.isEmpty else { return baseInstructions + "\nLeave details empty; put everything in fields and contents." }
+        let base = request.readsContents
+            ? baseInstructions
+            : baseInstructions + "\nThe owner asked for only the fields listed under details: leave contents empty."
+        guard !request.isEmpty else { return base + "\nLeave details empty; put everything in fields and contents." }
         var lines = ["", "Details, besides the important facts above:"]
         if request.findsUsefulDetails {
             lines += [
@@ -100,12 +103,16 @@ actor DocumentExtractor {
                 "- Family members of the holder named on the document (parents, spouse, children, siblings). Give each person's full name in personName, report their name as a detail labelled Name, and report each other detail printed about them separately, such as Date of birth, Place of birth or Nationality. Not landlords, agents, officers, employers, attorneys or anyone else who isn't family.",
             ]
         }
+        if !request.asked.isEmpty {
+            let list = request.asked.map(\.promptText).joined(separator: ", ")
+            lines.append("- The owner asked for these fields. Report each one that is printed as a detail for the holder, even when it's about someone else the document names (such as the landlord), using exactly the name as its label, and read the words in brackets as what the owner means: \(list). Report these even if they are also in contents.")
+        }
         if !request.requested.isEmpty {
             let list = request.requested.map { "\"\($0)\"" }.joined(separator: ", ")
             lines.append("- Always look for these, for the holder unless they clearly belong to a family member, and use exactly these names as labels: \(list).")
         }
         lines.append("- Only details printed on the document; never guess. At most 30 details. Don't repeat contents.")
-        return baseInstructions + lines.joined(separator: "\n")
+        return base + lines.joined(separator: "\n")
     }
 
     func extract(pages: [ReadPage], preferPrivateCloud: Bool, request: DetailRequest = DetailRequest()) async throws -> (DocumentReading, ExtractionEngine) {
