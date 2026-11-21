@@ -170,9 +170,9 @@ struct VaultView: View {
                         Button("Done") { endSelecting() }
                     }
                     ToolbarItem(placement: .bottomBar) {
-                        Button("Read Again", systemImage: "arrow.clockwise") { rereadingSelected = selected }
+                        Button("Read Again…", systemImage: "arrow.clockwise") { rereadingSelected = selected }
                             .disabled(selection.isEmpty || importer.isRunning)
-                            .rereadDocuments($rereadingSelected) { endSelecting() }
+                            .readAgainSheet($rereadingSelected) { endSelecting() }
                     }
                     ToolbarSpacer(.flexible, placement: .bottomBar)
                     ToolbarItem(placement: .bottomBar) {
@@ -517,8 +517,24 @@ struct LibraryFolderView: View {
 /// What the reader is doing, and anything it couldn't add.
 private struct ImportStatusSection: View {
     @Environment(ImportCoordinator.self) private var importer
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
 
     var body: some View {
+        if importer.waitingForCloud > 0 {
+            Section {
+                TileRow(
+                    symbol: "icloud.slash", badge: nil,
+                    title: importer.waitingForCloud == 1 ? "1 file waiting for Private Cloud Compute" : "\(importer.waitingForCloud) files waiting for Private Cloud Compute",
+                    subtitle: importer.cloudStatus ?? "Read when it’s available."
+                )
+                Button("Read on This iPhone Now", systemImage: "iphone") {
+                    importer.readWaitingNow(context: modelContext, preferPrivateCloud: usePrivateCloud)
+                }
+            } footer: {
+                Text("Reading on this iPhone misses more on long files. Dossier reads them again with Private Cloud Compute later, unless you’ve confirmed or edited something.")
+            }
+        }
         if let current = importer.current {
             Section {
                 TileRow(

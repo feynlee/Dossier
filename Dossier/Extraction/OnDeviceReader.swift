@@ -55,7 +55,7 @@ nonisolated struct OnDeviceReader {
         let fields = facts.fields.map { field in
             ReadField(key: field.key, value: field.value, page: Self.page(of: field.value, in: pages), confidence: field.confidence)
         }
-        return DocumentReading(kind: facts.kind, title: facts.title, fields: fields, contents: contents,
+        return DocumentReading(kind: facts.kind, title: facts.title, fields: fields, contents: request.readsContents ? contents : [],
                                details: request.isEmpty ? [] : details, travel: travel)
     }
 
@@ -223,6 +223,17 @@ nonisolated struct OnDeviceReader {
         """
 
     static func partInstructions(kind: String, title: String, known: String, request: DetailRequest) -> String {
+        guard request.readsContents else {
+            // Only the fields you asked for.
+            let list = request.asked.map(\.promptText).joined(separator: ", ")
+            return """
+                You copy fields from a personal document, one part at a time. This part is from: \(title) (\(kind)).
+                Leave contents empty. In details, report each of these fields that is printed in this part, for the \
+                holder even when it's about someone else the document names (such as the landlord), using exactly the \
+                name as its label; the words in brackets say what the owner means: \(list.isEmpty ? "none" : list).
+                Only what is printed; never guess. Dates as YYYY-MM-DD; US documents write dates month first.
+                """
+        }
         var text = """
             You copy what a personal document records, one part at a time. This part is from: \(title) (\(kind)). \
             Already read, so leave out: \(known.isEmpty ? "nothing" : known).
@@ -237,7 +248,12 @@ nonisolated struct OnDeviceReader {
         if request.isEmpty {
             text += "\nLeave details empty."
         } else {
-            text += "\nIn details, report details about the holder or their family that are useful for forms, such as phone, email, height, employer, or a family member's name and birth date."
+            text += request.findsUsefulDetails
+                ? "\nIn details, report details about the holder or their family that are useful for forms, such as phone, email, height, employer, or a family member's name and birth date."
+                : "\nIn details, report only the fields asked for below."
+            if !request.asked.isEmpty {
+                text += " The owner asked for these fields: report each one that is printed, for the holder even when it's about someone else the document names, using exactly the name as its label; the words in brackets say what the owner means: " + request.asked.map(\.promptText).joined(separator: ", ") + "."
+            }
             if !request.requested.isEmpty {
                 text += " Always look for: " + request.requested.map { "\"\($0)\"" }.joined(separator: ", ") + "."
             }

@@ -35,6 +35,11 @@ struct SettingsView: View {
                         LabeledContent("Also look for", value: requestedSummary)
                     }
                     .onAppear { requestedSummary = Self.summary(DetailRequest.current.requested) }
+                    NavigationLink {
+                        CustomFieldsSettingsView()
+                    } label: {
+                        TileRow(symbol: "list.bullet.rectangle", badge: nil, title: "Custom fields", subtitle: "Ask for specific fields, per file or category")
+                    }
                 } header: {
                     Text("Reading")
                 } footer: {

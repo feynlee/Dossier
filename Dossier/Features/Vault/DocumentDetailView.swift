@@ -38,6 +38,10 @@ struct DocumentDetailView: View {
     @State private var fileError: String?
     /// Face ID was asked for on this visit (and maybe cancelled): don't ask again until you tap Unlock.
     @State private var askedToUnlock = false
+    /// Set to open Read Again with its choice of fields.
+    @State private var readingAgain: [SourceDocument] = []
+    /// Why Private Cloud Compute can't be used now; nil when it can.
+    @State private var cloudStatus: String?
 
     private var facts: [Fact] {
         document.facts.filter { $0.status != .superseded }.sorted { $0.key.sortOrder < $1.key.sortOrder }
@@ -46,12 +50,40 @@ struct DocumentDetailView: View {
     /// The document's own fields, then other details about its holder, then each family member's.
     private var mainFacts: [Fact] { facts.filter { $0.key != .detail } }
     private var holderDetails: [Fact] {
-        facts.filter { $0.key == .detail && $0.section == nil && $0.relation == nil }.sorted { ($0.label ?? "") < ($1.label ?? "") }
+        unaskedFacts.filter { $0.key == .detail && $0.section == nil && $0.relation == nil }.sorted { ($0.label ?? "") < ($1.label ?? "") }
+    }
+
+    /// The fields you asked for, in your order, each with what was read for it, or nothing when it wasn't found.
+    private struct AskedRow: Identifiable {
+        let field: AskedField
+        let fact: Fact?
+        var id: String { field.id }
+    }
+
+    private var askedRows: [AskedRow] {
+        guard let asked = document.askedFields?.fields, !asked.isEmpty else { return [] }
+        let details = facts.filter { $0.key == .detail }
+        return asked.map { field in
+            let matching = details.filter { ($0.label ?? "").caseInsensitiveCompare(field.name) == .orderedSame }
+            return AskedRow(field: field, fact: matching.first { $0.section == nil && $0.relation == nil } ?? matching.first)
+        }
+    }
+
+    /// Everything not shown under the fields you asked for.
+    private var unaskedFacts: [Fact] {
+        let asked = Set(askedRows.compactMap { $0.fact?.persistentModelID })
+        return facts.filter { !asked.contains($0.persistentModelID) }
+    }
+
+    /// "Your fields", or the rule they came from.
+    private var askedTitle: String {
+        if let raw = document.fieldSourceRaw, raw.hasPrefix("rule:") { return "\(raw.dropFirst(5)) rule" }
+        return "Your fields"
     }
 
     /// What the document records, under its own section headings, in the document's order.
     private var contentGroups: [(section: String, facts: [Fact])] {
-        let entries = facts.filter { $0.section != nil }.sorted { $0.position < $1.position }
+        let entries = unaskedFacts.filter { $0.section != nil }.sorted { $0.position < $1.position }
         var order: [String] = []
         var grouped: [String: [Fact]] = [:]
         for fact in entries {
@@ -69,7 +101,7 @@ struct DocumentDetailView: View {
     }
 
     private var familyGroups: [FamilyGroup] {
-        let details = facts.filter { $0.key == .detail && $0.section == nil && $0.relation != nil }
+        let details = unaskedFacts.filter { $0.key == .detail && $0.section == nil && $0.relation != nil }
         let grouped = Dictionary(grouping: details) { "\($0.relationRaw ?? "")|\(($0.personName ?? "").uppercased())" }
         return grouped.map { id, facts in
             let first = facts[0]
@@ -154,13 +186,10 @@ struct DocumentDetailView: View {
                     }
                     .frame(height: height)
                     .clipped()
-                    // The handle resizes the document while it's shown; hiding it is the eye button's job.
-                    if previewSize != .collapsed {
-                        PreviewHandle(size: $previewSize)
-                            .gesture(resizeGesture(total: geometry.size.height))
-                    } else {
-                        Divider()
-                    }
+                    // Drag the handle to resize the document; all the way up folds it into one line, and down
+                    // opens it again.
+                    PreviewHandle(size: $previewSize)
+                        .gesture(resizeGesture(total: geometry.size.height))
                 }
                 factList
             }
@@ -287,6 +316,8 @@ struct DocumentDetailView: View {
         .sheet(isPresented: $showingMissing) { MissingSourceSheet(document: document) }
         .sheet(isPresented: $showingDecision) { DocumentDecisionSheet(document: document) }
         .sheet(isPresented: $isPlacing) { LibraryPlacementSheet(document: document) }
+        .readAgainSheet($readingAgain)
+        .task(id: document.engineRaw) { cloudStatus = DocumentExtractor.privateCloudStatus() }
     }
 
     private var factList: some View {
@@ -324,6 +355,24 @@ struct DocumentDetailView: View {
                 }
             }
 
+            if document.isReady, document.engine == .onDevice {
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Read on this iPhone, so some fields may be missing.", systemImage: "iphone")
+                            .font(.subheadline)
+                        if usePrivateCloud {
+                            Button(cloudStatus == nil ? "Read Again with the Cloud" : "Cloud not available now") {
+                                importer.reread(document, context: modelContext, preferPrivateCloud: true)
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .disabled(cloudStatus != nil || importer.isRunning)
+                        }
+                    }
+                } footer: {
+                    if let note = document.engineNote { Text(note) }
+                }
+            }
+
             Section {
                 ForEach(shown(mainFacts)) { factRow($0) }
             } header: {
@@ -332,6 +381,28 @@ struct DocumentDetailView: View {
             } footer: {
                 if !facts.isEmpty {
                     Text("Tap a field to see where it was read. Confirming a name, birth date or place of birth also confirms it on your other documents.")
+                }
+            }
+
+            let asked = askedRows.filter { !onlyUncertain || $0.fact?.status == .needsReview }
+            if !asked.isEmpty {
+                Section {
+                    ForEach(asked) { row in
+                        if let fact = row.fact {
+                            factRow(fact)
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(row.field.name).font(.footnote).foregroundStyle(.secondary)
+                                Text("Not found in this document").foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 2)
+                            .accessibilityElement(children: .combine)
+                        }
+                    }
+                } header: {
+                    Text(askedTitle)
+                } footer: {
+                    Text("Every field you asked for gets a row, in your order. Dossier never guesses a value that isn’t printed.")
                 }
             }
 
@@ -375,7 +446,19 @@ struct DocumentDetailView: View {
                 LabeledContent("File", value: document.fileName)
                 LabeledContent("Location", value: document.sourceMissing ? "Removed" : (document.locationDescription ?? "Unknown"))
                 LabeledContent("Pages read", value: "\(document.pageCount)")
-                LabeledContent("Read by", value: document.engine.displayName)
+                Button {
+                    readingAgain = [document]
+                } label: {
+                    LabeledContent("Fields") {
+                        HStack(spacing: 6) {
+                            FieldTag(document.fieldSource, short: true)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+                .foregroundStyle(.primary)
+                .disabled(document.bookmark == nil)
+                LabeledContent("Read by", value: document.engine == .onDevice ? "This iPhone" : "Private Cloud Compute")
                 if canEditFile {
                     Button("Edit Pages", systemImage: "square.grid.2x2") { withUnlock { isEditingPages = true } }
                 }
@@ -386,9 +469,11 @@ struct DocumentDetailView: View {
             } header: {
                 Text("Source")
             } footer: {
-                Text(sourceIsPDF || !canEditFile
+                Text((document.engine == .onDevice ? (document.engineNote.map { "Read on this iPhone: \($0) " } ?? "") : "")
+                    + "Fields opens the choice of your fields, a category rule or the default, and reads the file again. "
+                    + (sourceIsPDF || !canEditFile
                     ? "Edit Pages saves your changes to the file. Replacing with a file you choose leaves the current file where it is."
-                    : "This file is a photo. Editing or scanning saves a new PDF to iCloud Drive; the photo isn’t changed.")
+                    : "This file is a photo. Editing or scanning saves a new PDF to iCloud Drive; the photo isn’t changed."))
             }
 
             Section {
@@ -426,8 +511,8 @@ struct DocumentDetailView: View {
 
     private func previewHeight(in total: CGFloat) -> CGFloat {
         let base = previewSize.height(in: total)
-        guard let dragTranslation, previewSize != .collapsed else { return base }
-        return min(max(base + dragTranslation, PreviewSize.medium.height(in: total)), total * PreviewSize.maxFraction)
+        guard let dragTranslation else { return base }
+        return min(max(base + dragTranslation, PreviewSize.barHeight), total * PreviewSize.maxFraction)
     }
 
     /// Drag the handle: the preview follows your finger and settles on the nearest size, taking the
@@ -454,7 +539,7 @@ struct DocumentDetailView: View {
     /// Something from this page is covering it (an editor, the scanner, a sheet), so it hasn't been left.
     private var isPresentingOnTop: Bool {
         isEditingPages || isScanningReplacement || isChoosingReplacement || replacementScan != nil
-            || editing != nil || showingMissing || showingDecision || !removing.isEmpty
+            || editing != nil || showingMissing || showingDecision || !removing.isEmpty || !readingAgain.isEmpty
     }
 
     private func unlockAutomatically() {
@@ -781,8 +866,8 @@ enum PreviewSize: String, CaseIterable {
 
     static let barHeight: CGFloat = 60
     static let maxFraction: CGFloat = 0.75
-    /// The sizes the handle moves between. Hiding is done with the eye button.
-    static let resizable: [PreviewSize] = [.medium, .large]
+    /// The sizes the handle moves between: dragged all the way up, the file folds into one line.
+    static let resizable: [PreviewSize] = [.collapsed, .medium, .large]
 
     func height(in total: CGFloat) -> CGFloat {
         switch self {
@@ -812,7 +897,7 @@ struct PreviewHandle: View {
             }
             .accessibilityElement()
             .accessibilityLabel("Document preview size")
-            .accessibilityValue(size == .large ? "Large" : "Half")
+            .accessibilityValue(size == .large ? "Large" : size == .medium ? "Half" : "Hidden")
             .accessibilityHint("Swipe up or down to change it.")
             .accessibilityAdjustableAction { direction in
                 let all = PreviewSize.resizable, index = all.firstIndex(of: size) ?? 0
