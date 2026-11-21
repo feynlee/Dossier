@@ -5,7 +5,8 @@ import UniformTypeIdentifiers
 struct OnboardingView: View {
     let onFinish: () -> Void
 
-    @State private var isPicking = false
+    @State private var isPickingFiles = false
+    @State private var isPickingFolder = false
     @State private var folder: URL?
     @State private var isScanning = false
 
@@ -42,13 +43,16 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.capsule)
-                    Button("Choose Files") { isPicking = true }
-                        .font(.headline)
-                        .padding(.vertical, 4)
+                    HStack(spacing: 24) {
+                        Button("Choose Files") { isPickingFiles = true }
+                        Button("Choose from a Folder") { isPickingFolder = true }
+                    }
+                    .font(.headline)
+                    .padding(.vertical, 4)
                 }
                 .padding()
             }
-            .chooseFromFolder(isPresented: $isPicking, folder: $folder, onAdded: onFinish)
+            .addDocuments(choosingFiles: $isPickingFiles, choosingFromFolder: $isPickingFolder, folder: $folder, onAdded: onFinish)
             .fullScreenCover(isPresented: $isScanning) { DocumentScanner(onSaved: onFinish) }
         }
     }

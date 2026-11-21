@@ -98,7 +98,8 @@ private struct RereadDocumentsModifier: ViewModifier {
 
 /// The vault before anything is added, or after everything was removed.
 struct EmptyVault: View {
-    @Binding var isPicking: Bool
+    @Binding var isPickingFiles: Bool
+    @Binding var isPickingFolder: Bool
     @Binding var isScanning: Bool
 
     var body: some View {
@@ -109,8 +110,38 @@ struct EmptyVault: View {
         } actions: {
             Button("Scan Documents", systemImage: "doc.viewfinder") { isScanning = true }
                 .buttonStyle(.borderedProminent)
-            Button("Choose Files", systemImage: "folder") { isPicking = true }
+            Button("Choose Files", systemImage: "doc") { isPickingFiles = true }
+            Button("Choose from a Folder", systemImage: "folder") { isPickingFolder = true }
         }
         .tint(.dsTint)
+    }
+}
+
+/// The Add menu: each way to add documents, with a line on how it works, so picking several files is easy
+/// to find.
+struct AddDocumentsMenuItems: View {
+    @Binding var isPickingFiles: Bool
+    @Binding var isPickingFolder: Bool
+    @Binding var isScanning: Bool
+
+    var body: some View {
+        Button { isScanning = true } label: {
+            Label {
+                Text("Scan Documents")
+                Text("Use the camera")
+            } icon: { Image(systemName: "doc.viewfinder") }
+        }
+        Button { isPickingFiles = true } label: {
+            Label {
+                Text("Choose Files")
+                Text("Tap a file to add it, or Select for several")
+            } icon: { Image(systemName: "doc") }
+        }
+        Button { isPickingFolder = true } label: {
+            Label {
+                Text("Choose from a Folder")
+                Text("Tick files across its subfolders")
+            } icon: { Image(systemName: "folder") }
+        }
     }
 }

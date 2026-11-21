@@ -22,6 +22,8 @@ final class ImportCoordinator {
     @ObservationIgnored let organizer = LibraryOrganizer()
     @ObservationIgnored private let sealer = Sealer.shared
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// Set when files are added or queued while a pass is reading, so another pass picks them up.
+    @ObservationIgnored private var needsAnotherPass = false
     @ObservationIgnored private let logger = Logger(subsystem: "liziyue.Dossier", category: "Import")
 
     /// How often to look again while iCloud is still downloading files: every 15 seconds for the first five
@@ -83,12 +85,19 @@ final class ImportCoordinator {
     // MARK: Processing
 
     func start(context: ModelContext, preferPrivateCloud: Bool) {
-        guard !isRunning else { return }
+        // A pass is already reading: it took its queue when it began, so ask for another pass for the files
+        // added since. Without this, files added while others were being read waited until the next launch.
+        guard !isRunning else {
+            needsAnotherPass = true
+            return
+        }
         task?.cancel()
         task = Task {
             var rechecks = 0
             while !Task.isCancelled {
+                needsAnotherPass = false
                 let waiting = await run(context: context, preferPrivateCloud: preferPrivateCloud)
+                if needsAnotherPass { continue }
                 guard waiting > 0 else { break }
                 // Files still downloading from iCloud: look again until they arrive.
                 try? await Task.sleep(for: Self.recheckDelay(after: rechecks))
@@ -99,6 +108,7 @@ final class ImportCoordinator {
 
     func cancel() {
         task?.cancel()
+        needsAnotherPass = false
         isRunning = false
         current = nil
     }
