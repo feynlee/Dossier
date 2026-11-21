@@ -19,7 +19,7 @@ struct ProfileView: View {
     @State private var details = ProfileDetails(you: [], family: [])
     @State private var editingDetail: (detail: ProfileDetails.Detail, value: String)?
     @State private var deletingDetail: ProfileDetails.Detail?
-    /// The row just copied: it reads "Copied" for a moment.
+    /// The row just copied: its source line reads "Copied" for a moment, under the value.
     @State private var copiedRow: String?
     /// What was copied, shown at the bottom of the screen for a moment.
     @State private var copyNote: CopyNote?
@@ -191,22 +191,25 @@ struct ProfileView: View {
             Button { copy(detail, row: row) } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(detail.label).font(.footnote).foregroundStyle(.secondary)
-                    if copiedRow == row {
-                        CopiedLabel()
-                    } else if detail.isSensitive {
+                    if detail.isSensitive {
                         Text(unlocked.context.flatMap { try? VaultReader.reveal(detail.fact, context: $0) } ?? VaultReader.masked(detail.fact))
                             .font(.dsFieldValue)
                     } else {
                         Text(detail.value.map { VaultReader.display($0, for: .detail) } ?? "—")
                     }
-                    HStack(spacing: 4) {
-                        if detail.needsReview || detail.differs {
-                            Image(systemName: "questionmark.circle.fill").foregroundStyle(Color.dsBadgeNeutral)
+                    // "Copied" takes the source line's place for a moment, so the value stays in view.
+                    if copiedRow == row {
+                        CopiedLabel()
+                    } else {
+                        HStack(spacing: 4) {
+                            if detail.needsReview || detail.differs {
+                                Image(systemName: "questionmark.circle.fill").foregroundStyle(Color.dsBadgeNeutral)
+                            }
+                            Text(detail.differs ? "Documents differ · showing \(detail.fact.document?.title ?? "the newest")" : "From \(detail.sources.joined(separator: ", "))")
                         }
-                        Text(detail.differs ? "Documents differ · showing \(detail.fact.document?.title ?? "the newest")" : "From \(detail.sources.joined(separator: ", "))")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     }
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -424,8 +427,8 @@ private struct SourceMenuItems: View {
 
 private struct CopiedLabel: View {
     var body: some View {
-        Label("Copied", systemImage: "checkmark")
-            .font(.body.weight(.semibold))
+        Label("Copied", systemImage: "checkmark.circle.fill")
+            .font(.footnote.weight(.semibold))
             .foregroundStyle(Color.dsTint)
             .transition(.opacity)
     }
@@ -494,9 +497,7 @@ private struct ProfileRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(entry.key.label).font(.footnote).foregroundStyle(.secondary)
-            if copied {
-                CopiedLabel()
-            } else if entry.status == .conflict, entry.override == nil {
+            if entry.status == .conflict, entry.override == nil {
                 Text("Choose the right value").foregroundStyle(Color.dsTint)
             } else if entry.key.isSensitive {
                 Text(unlocked.context.flatMap { profile.value(entry.key, context: $0) } ?? profile.masked(entry.key) ?? "—")
@@ -505,16 +506,21 @@ private struct ProfileRow: View {
                 Text(display(entry.value))
                     .font(entry.key.isDate ? .dsFieldValue : .body)
             }
-            HStack(spacing: 4) {
-                if entry.needsAttention || entry.status == .uncertain {
-                    Image(systemName: "questionmark.circle.fill").foregroundStyle(Color.dsBadgeNeutral)
-                } else if entry.override == nil, case .agreed = entry.status {
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.dsTint)
+            // "Copied" takes the source line's place for a moment, so the value stays in view.
+            if copied {
+                CopiedLabel()
+            } else {
+                HStack(spacing: 4) {
+                    if entry.needsAttention || entry.status == .uncertain {
+                        Image(systemName: "questionmark.circle.fill").foregroundStyle(Color.dsBadgeNeutral)
+                    } else if entry.override == nil, case .agreed = entry.status {
+                        Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.dsTint)
+                    }
+                    Text(entry.status.summary(sources: entry.sources, edited: entry.override != nil))
                 }
-                Text(entry.status.summary(sources: entry.sources, edited: entry.override != nil))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
     }
