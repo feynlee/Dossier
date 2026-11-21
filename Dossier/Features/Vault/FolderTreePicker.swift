@@ -7,7 +7,8 @@ import UniformTypeIdentifiers
 struct FolderTreePicker: View {
     let folder: URL
     var onChangeFolder: () -> Void = {}
-    var onAdded: () -> Void = {}
+    /// The files you ticked, and how many of them were added.
+    var onAdded: (_ files: [URL], _ added: Int) -> Void = { _, _ in }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(ImportCoordinator.self) private var importer
@@ -150,7 +151,7 @@ struct FolderTreePicker: View {
         let urls = selection.files(in: tree).map(\.url)
         let added = importer.add(urls, within: folder, context: modelContext, preferPrivateCloud: usePrivateCloud)
         dismiss()
-        if added > 0 { onAdded() }
+        onAdded(urls, added)
     }
 }
 
@@ -258,40 +259,94 @@ private struct SelectionBar: View {
     }
 }
 
-/// Choosing files in Dossier's own list, `FolderTreePicker`, starting in the folder you chose files from
-/// last time. The Files picker opens only to choose a folder: the first time, or when you tap Change.
-struct ChooseFromFolderModifier: ViewModifier {
-    @Binding var isPresented: Bool
+/// The two ways to add files you already have.
+///
+/// - Choose Files opens the Files picker. Tapping a file adds it straight away; tap Select (top right) to
+///   pick several, then Open.
+/// - Choose from a Folder opens Dossier's own list, `FolderTreePicker`, starting in the folder you chose
+///   files from last time, to tick files across its subfolders. The Files picker opens only to choose that
+///   folder: the first time, or when you tap Change.
+///
+/// Both share one Files picker: two `fileImporter`s on one view can stop each other from opening.
+struct AddDocumentsModifier: ViewModifier {
+    @Binding var isChoosingFiles: Bool
+    @Binding var isChoosingFromFolder: Bool
     /// Set to open the tree straight away, for a folder you dropped on the Vault.
     @Binding var folder: URL?
     var onAdded: () -> Void = {}
 
-    @State private var isChoosingFolder = false
+    @Environment(ImportCoordinator.self) private var importer
+    @Environment(IncomingFiles.self) private var incoming
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
+    @State private var isImporting = false
+    /// What the Files picker is open for. Kept after it closes, because the result arrives after that.
+    @State private var pickingFolder = false
     @State private var errorMessage: String?
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: isPresented) { _, presented in
+            .onChange(of: isChoosingFiles) { _, presented in
                 guard presented else { return }
-                isPresented = false
-                if let last = LastFolder.url { folder = last } else { isChoosingFolder = true }
+                isChoosingFiles = false
+                openFilesPicker(forFolder: false)
             }
-            .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
+            .onChange(of: isChoosingFromFolder) { _, presented in
+                guard presented else { return }
+                isChoosingFromFolder = false
+                if let last = LastFolder.url { folder = last } else { openFilesPicker(forFolder: true) }
+            }
+            .fileImporter(
+                isPresented: $isImporting,
+                allowedContentTypes: pickingFolder ? [.folder] : FileAccess.readableTypes,
+                allowsMultipleSelection: !pickingFolder
+            ) { result in
                 switch result {
-                case .success(let url):
-                    LastFolder.remember(url)
-                    folder = url
+                case .success(let urls):
+                    if pickingFolder {
+                        guard let url = urls.first else { return }
+                        LastFolder.remember(url)
+                        folder = url
+                    } else {
+                        let added = importer.add(urls, context: modelContext, preferPrivateCloud: usePrivateCloud)
+                        announce(added: added, of: urls)
+                    }
                 case .failure(let error): errorMessage = error.localizedDescription
                 }
             }
             .sheet(item: Binding(get: { folder.map(PickedFolder.init) }, set: { if $0 == nil { folder = nil } })) { picked in
-                FolderTreePicker(folder: picked.url, onChangeFolder: changeFolder, onAdded: onAdded)
+                FolderTreePicker(folder: picked.url, onChangeFolder: changeFolder) { urls, added in
+                    announce(added: added, of: urls)
+                }
             }
-            .alert("Couldn’t open the folder", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            .alert(pickingFolder ? "Couldn’t open the folder" : "Couldn’t add the files", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
                 Button("OK") { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")
             }
+    }
+
+    private func openFilesPicker(forFolder: Bool) {
+        pickingFolder = forFolder
+        isImporting = true
+    }
+
+    /// Says what was added, at the top of the screen, so you know it worked even when the new documents are
+    /// further down the list. Files that weren't added are listed in the Vault.
+    private func announce(added: Int, of urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        withAnimation { incoming.notice = Self.notice(added: added, of: urls) }
+        if added > 0 { onAdded() }
+    }
+
+    static func notice(added: Int, of urls: [URL]) -> String {
+        if added == 0 {
+            return urls.count == 1 ? "\(urls[0].lastPathComponent) is already in Dossier" : "These files are already in Dossier"
+        }
+        if added == 1, urls.count == 1 { return "Added \(urls[0].lastPathComponent). Reading it now." }
+        let skipped = urls.count - added
+        let base = added == 1 ? "Added 1 file. Reading it now." : "Added \(added) files. Reading them now."
+        return skipped > 0 ? "\(base) \(skipped) not added." : base
     }
 
     /// Closes the tree, then opens the Files picker to choose another folder once the sheet is gone.
@@ -299,7 +354,7 @@ struct ChooseFromFolderModifier: ViewModifier {
         folder = nil
         Task {
             try? await Task.sleep(for: .milliseconds(450))
-            isChoosingFolder = true
+            openFilesPicker(forFolder: true)
         }
     }
 }
@@ -334,8 +389,12 @@ private struct PickedFolder: Identifiable {
 }
 
 extension View {
-    func chooseFromFolder(isPresented: Binding<Bool>, folder: Binding<URL?>, onAdded: @escaping () -> Void = {}) -> some View {
-        modifier(ChooseFromFolderModifier(isPresented: isPresented, folder: folder, onAdded: onAdded))
+    /// Choose Files (the Files picker, one tap or several with Select) and Choose from a Folder (Dossier's
+    /// list of a folder and its subfolders).
+    func addDocuments(
+        choosingFiles: Binding<Bool>, choosingFromFolder: Binding<Bool>, folder: Binding<URL?>, onAdded: @escaping () -> Void = {}
+    ) -> some View {
+        modifier(AddDocumentsModifier(isChoosingFiles: choosingFiles, isChoosingFromFolder: choosingFromFolder, folder: folder, onAdded: onAdded))
     }
 }
 

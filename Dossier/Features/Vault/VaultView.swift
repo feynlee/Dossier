@@ -13,6 +13,7 @@ struct VaultView: View {
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
+    @State private var isPickingFiles = false
     @State private var isPickingFolder = false
     /// A folder to choose files from: picked, or dropped on the Vault.
     @State private var pickedFolder: URL?
@@ -86,7 +87,7 @@ struct VaultView: View {
 
                 if documents.isEmpty {
                     Section {
-                        EmptyVault(isPicking: $isPickingFolder, isScanning: $isScanning)
+                        EmptyVault(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder, isScanning: $isScanning)
                     }
                     .listRowBackground(Color.clear)
                 } else if searchText.isEmpty, !isSelecting, !placed.isEmpty {
@@ -184,8 +185,7 @@ struct VaultView: View {
                 } else {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
-                            Button("Scan Documents", systemImage: "doc.viewfinder") { isScanning = true }
-                            Button("Choose Files", systemImage: "folder") { isPickingFolder = true }
+                            AddDocumentsMenuItems(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder, isScanning: $isScanning)
                         } label: {
                             Label("Add Documents", systemImage: "plus")
                         }
@@ -198,7 +198,7 @@ struct VaultView: View {
                 }
             }
             .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
-            .chooseFromFolder(isPresented: $isPickingFolder, folder: $pickedFolder)
+            .addDocuments(choosingFiles: $isPickingFiles, choosingFromFolder: $isPickingFolder, folder: $pickedFolder)
             .onDrop(of: [.item], isTargeted: nil) { providers in
                 Task { await receive(providers) }
                 return true
@@ -277,6 +277,18 @@ struct VaultView: View {
             .listRowInsets(EdgeInsets())
         }
         let statuses = lifecycle
+        // Files you just added come first, so you see them arrive and get read; each moves to its folder
+        // once it's read.
+        let unplaced = documents.filter { $0.placement == nil }
+        if !unplaced.isEmpty {
+            Section {
+                ForEach(unplaced) { row($0, status: statuses[$0.contentHash]) }
+            } header: {
+                Text("Not sorted yet")
+            } footer: {
+                Text("Dossier sorts documents into folders once it has read them.")
+            }
+        }
         ForEach(LibraryGroups.sections(placed, person: names.count > 1 ? person : nil, status: { statuses[$0.contentHash] ?? .current })) { section in
             Section(section.isShared ? "\(section.category) · shared" : section.category) {
                 ForEach(section.folders) { folder in
@@ -291,16 +303,6 @@ struct VaultView: View {
                         .accessibilityIdentifier("folder \(folder.name)")
                     }
                 }
-            }
-        }
-        let unplaced = documents.filter { $0.placement == nil }
-        if !unplaced.isEmpty {
-            Section {
-                ForEach(unplaced) { row($0, status: statuses[$0.contentHash]) }
-            } header: {
-                Text("Not sorted yet")
-            } footer: {
-                Text("Dossier sorts documents into folders once it has read them.")
             }
         }
     }
