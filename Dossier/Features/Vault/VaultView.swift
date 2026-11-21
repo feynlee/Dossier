@@ -14,8 +14,7 @@ struct VaultView: View {
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
     @State private var isPickingFiles = false
-    @State private var isPickingFolder = false
-    /// A folder to choose files from: picked, or dropped on the Vault.
+    /// A folder dropped on the Vault, to choose files from.
     @State private var pickedFolder: URL?
     @Environment(IncomingFiles.self) private var incoming
     @State private var isScanning = false
@@ -87,7 +86,7 @@ struct VaultView: View {
 
                 if documents.isEmpty {
                     Section {
-                        EmptyVault(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder, isScanning: $isScanning)
+                        EmptyVault(isPickingFiles: $isPickingFiles, isScanning: $isScanning)
                     }
                     .listRowBackground(Color.clear)
                 } else if searchText.isEmpty, !isSelecting, !placed.isEmpty {
@@ -185,7 +184,7 @@ struct VaultView: View {
                 } else {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
-                            AddDocumentsMenuItems(isPickingFiles: $isPickingFiles, isPickingFolder: $isPickingFolder, isScanning: $isScanning)
+                            AddDocumentsMenuItems(isPickingFiles: $isPickingFiles, isScanning: $isScanning)
                         } label: {
                             Label("Add Documents", systemImage: "plus")
                         }
@@ -198,7 +197,7 @@ struct VaultView: View {
                 }
             }
             .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
-            .addDocuments(choosingFiles: $isPickingFiles, choosingFromFolder: $isPickingFolder, folder: $pickedFolder)
+            .addDocuments(choosingFiles: $isPickingFiles, folder: $pickedFolder)
             .onDrop(of: [.item], isTargeted: nil) { providers in
                 Task { await receive(providers) }
                 return true

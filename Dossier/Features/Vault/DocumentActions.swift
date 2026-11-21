@@ -99,7 +99,6 @@ private struct RereadDocumentsModifier: ViewModifier {
 /// The vault before anything is added, or after everything was removed.
 struct EmptyVault: View {
     @Binding var isPickingFiles: Bool
-    @Binding var isPickingFolder: Bool
     @Binding var isScanning: Bool
 
     var body: some View {
@@ -111,7 +110,6 @@ struct EmptyVault: View {
             Button("Scan Documents", systemImage: "doc.viewfinder") { isScanning = true }
                 .buttonStyle(.borderedProminent)
             Button("Choose Files", systemImage: "doc") { isPickingFiles = true }
-            Button("Choose from a Folder", systemImage: "folder") { isPickingFolder = true }
         }
         .tint(.dsTint)
     }
@@ -121,7 +119,6 @@ struct EmptyVault: View {
 /// to find.
 struct AddDocumentsMenuItems: View {
     @Binding var isPickingFiles: Bool
-    @Binding var isPickingFolder: Bool
     @Binding var isScanning: Bool
 
     var body: some View {
@@ -136,12 +133,6 @@ struct AddDocumentsMenuItems: View {
                 Text("Choose Files")
                 Text("Tap a file to add it, or Select for several")
             } icon: { Image(systemName: "doc") }
-        }
-        Button { isPickingFolder = true } label: {
-            Label {
-                Text("Choose from a Folder")
-                Text("Tick files across its subfolders")
-            } icon: { Image(systemName: "folder") }
         }
     }
 }
