@@ -6,7 +6,7 @@ import SwiftData
 /// key; sensitive ones stay sealed and only their last four characters and fingerprint come along.
 enum KnowledgeSnapshot {
     static func documents(_ sources: [SourceDocument], overrides: [ProfileOverride] = []) -> [KnowledgeDocument] {
-        var documents = sources.filter { !$0.isGone && $0.isReady }.map(document)
+        var documents = sources.filter { !$0.isGone && $0.isReady }.map { document($0) }
         if let edited = edits(overrides) { documents.append(edited) }
         return documents
     }

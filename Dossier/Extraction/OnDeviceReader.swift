@@ -133,7 +133,7 @@ nonisolated struct OnDeviceReader {
     }
 
     static func isGuardrail(_ error: Error) -> Bool {
-        if let error = error as? LanguageModelSession.GenerationError, case .guardrailViolation = error { return true }
+        if let error = error as? LanguageModelError, case .guardrailViolation = error { return true }
         let text = String(describing: error).lowercased()
         return text.contains("unsafe") || text.contains("guardrail")
     }
