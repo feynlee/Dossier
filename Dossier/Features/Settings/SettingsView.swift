@@ -1,5 +1,6 @@
 import AppIntents
 import AuthenticationServices
+import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
