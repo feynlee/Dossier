@@ -13,6 +13,8 @@ struct VaultView: View {
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
+    /// Key documents you pinned, took out or reordered (`KeyDocuments` as JSON).
+    @AppStorage(KeyDocuments.storageKey) private var keyDocumentsJSON = ""
     /// Set by pulling the Vault down past its top, which opens search.
     @State private var isSearchPresented = false
     @State private var isPickingFiles = false
@@ -305,10 +307,12 @@ struct VaultView: View {
         let shownPerson: String? = nil
         let statuses = lifecycle
         let status = { (document: SourceDocument) in statuses[document.contentHash] ?? document.lifecycleStatus }
-        let cards = WalletStack.cards(placed.map(\.item), status: status)
+        let cards = WalletStack.cards(placed.map(\.item), keys: KeyDocuments(json: keyDocumentsJSON), status: status)
         if !cards.isEmpty {
             Section {
                 WalletStack(documents: cards, showsPerson: people.count > 1)
+            } header: {
+                Text("Key documents")
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))

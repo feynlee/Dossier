@@ -44,29 +44,106 @@ struct CategoryStyle {
     }
 }
 
+// MARK: Key documents
+
+/// Which documents are Key documents (the card stack at the top of the Vault) and in what order. IDs in
+/// use are added on their own; you can pin other documents, take an ID out, and reorder the stack.
+/// Payment, loyalty and insurance cards are never added on their own: Dossier holds documents, not cards
+/// for Apple Wallet. Stored as JSON in UserDefaults under `storageKey`, so a view that reads it with
+/// `@AppStorage(KeyDocuments.storageKey)` updates when it changes.
+nonisolated struct KeyDocuments: Codable, Equatable, Sendable {
+    /// Content hashes of documents you added yourself.
+    var pinned: [String] = []
+    /// Content hashes of IDs you took out of the stack.
+    var hidden: [String] = []
+    /// Content hashes in stack order, top of the screen first. The last card is the one drawn whole.
+    /// Key documents not listed here go after these, so a new ID shows in front.
+    var order: [String] = []
+
+    static let storageKey = "keyDocuments"
+
+    /// Kinds that become Key documents on their own while they're in use. Back to front.
+    static let automaticKinds: [DocumentKind] = [.visa, .employmentAuthorization, .greenCard, .stateID, .driversLicense, .passport]
+
+    init() {}
+
+    init(json: String) {
+        self = (try? JSONDecoder().decode(KeyDocuments.self, from: Data(json.utf8))) ?? KeyDocuments()
+    }
+
+    var json: String {
+        (try? JSONEncoder().encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? ""
+    }
+
+    /// The saved list.
+    static var current: KeyDocuments {
+        KeyDocuments(json: UserDefaults.standard.string(forKey: storageKey) ?? "")
+    }
+
+    /// Changes the saved list.
+    static func update(_ change: (inout KeyDocuments) -> Void) {
+        var list = current
+        change(&list)
+        UserDefaults.standard.set(list.json, forKey: storageKey)
+    }
+
+    /// Whether a document is a Key document: pinned, or an ID in use that you didn't take out.
+    func contains(hash: String, kind: DocumentKind, isInUse: Bool) -> Bool {
+        if pinned.contains(hash) { return true }
+        return Self.automaticKinds.contains(kind) && isInUse && !hidden.contains(hash)
+    }
+
+    /// Adds a document to the stack, in front.
+    mutating func add(_ hash: String) {
+        hidden.removeAll { $0 == hash }
+        if !pinned.contains(hash) { pinned.append(hash) }
+        order.removeAll { $0 == hash }
+        order.append(hash)
+    }
+
+    /// Takes a document out of the stack. An ID stays out until you add it again.
+    mutating func remove(_ hash: String, kind: DocumentKind) {
+        pinned.removeAll { $0 == hash }
+        order.removeAll { $0 == hash }
+        if Self.automaticKinds.contains(kind), !hidden.contains(hash) { hidden.append(hash) }
+    }
+
+    /// Saves the stack's order as shown, top of the screen first.
+    mutating func reorder(_ hashes: [String]) {
+        order = hashes
+    }
+
+    /// Key documents, top of the screen first: in your order, then the rest by kind and person.
+    func sorted<Item>(_ items: [Item], hash: (Item) -> String, kind: (Item) -> DocumentKind, person: (Item) -> String) -> [Item] {
+        items.sorted { a, b in
+            let x = order.firstIndex(of: hash(a)) ?? Int.max, y = order.firstIndex(of: hash(b)) ?? Int.max
+            if x != y { return x < y }
+            let p = Self.automaticKinds.firstIndex(of: kind(a)) ?? -1, q = Self.automaticKinds.firstIndex(of: kind(b)) ?? -1
+            if p != q { return p < q }
+            return person(a).localizedStandardCompare(person(b)) == .orderedDescending
+        }
+    }
+}
+
 // MARK: Wallet
 
-/// The IDs you reach for most, as a stack of cards at the top of the Vault. Each card opens its document
-/// in one tap. Only documents in use are shown; expired and renewed ones stay on the shelves.
+/// Key documents as a stack of cards at the top of the Vault. Each card opens its document in one tap.
+/// IDs that expired or were renewed leave the stack and stay on the shelves.
 struct WalletStack: View {
     /// Back to front: the last card is drawn whole.
     let documents: [SourceDocument]
     /// Show whose card it is, when the Vault shows more than one person.
     let showsPerson: Bool
 
-    static let kinds: [DocumentKind] = [.greenCard, .stateID, .driversLicense, .passport]
     private static let cardHeight: CGFloat = 196
     private static let peek: CGFloat = 54
 
-    /// The wallet's documents: in use, read, one of the card kinds. Back to front by kind, then by person.
-    static func cards(_ documents: [SourceDocument], status: (SourceDocument) -> DocumentLifecycle.Status) -> [SourceDocument] {
-        documents
-            .filter { $0.isReady && kinds.contains($0.kind) && !status($0).isEnded }
-            .sorted { a, b in
-                let x = kinds.firstIndex(of: a.kind) ?? 0, y = kinds.firstIndex(of: b.kind) ?? 0
-                if x != y { return x < y }
-                return (a.libraryPerson ?? "").localizedStandardCompare(b.libraryPerson ?? "") == .orderedDescending
-            }
+    /// The Key documents among these, top of the screen first.
+    static func cards(_ documents: [SourceDocument], keys: KeyDocuments, status: (SourceDocument) -> DocumentLifecycle.Status) -> [SourceDocument] {
+        let chosen = documents.filter {
+            $0.isReady && keys.contains(hash: $0.contentHash, kind: $0.kind, isInUse: !status($0).isEnded)
+        }
+        return keys.sorted(chosen, hash: { $0.contentHash }, kind: { $0.kind }, person: { $0.libraryPerson ?? "" })
     }
 
     var body: some View {
@@ -78,6 +155,11 @@ struct WalletStack: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
+                .contextMenu {
+                    Button("Remove from Key Documents", systemImage: "rectangle.stack.badge.minus") {
+                        KeyDocuments.update { $0.remove(document.contentHash, kind: document.kind) }
+                    }
+                }
                 .offset(y: CGFloat(index) * Self.peek)
             }
         }
@@ -211,6 +293,9 @@ struct CategoryShelf: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
             .contextMenu {
+                Button("Add to Key Documents", systemImage: "rectangle.stack.badge.plus") {
+                    KeyDocuments.update { $0.add(document.contentHash) }
+                }
                 Button("Read again", systemImage: "arrow.clockwise") { onReread(document) }
                 Button("Remove from Vault", systemImage: "trash", role: .destructive) { onRemove(document) }
             }
