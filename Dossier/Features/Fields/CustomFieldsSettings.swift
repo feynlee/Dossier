@@ -191,6 +191,6 @@ struct CategoryRuleView: View {
 
     private func add(_ name: String) {
         newName = ""
-        if withAnimation({ fields.add(name) }) { saved = false }
+        if withAnimation(.default, { fields.add(name) }) { saved = false }
     }
 }

@@ -216,7 +216,7 @@ final class PageDraft {
             loadError = "The file can’t be opened."
             return
         }
-        pages = (0..<source.pageCount).compactMap { source.page(at: $0) }.map(Self.page)
+        pages = (0..<source.pageCount).compactMap { source.page(at: $0) }.map { Self.page($0) }
     }
 
     func move(_ id: UUID, before target: UUID) {
@@ -244,7 +244,7 @@ final class PageDraft {
     /// Returns the new pages' ids.
     func insert(_ scanned: [ScannedPage], after index: Int?) -> [UUID] {
         guard let data = ScanPDF.make(scanned), let source = PDFDocument(data: data) else { return [] }
-        let new = (0..<source.pageCount).compactMap { source.page(at: $0) }.map(Self.page)
+        let new = (0..<source.pageCount).compactMap { source.page(at: $0) }.map { Self.page($0) }
         pages.insert(contentsOf: new, at: index.map { $0 + 1 } ?? pages.count)
         hasChanges = true
         return new.map(\.id)

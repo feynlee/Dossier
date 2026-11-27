@@ -103,7 +103,7 @@ struct AnswerSnippet: View {
 /// Siri's own "search in Dossier for …": with Apple Intelligence, Siri looks for an app's search action when
 /// you ask it to find something in that app. Without one it said "I can't search within Dossier" on Li's
 /// iPhone, though Try a question answered the same question. Answers like Ask Dossier.
-@AppIntent(schema: .system.search)
+@AppIntent(schema: .system.searchInApp)
 struct SearchDossierIntent: ShowInAppSearchResultsIntent {
     static let searchScopes: [StringSearchScope] = [.general]
     static let authenticationPolicy = IntentAuthenticationPolicy.requiresLocalDeviceAuthentication

@@ -132,7 +132,7 @@ nonisolated enum DocumentLifecycle {
 
 extension DocumentLifecycle.Status {
     /// The date the subtitle shows for an ended document.
-    var endedOn: SimpleDate? {
+    nonisolated var endedOn: SimpleDate? {
         switch self {
         case .current, .renewing: nil
         case .expired(let date), .renewed(let date): date
