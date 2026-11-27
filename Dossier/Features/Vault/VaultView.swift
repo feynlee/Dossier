@@ -30,8 +30,6 @@ struct VaultView: View {
     @State private var rereadingSelected: [SourceDocument] = []
     @State private var editMode: EditMode = .inactive
     @State private var selection = Set<PersistentIdentifier>()
-    /// The person whose documents the Vault shows; nil for everyone.
-    @State private var person: String?
     /// What's open on top of the Vault, kept here so Back always returns one screen.
     @State private var path: [VaultRoute] = []
 
@@ -299,30 +297,18 @@ struct VaultView: View {
         return LibraryGroups.sections(placed, person: nil).flatMap { $0.folders.map(\.name) }.filter { seen.insert($0).inserted }
     }
 
-    /// The Vault laid out like a wallet and shelves: a person switcher when there's more than one person,
-    /// your IDs as cards, then a shelf per category. A tile with one document opens it; a tile with several
+    /// The Vault laid out like a wallet and shelves, with everyone's documents together: IDs as cards,
+    /// then a shelf per category. A tile with one document opens it; a tile with several
     /// opens the folder, and See all opens the whole category.
     @ViewBuilder private var librarySections: some View {
-        let names = people
-        let shownPerson = names.count > 1 ? person : nil
-        if names.count > 1 {
-            Section {
-                Picker("Person", selection: $person) {
-                    Text("Everyone").tag(String?.none)
-                    ForEach(names, id: \.self) { Text($0).tag(Optional($0)) }
-                }
-                .pickerStyle(.segmented)
-            }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
-        }
+        // Everyone's documents together: each card and tile says whose it is where that helps.
+        let shownPerson: String? = nil
         let statuses = lifecycle
         let status = { (document: SourceDocument) in statuses[document.contentHash] ?? document.lifecycleStatus }
-        let visible = placed.filter { shownPerson == nil || $0.placement.person == shownPerson || $0.placement.person == LibraryPlacement.household }
-        let cards = WalletStack.cards(visible.map(\.item), status: status)
+        let cards = WalletStack.cards(placed.map(\.item), status: status)
         if !cards.isEmpty {
             Section {
-                WalletStack(documents: cards, showsPerson: shownPerson == nil && names.count > 1)
+                WalletStack(documents: cards, showsPerson: people.count > 1)
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))

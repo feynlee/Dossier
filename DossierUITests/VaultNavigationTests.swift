@@ -50,14 +50,13 @@ final class VaultNavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
     }
 
-    func testPersonSwitcherShowsEachPersonsDocuments() {
+    func testVaultShowsEveryonesDocumentsTogether() {
         keepScreenshot("Vault, everyone")
-        app.buttons["Mei"].tap()
-        XCTAssertTrue(app.buttons["folder EAD cards"].waitForExistence(timeout: 5), "Mei's EAD cards are missing")
-        XCTAssertFalse(app.buttons["document Li · Passport · 2019-03-14 to 2029-03-14"].exists, "Li's passport shows for Mei")
-        keepScreenshot("Vault, Mei")
+        // No person switcher: Li's, Mei's and the household's documents all show.
+        XCTAssertFalse(app.segmentedControls.firstMatch.exists, "The person switcher is back")
+        XCTAssertTrue(reveal(app.buttons["document Li · Passport · 2019-03-14 to 2029-03-14"]), "Li's passport is missing")
+        XCTAssertTrue(reveal(app.buttons["folder EAD cards"]), "Mei's EAD cards are missing")
         XCTAssertTrue(reveal(app.buttons["document Household · Lease 88 Pine Ave · 2023-06-01 to 2024-05-31"]), "The shared lease is missing")
-        while !app.buttons["Mei"].isHittable { app.swipeDown() }
 
         tap(app.buttons["folder EAD cards"])
         XCTAssertTrue(app.navigationBars["EAD cards"].waitForExistence(timeout: 5))
@@ -65,10 +64,7 @@ final class VaultNavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["EAD card"].waitForExistence(timeout: 5))
         goBack()
         goBack()
-
-        app.buttons["Li"].tap()
-        XCTAssertTrue(app.buttons["document Li · Passport · 2019-03-14 to 2029-03-14"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["folder EAD cards"].exists, "Mei's EAD cards show for Li")
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
     }
 
     func testShelfSeeAllListsTheCategory() {
