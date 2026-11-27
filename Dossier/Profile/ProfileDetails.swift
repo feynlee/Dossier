@@ -70,7 +70,7 @@ struct ProfileDetails {
     }
 
     /// Letters and digits only, uppercased: "Eye colour" and "EYE COLOUR" are the same detail.
-    static func normalize(_ value: String) -> String {
+    nonisolated static func normalize(_ value: String) -> String {
         String(value.uppercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
     }
 }

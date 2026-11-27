@@ -418,7 +418,7 @@ private struct SourceMenuItems: View {
                 parts.append(VaultReader.display(value, for: fact.key))
             }
         }
-        if let issued = reference.document.fact(.issueDate).flatMap(VaultReader.value(of:)).flatMap(SimpleDate.init(iso:)) {
+        if let issued = reference.document.fact(.issueDate).flatMap({ VaultReader.value(of: $0) }).flatMap(SimpleDate.init(iso:)) {
             parts.append("Issued \(issued.display)")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")

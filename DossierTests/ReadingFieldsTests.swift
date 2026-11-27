@@ -22,9 +22,12 @@ struct ReadingFieldsTests {
 
     @Test func addingSkipsBlankAndRepeatedNames() {
         var fields = ReadingFields()
-        #expect(fields.add("  Late fee "))
-        #expect(!fields.add("late fee"))
-        #expect(!fields.add("   "))
+        let first = fields.add("  Late fee ")
+        let repeated = fields.add("late fee")
+        let blank = fields.add("   ")
+        #expect(first)
+        #expect(!repeated)
+        #expect(!blank)
         #expect(fields.fields.map(\.name) == ["Late fee"])
     }
 
