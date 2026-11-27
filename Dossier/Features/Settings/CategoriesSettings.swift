@@ -200,7 +200,7 @@ struct CategoryDetailView: View {
 
             Section {
                 ForEach(category.exclusions) { line in
-                    HStack {
+                    VStack(alignment: .leading, spacing: 6) {
                         LineRow(line: line) { update(line, text: $0) }
                         Menu {
                             ForEach(targets, id: \.self) { target in
