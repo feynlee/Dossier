@@ -21,15 +21,18 @@ struct BadgedTile: View {
     let symbol: String
     let badge: TileBadge?
     var size: CGFloat = 32
+    /// The symbol's color and the tile's fill. The Vault's shelves color each category.
+    var tint: Color = .dsTint
+    var soft: Color = .dsTintSoft
 
     var body: some View {
         RoundedRectangle(cornerRadius: size / 4, style: .continuous)
-            .fill(badge?.isEnded == true ? Color(uiColor: .tertiarySystemFill) : Color.dsTintSoft)
+            .fill(badge?.isEnded == true ? Color(uiColor: .tertiarySystemFill) : soft)
             .frame(width: size, height: size)
             .overlay {
                 Image(systemName: symbol)
                     .font(.system(size: size * 0.47, weight: .medium))
-                    .foregroundStyle(badge?.isEnded == true ? Color.secondary : Color.dsTint)
+                    .foregroundStyle(badge?.isEnded == true ? Color.secondary : tint)
             }
             .overlay(alignment: .bottomTrailing) {
                 if let badge {

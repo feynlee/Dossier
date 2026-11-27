@@ -71,6 +71,26 @@ final class VaultNavigationTests: XCTestCase {
         XCTAssertFalse(app.buttons["folder EAD cards"].exists, "Mei's EAD cards show for Li")
     }
 
+    func testShelfSeeAllListsTheCategory() {
+        tap(app.buttons["category Immigration"])
+        XCTAssertTrue(app.navigationBars["Immigration"].waitForExistence(timeout: 5), "See all didn't open the category")
+        keepScreenshot("Immigration, see all")
+        tap(app.buttons["document Mei · EAD card C09 · 2024-05-01 to 2026-04-30"])
+        XCTAssertTrue(app.navigationBars["EAD card"].waitForExistence(timeout: 5), "A document didn't open from See all")
+        goBack()
+        goBack()
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5), "Back didn't return to the Vault")
+    }
+
+    func testPullingDownOpensSearch() {
+        let list = app.collectionViews.firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+            .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)))
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "Pulling down didn't show search")
+        keepScreenshot("Pulled down to search")
+    }
+
     func testPersonalInformationOpensAndGoesBack() {
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Personal information'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))

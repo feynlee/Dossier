@@ -1,0 +1,316 @@
+import SwiftData
+import SwiftUI
+
+// MARK: Category colors
+
+/// Each category has its own color, so you can tell the shelves apart at a glance.
+/// Ended documents still use the muted gray tile.
+struct CategoryStyle {
+    let tint: Color
+    let soft: Color
+
+    static func of(_ category: String) -> CategoryStyle {
+        switch category {
+        case "Identity": CategoryStyle(tint: .dsTint, soft: .dsTintSoft)
+        case "Immigration": CategoryStyle(tint: Color(light: 0x0B6F7A, dark: 0x5AC8D8), soft: Color(light: 0xDDF1F2, dark: 0x173A3E))
+        case "Housing": CategoryStyle(tint: Color(light: 0x2F6B3A, dark: 0x7BD88F), soft: Color(light: 0xE2F1E4, dark: 0x1C3A22))
+        case "Health": CategoryStyle(tint: Color(light: 0xB0234F, dark: 0xFF7EA3), soft: Color(light: 0xFBE4EB, dark: 0x45202D))
+        case "Tax and money": CategoryStyle(tint: Color(light: 0x1F5FB8, dark: 0x7FB2FF), soft: Color(light: 0xE1ECFA, dark: 0x1D2F4A))
+        case "Education": CategoryStyle(tint: Color(light: 0x7A4BB8, dark: 0xC5A3FF), soft: Color(light: 0xEFE6FA, dark: 0x33264A))
+        case "Work": CategoryStyle(tint: Color(light: 0x8A5A00, dark: 0xF0C060), soft: Color(light: 0xF6EBD6, dark: 0x3D3018))
+        default: CategoryStyle(tint: .dsTint, soft: .dsTintSoft)
+        }
+    }
+}
+
+// MARK: Wallet
+
+/// The IDs you reach for most, as a stack of cards at the top of the Vault. Each card opens its document
+/// in one tap. Only documents in use are shown; expired and renewed ones stay on the shelves.
+struct WalletStack: View {
+    /// Back to front: the last card is drawn whole.
+    let documents: [SourceDocument]
+    /// Show whose card it is, when the Vault shows more than one person.
+    let showsPerson: Bool
+
+    static let kinds: [DocumentKind] = [.greenCard, .stateID, .driversLicense, .passport]
+    private static let cardHeight: CGFloat = 196
+    private static let peek: CGFloat = 54
+
+    /// The wallet's documents: in use, read, one of the card kinds. Back to front by kind, then by person.
+    static func cards(_ documents: [SourceDocument], status: (SourceDocument) -> DocumentLifecycle.Status) -> [SourceDocument] {
+        documents
+            .filter { $0.isReady && kinds.contains($0.kind) && !status($0).isEnded }
+            .sorted { a, b in
+                let x = kinds.firstIndex(of: a.kind) ?? 0, y = kinds.firstIndex(of: b.kind) ?? 0
+                if x != y { return x < y }
+                return (a.libraryPerson ?? "").localizedStandardCompare(b.libraryPerson ?? "") == .orderedDescending
+            }
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            ForEach(Array(documents.enumerated()), id: \.element.persistentModelID) { index, document in
+                NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
+                    WalletCard(document: document, showsPerson: showsPerson, isFront: index == documents.count - 1)
+                        .frame(height: Self.cardHeight)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
+                .offset(y: CGFloat(index) * Self.peek)
+            }
+        }
+        .frame(height: Self.cardHeight + CGFloat(max(documents.count - 1, 0)) * Self.peek, alignment: .top)
+        .padding(.vertical, 4)
+    }
+}
+
+/// One ID as a card: its type, whose it is, the masked number and the expiry date.
+struct WalletCard: View {
+    let document: SourceDocument
+    let showsPerson: Bool
+    let isFront: Bool
+
+    private var color: Color {
+        switch document.kind {
+        case .passport: Color(light: 0x1E2A55, dark: 0x2A3A70)
+        case .greenCard: Color(light: 0x0B6F7A, dark: 0x0E7C86)
+        default: Color(light: 0x4B45C6, dark: 0x5E5CE6)
+        }
+    }
+
+    private var number: String? {
+        guard let fact = document.fact(.documentNumber) ?? document.fact(.alienNumber) else { return nil }
+        return fact.isSensitive ? VaultReader.masked(fact) : VaultReader.value(of: fact)
+    }
+
+    private var isExpiring: Bool { document.badge == .expiring }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(document.kind.displayName)
+                    .font(.headline)
+                Spacer()
+                if isExpiring, let expiry = document.expiryDate {
+                    Label("Expires \(SimpleDate(utc: expiry).display)", systemImage: "clock")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color(light: 0xB25000, dark: 0xB25000))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(.white))
+                } else if showsPerson, let person = document.libraryPerson {
+                    Text(person).font(.subheadline).opacity(0.9)
+                }
+            }
+            Spacer(minLength: 8)
+            if isFront {
+                HStack(spacing: 14) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(.white.opacity(0.18))
+                        .frame(width: 54, height: 66)
+                        .overlay {
+                            Image(systemName: document.kind.symbol)
+                                .font(.system(size: 24, weight: .medium))
+                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let number {
+                            Text("Number").font(.caption).opacity(0.8)
+                            Text(number).font(.system(.title3, design: .monospaced).weight(.medium))
+                        }
+                        if let expiry = document.expiryDate {
+                            Text("Expires \(SimpleDate(utc: expiry).display)").font(.caption).opacity(0.8)
+                        }
+                        if showsPerson, isExpiring, let person = document.libraryPerson {
+                            Text(person).font(.caption).opacity(0.8)
+                        }
+                    }
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(color.gradient))
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: Shelves
+
+/// One category as a shelf: its name, See all, and its folders as tiles that scroll sideways.
+struct CategoryShelf: View {
+    let section: LibraryGroups.Section<SourceDocument>
+    let person: String?
+    let statuses: [String: DocumentLifecycle.Status]
+    var onReread: (SourceDocument) -> Void = { _ in }
+    var onRemove: (SourceDocument) -> Void = { _ in }
+
+    private var style: CategoryStyle { .of(section.category) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(section.category)
+                    .font(.title3.bold())
+                if section.isShared {
+                    Text("shared").font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                NavigationLink(value: VaultRoute.category(LibraryCategoryRoute(person: person, category: section.category, isShared: section.isShared))) {
+                    Text("See all").font(.subheadline)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.dsTint)
+                .accessibilityIdentifier("category \(section.category)")
+            }
+            .padding(.horizontal, 20)
+
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 10) {
+                    ForEach(section.folders) { folder in
+                        tile(folder)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder private func tile(_ folder: LibraryGroups.Folder<SourceDocument>) -> some View {
+        if folder.items.count == 1, let document = folder.items.first {
+            let status = statuses[document.contentHash] ?? document.lifecycleStatus
+            NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
+                ShelfTile(symbol: document.kind.symbol, badge: document.badge(status), title: folder.name, subtitle: shortSubtitle(document, status: status), style: style)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
+            .contextMenu {
+                Button("Read again", systemImage: "arrow.clockwise") { onReread(document) }
+                Button("Remove from Vault", systemImage: "trash", role: .destructive) { onRemove(document) }
+            }
+        } else {
+            NavigationLink(value: VaultRoute.folder(LibraryFolderRoute(person: person, category: section.category, folder: folder.name, isShared: section.isShared))) {
+                ShelfTile(symbol: folder.items.first?.kind.symbol ?? "folder", badge: folderBadge(folder.items), title: folder.name, subtitle: folderSubtitle(folder.items), style: style, count: folder.items.count)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("folder \(folder.name)")
+        }
+    }
+
+    private func status(_ document: SourceDocument) -> DocumentLifecycle.Status {
+        statuses[document.contentHash] ?? document.lifecycleStatus
+    }
+
+    private func shortSubtitle(_ document: SourceDocument, status: DocumentLifecycle.Status) -> String {
+        switch status {
+        case .renewed: return "Renewed"
+        case .expired: return "Expired"
+        default: break
+        }
+        if let expiry = document.expiryDate { return "Until \(SimpleDate(utc: expiry).display)" }
+        let facts = document.libraryFacts
+        if let years = LibraryGroups.years([facts.from, facts.until, facts.date].compactMap { $0 }) { return years }
+        return document.kind.displayName
+    }
+
+    private func folderSubtitle(_ documents: [SourceDocument]) -> String {
+        let dates = documents.flatMap { [$0.libraryFacts.from, $0.libraryFacts.until, $0.libraryFacts.date].compactMap { $0 } }
+        return LibraryGroups.years(dates) ?? "\(documents.count) documents"
+    }
+
+    /// The badge of the document that most needs you; ended ones count only when all have ended.
+    private func folderBadge(_ documents: [SourceDocument]) -> TileBadge {
+        let badges = documents.map { $0.badge(status($0)) }
+        let inUse = badges.filter { !$0.isEnded }
+        if inUse.isEmpty { return documents.first.map { status($0).isRenewed } == true ? .renewed : .expired }
+        return inUse.contains(.review) ? .review : inUse.contains(.expiring) ? .expiring : inUse.contains(.reading) ? .reading : .verified
+    }
+}
+
+/// A folder or document on a shelf.
+struct ShelfTile: View {
+    let symbol: String
+    let badge: TileBadge
+    let title: String
+    let subtitle: String
+    let style: CategoryStyle
+    var count: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                BadgedTile(symbol: symbol, badge: badge, size: 34, tint: style.tint, soft: style.soft)
+                Spacer()
+                if let count {
+                    Text("\(count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(style.tint)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(style.soft))
+                }
+            }
+            Spacer(minLength: 8)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(2)
+                .foregroundStyle(.primary)
+            Text(subtitle)
+                .font(.footnote)
+                .lineLimit(1)
+                .foregroundStyle(badge == .expiring ? Color.dsWarning : .secondary)
+        }
+        .padding(12)
+        .frame(width: 132, height: 120, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.dsSurface))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: See all
+
+/// One category's shelf, as the Vault shows it.
+struct LibraryCategoryRoute: Hashable {
+    /// The person the Vault was showing; nil for everyone.
+    var person: String?
+    var category: String
+    /// The category's Household documents shown with one person's.
+    var isShared: Bool
+}
+
+/// Every document in one category, a section per folder. Reads them itself, so it stays current while it's open.
+struct LibraryCategoryView: View {
+    let route: LibraryCategoryRoute
+
+    @Query private var documents: [SourceDocument]
+
+    var body: some View {
+        let statuses = documents.lifecycle()
+        let placed = documents.compactMap { document in document.placement.map { (item: document, placement: $0) } }
+        let section = LibraryGroups.sections(placed, person: route.person, status: { statuses[$0.contentHash] ?? .current })
+            .first { $0.category == route.category && $0.isShared == route.isShared }
+        List {
+            ForEach(section?.folders ?? []) { folder in
+                Section(folder.name) {
+                    ForEach(folder.items) { document in
+                        NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
+                            DocumentRow(document: document, status: statuses[document.contentHash])
+                        }
+                        .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
+                    }
+                }
+            }
+        }
+        .overlay {
+            if section == nil { ContentUnavailableView("No documents here now", systemImage: "folder") }
+        }
+        .navigationTitle(route.category)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
