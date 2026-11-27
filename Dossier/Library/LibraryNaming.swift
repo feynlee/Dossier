@@ -47,10 +47,11 @@ nonisolated struct LibraryFacts: Equatable, Sendable {
 }
 
 nonisolated enum LibraryNaming {
-    /// The starter categories the model's layouts follow.
-    static let starterCategories = ["Identity", "Immigration", "Housing", "Health", "Tax and money", "Education", "Work", "Other"]
+    /// Your categories, in shelf order (Settings › Library › Categories).
+    static var starterCategories: [String] { CategoryList.current.names }
 
     /// Category, folder and the type word for kinds Dossier recognises. Other kinds are placed by the model.
+    /// The category is the default name: `CategoryList.builtIn(_:)` gives its name now.
     static func rule(for kind: DocumentKind) -> (category: String, folder: String, type: String)? {
         switch kind {
         case .passport: ("Identity", "Passports", "Passport")
@@ -61,7 +62,7 @@ nonisolated enum LibraryNaming {
         case .visa: ("Immigration", "Visas", "Visa")
         case .uscisNotice: ("Immigration", "USCIS notices", "USCIS notice")
         case .i94: ("Immigration", "I-94 records", "I-94")
-        case .lease: ("Housing", "Leases", "Lease")
+        case .lease: ("Home", "Leases", "Lease")
         case .other, .addedByYou: nil
         }
     }

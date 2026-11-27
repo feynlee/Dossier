@@ -12,8 +12,11 @@ final class LibraryOrganizer {
 
     @ObservationIgnored private let model = LibraryModel()
     @ObservationIgnored private let logger = Logger(subsystem: "liziyue.Dossier", category: "Library")
-    /// The folders the model was last asked to lay out, so the same library isn't sent twice.
-    @ObservationIgnored private var lastLayoutAsked: [LibraryPlanner.FolderSummary] = []
+    /// Moves found by `proposeRefile`, waiting for you to review them. Nil when there's nothing to review.
+    private(set) var refileMoves: [RefileMove]?
+    /// True while `proposeRefile` asks the model about each document.
+    private(set) var isCheckingRefile = false
+    @ObservationIgnored private var refilePlan: [String: LibraryPlacement] = [:]
 
     func organize(context: ModelContext) async {
         guard !isOrganizing else { return }
@@ -24,28 +27,20 @@ final class LibraryOrganizer {
             .filter { $0.isReady && $0.kind != .addedByYou }
         let entries = documents.map(\.libraryEntry)
 
-        // The model places documents of kinds without a rule, one at a time, seeing the folders so far.
+        let categories = CategoryList.current
+
+        // The model places documents of kinds without a fixed place, one at a time, seeing the folders so far.
         var folders = Set(documents.compactMap(\.placement).map { FolderKey(category: $0.category, folder: $0.folder) })
         var placed: [String: ModelPlacement] = [:]
-        for entry in LibraryPlanner.needsModel(entries) {
-            let existing = folders.sorted { ($0.category, $0.folder) < ($1.category, $1.folder) }
-            guard let placement = await model.place(title: entry.facts.title, kind: entry.facts.kind.displayName, existing: existing) else { continue }
+        for entry in LibraryPlanner.needsModel(entries, categories: categories) {
+            let existing = folders.filter { categories.resolve($0.category) != nil }.sorted { ($0.category, $0.folder) < ($1.category, $1.folder) }
+            guard let placement = await model.place(title: entry.facts.title, kind: entry.facts.kind.displayName, existing: existing, categories: categories) else { continue }
             placed[entry.id] = placement
             folders.insert(FolderKey(category: placement.category, folder: placement.folder))
         }
 
         let people = await resolvePeople(entries)
-        var plan = LibraryPlanner.plan(entries, model: placed, people: people)
-        let titles = Dictionary(documents.map { ($0.contentHash, $0.title) }, uniquingKeysWith: { first, _ in first })
-        let summary = LibraryPlanner.summary(of: plan.filter { id, _ in !(entries.first { $0.id == id }?.isYours ?? false) }, titles: titles)
-        if LibraryPlanner.needsNewLayout(summary), summary != lastLayoutAsked {
-            lastLayoutAsked = summary
-            let moves = await model.layout(summary)
-            if !moves.isEmpty {
-                logger.info("New library layout: \(moves.count, privacy: .public) folders move")
-                plan = LibraryPlanner.plan(entries, model: placed, moves: moves, people: people)
-            }
-        }
+        let plan = LibraryPlanner.plan(entries, model: placed, people: people, categories: categories)
 
         for document in documents where !document.isGone {
             if let placement = plan[document.contentHash], placement != document.placement {
@@ -54,6 +49,72 @@ final class LibraryOrganizer {
         }
         try? context.save()
         await arrangeFiles(documents, showingPerson: LibraryPlanner.showsPeople(plan.values), context: context)
+    }
+
+    // MARK: Refiling after you change your categories
+
+    /// Works out where every document goes with your categories as they are now, asking the model again about
+    /// each document without a fixed place. Sets `refileMoves` to the documents whose category changes. Your
+    /// own placements never move.
+    func proposeRefile(context: ModelContext) async {
+        guard !isOrganizing, !isCheckingRefile else { return }
+        isCheckingRefile = true
+        defer { isCheckingRefile = false }
+        refileMoves = nil
+
+        let documents = ((try? context.fetch(FetchDescriptor<SourceDocument>())) ?? [])
+            .filter { $0.isReady && $0.kind != .addedByYou && !$0.isGone }
+        let entries = documents.map(\.libraryEntry)
+        let categories = CategoryList.current
+
+        var folders = Set(documents.compactMap(\.placement).compactMap { placement -> FolderKey? in
+            categories.resolve(placement.category).map { FolderKey(category: $0, folder: placement.folder) }
+        })
+        var placed: [String: ModelPlacement] = [:]
+        for entry in LibraryPlanner.needsModelForRefile(entries, categories: categories) {
+            let existing = folders.sorted { ($0.category, $0.folder) < ($1.category, $1.folder) }
+            guard let placement = await model.place(title: entry.facts.title, kind: entry.facts.kind.displayName, existing: existing, categories: categories) else { continue }
+            placed[entry.id] = placement
+            folders.insert(FolderKey(category: placement.category, folder: placement.folder))
+        }
+        let people = await resolvePeople(entries)
+        let plan = LibraryPlanner.plan(entries, model: placed, people: people, categories: categories)
+        refilePlan = plan
+        refileMoves = Self.moves(documents: documents, plan: plan, categories: categories)
+    }
+
+    /// The documents whose category changes. A category you renamed isn't a move.
+    static func moves(documents: [SourceDocument], plan: [String: LibraryPlacement], categories: CategoryList) -> [RefileMove] {
+        documents.compactMap { document in
+            guard !document.placementIsYours, let target = plan[document.contentHash] else { return nil }
+            let from = document.libraryCategory
+            if let from, (categories.resolve(from) ?? from) == target.category { return nil }
+            return RefileMove(id: document.contentHash, title: document.libraryName ?? document.title, from: from, to: target)
+        }
+        .sorted { ($0.to.category, $0.title) < ($1.to.category, $1.title) }
+    }
+
+    /// Saves the reviewed plan: every document gets its new place, and files in iCloud Drive › Dossier move.
+    func applyRefile(context: ModelContext) async {
+        let plan = refilePlan
+        refileMoves = nil
+        refilePlan = [:]
+        guard !plan.isEmpty else { return }
+        let documents = ((try? context.fetch(FetchDescriptor<SourceDocument>())) ?? []).filter { $0.isReady && !$0.isGone }
+        for document in documents where !document.placementIsYours {
+            if let placement = plan[document.contentHash], placement != document.placement {
+                document.placement = placement
+            }
+        }
+        try? context.save()
+        await arrangeFiles(documents, showingPerson: LibraryPlanner.showsPeople(plan.values), context: context)
+    }
+
+    /// Drops the reviewed plan. Renamed categories and ones you deleted are still sorted out, as on any pass.
+    func keepCurrentShelves(context: ModelContext) async {
+        refileMoves = nil
+        refilePlan = [:]
+        await organize(context: context)
     }
 
     /// Who each document is about. The rules group documents they're sure of; when that leaves more than one
@@ -194,4 +255,14 @@ extension SourceDocument {
             identityKeys: fact(.alienNumber)?.fingerprint.map { ["A|" + $0.base64EncodedString()] } ?? []
         )
     }
+}
+
+/// One document that moves to another category after you change your categories.
+nonisolated struct RefileMove: Identifiable, Equatable, Sendable {
+    /// The document's content hash.
+    var id: String
+    var title: String
+    /// Its category before, as saved. Nil when it had no place yet.
+    var from: String?
+    var to: LibraryPlacement
 }
