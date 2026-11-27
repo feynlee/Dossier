@@ -10,7 +10,10 @@ final class RereadingTapTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-SampleVault", "-SampleVaultStale"]
         app.launch()
-        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 15), "The Vault didn't open")
+        // Personal is the first tab, so Dossier opens on it.
+        XCTAssertTrue(app.navigationBars["Personal"].waitForExistence(timeout: 15), "Personal didn't open first")
+        app.tabBars.buttons["Vault"].tap()
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5), "The Vault didn't open")
     }
 
     func testRowsOpenWithOneTapWhileReading() {
@@ -49,6 +52,12 @@ final class RereadingTapTests: XCTestCase {
                          file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: 5), "Couldn't find \(element)", file: file, line: line)
         element.tap()
+        // A Key document's card comes forward first; its Open document button opens the page.
+        let open = app.buttons["open document"]
+        if open.waitForExistence(timeout: 2) {
+            open.tap()
+            XCTAssertTrue(open.waitForNonExistence(timeout: 4), "The card didn't close", file: file, line: line)
+        }
         XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 4), "One tap didn't open \(title)", file: file, line: line)
         if goingBack { goBack(to: backTo, file: file, line: line) }
     }

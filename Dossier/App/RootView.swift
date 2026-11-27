@@ -82,6 +82,10 @@ struct MainTabView: View {
 
     var body: some View {
         TabView {
+            // Your details first: the values you copy most often, in full.
+            Tab("Personal", systemImage: "person.crop.circle") {
+                PersonalView()
+            }
             Tab("Vault", systemImage: "person.text.rectangle") {
                 VaultView()
             }

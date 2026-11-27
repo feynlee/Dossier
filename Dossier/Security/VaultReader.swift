@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import LocalAuthentication
 import UIKit
 import UniformTypeIdentifiers
@@ -19,6 +20,23 @@ enum VaultReader {
 
     static func reveal(_ fact: Fact, context: LAContext) throws -> String {
         try Sealer.shared.openSensitive(fact.sealedValue, context: context)
+    }
+
+    /// The full value of a sensitive fact while Dossier is unlocked, with no second Face ID. Nil while
+    /// locked, or when the unlock can't open numbers (see `VaultSession`).
+    static func revealIfUnlocked(_ fact: Fact) -> String? {
+        guard let context = VaultSession.shared.context else { return nil }
+        return try? reveal(fact, context: context)
+    }
+
+    /// What to show for a sensitive fact: the full value while Dossier is unlocked, else `•••• •• 4821`.
+    static func shown(_ fact: Fact) -> String {
+        revealIfUnlocked(fact) ?? masked(fact)
+    }
+
+    /// Any fact as a card shows it: plain values as they are, numbers in full while Dossier is unlocked.
+    static func cardValue(_ fact: Fact) -> String? {
+        fact.isSensitive ? shown(fact) : value(of: fact)
     }
 
     static func alternate(of fact: Fact, context: LAContext?) -> String? {
@@ -54,5 +72,41 @@ enum VaultReader {
         } else {
             UIPasteboard.general.string = value
         }
+    }
+}
+
+/// The Face ID check that unlocked Dossier, kept until the app locks again. Every number opens with it, so
+/// you look once per unlock and not once per value.
+@Observable
+final class VaultSession {
+    static let shared = VaultSession()
+
+    /// A check that can open numbers. Nil while Dossier is locked, or before the first look when the app
+    /// lock is off.
+    private(set) var context: LAContext? {
+        didSet { Authenticator.unlocked = context }
+    }
+
+    /// Keeps a check that just passed, if it can open numbers. An unlock with the passcode can't (the
+    /// number key needs Face ID), so the first number then asks for Face ID once, and that check is kept.
+    @discardableResult
+    func begin(_ context: LAContext) -> Bool {
+        // Never show a prompt from here: a check that isn't enough is dropped, not repeated.
+        context.interactionNotAllowed = true
+        guard Self.canOpenNumbers(with: context) else { return false }
+        self.context = context
+        return true
+    }
+
+    /// Dossier locked: numbers need a new check.
+    func end() {
+        context?.invalidate()
+        context = nil
+    }
+
+    /// Seals a short test value to the number key and opens it with the check.
+    private static func canOpenNumbers(with context: LAContext) -> Bool {
+        guard let probe = try? VaultKeys.shared.sealSensitive(Data("probe".utf8)) else { return false }
+        return (try? VaultKeys.shared.openSensitive(probe, context: context)) != nil
     }
 }

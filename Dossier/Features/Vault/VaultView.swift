@@ -15,8 +15,12 @@ struct VaultView: View {
     @State private var searchText = ""
     /// Key documents you pinned, took out or reordered (`KeyDocuments` as JSON).
     @AppStorage(KeyDocuments.storageKey) private var keyDocumentsJSON = ""
-    /// Set by pulling the Vault down past its top, which opens search.
+    /// Set by the search button, or by pulling the Vault down past its top, which opens search.
     @State private var isSearchPresented = false
+    /// The Key document brought forward from the wallet.
+    @State private var focusedCard: SourceDocument?
+    /// Documents on their way to another shelf, from a drop or Move to….
+    @State private var moving: MoveRequest?
     @State private var isPickingFiles = false
     /// A folder dropped on the Vault, to choose files from.
     @State private var pickedFolder: URL?
@@ -110,7 +114,7 @@ struct VaultView: View {
                     }
                 }
             }
-            // Hidden above the wallet until you pull the Vault down.
+            // Hidden above the wallet until you tap Search or pull the Vault down.
             .searchable(text: $searchText, isPresented: $isSearchPresented, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search documents and facts")
             .searchSuggestions {
                 if searchText.isEmpty {
@@ -142,7 +146,11 @@ struct VaultView: View {
                             .removeDocuments($removingSelected) { endSelecting() }
                     }
                 } else {
-                    ToolbarItem(placement: .primaryAction) {
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        if !documents.isEmpty {
+                            Button("Search", systemImage: "magnifyingglass") { isSearchPresented = true }
+                                .accessibilityIdentifier("search documents")
+                        }
                         Menu {
                             AddDocumentsMenuItems(isPickingFiles: $isPickingFiles, isScanning: $isScanning)
                         } label: {
@@ -163,6 +171,14 @@ struct VaultView: View {
                 return true
             }
             .fullScreenCover(isPresented: $isScanning) { DocumentScanner() }
+            .sheet(item: $moving) { request in
+                MoveDocumentSheet(documents: request.documents, category: request.category)
+            }
+            .sheet(item: $focusedCard) { document in
+                WalletFocusView(document: document, cards: walletCards) { open in
+                    path.append(.document(open.persistentModelID))
+                }
+            }
             .removeDocuments($removing) { endSelecting() }
             .onChange(of: documents.count) { _, count in
                 if count == 0 { endSelecting() }
@@ -288,11 +304,6 @@ struct VaultView: View {
         documents.compactMap { document in document.placement.map { (item: document, placement: $0) } }
     }
 
-    private var people: [String] {
-        let placements = placed.map(\.placement)
-        return LibraryGroups.people(placements, owner: LibraryGroups.owner(placements))
-    }
-
     /// Folder names to jump to from an empty search, in shelf order.
     private var typeSuggestions: [String] {
         var seen = Set<String>()
@@ -306,11 +317,10 @@ struct VaultView: View {
         // Everyone's documents together: each card and tile says whose it is where that helps.
         let shownPerson: String? = nil
         let statuses = lifecycle
-        let status = { (document: SourceDocument) in statuses[document.contentHash] ?? document.lifecycleStatus }
-        let cards = WalletStack.cards(placed.map(\.item), keys: KeyDocuments(json: keyDocumentsJSON), status: status)
+        let cards = walletCards
         if !cards.isEmpty {
             Section {
-                WalletStack(documents: cards, showsPerson: people.count > 1)
+                WalletStack(documents: cards) { focusedCard = $0 }
             } header: {
                 HStack {
                     Text("Key documents")
@@ -347,12 +357,27 @@ struct VaultView: View {
                 CategoryShelf(
                     section: section, person: shownPerson, statuses: statuses,
                     onReread: { importer.reread($0, context: modelContext, preferPrivateCloud: usePrivateCloud) },
-                    onRemove: { removing = [$0] }
+                    onRemove: { removing = [$0] },
+                    onMove: { moving = MoveRequest(documents: $0, category: $1) },
+                    onDrop: { hashes, category in
+                        let dropped = documents.filter { hashes.contains($0.contentHash) && $0.placement != nil }
+                        // A drop on the shelf it's already on does nothing.
+                        guard !dropped.isEmpty, dropped.contains(where: { $0.placement?.category != category }) else { return }
+                        moving = MoveRequest(documents: dropped, category: category)
+                    }
                 )
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
             .listSectionSpacing(.compact)
+        }
+    }
+
+    /// Key documents in the wallet, back to front.
+    private var walletCards: [SourceDocument] {
+        let statuses = lifecycle
+        return WalletStack.cards(placed.map(\.item), keys: KeyDocuments(json: keyDocumentsJSON)) {
+            statuses[$0.contentHash] ?? $0.lifecycleStatus
         }
     }
 
@@ -605,4 +630,11 @@ private struct ImportStatusSection: View {
             }
         }
     }
+}
+
+/// Documents to move, and the shelf they were dropped on (nil from Move to…).
+struct MoveRequest: Identifiable {
+    let id = UUID()
+    let documents: [SourceDocument]
+    let category: String?
 }
