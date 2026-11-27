@@ -3,23 +3,44 @@ import SwiftUI
 
 // MARK: Category colors
 
-/// Each category has its own color, so you can tell the shelves apart at a glance.
-/// Ended documents still use the muted gray tile.
+/// Each category has its own color and symbol, so you can tell the shelves apart at a glance. Settings ›
+/// Categories uses the same style. Ended documents still use the muted gray tile.
 struct CategoryStyle {
     let tint: Color
     let soft: Color
+    let symbol: String
 
+    /// The 14 default categories. Old names (Housing, Tax and money) keep their colors until documents move.
     static func of(_ category: String) -> CategoryStyle {
         switch category {
-        case "Identity": CategoryStyle(tint: .dsTint, soft: .dsTintSoft)
-        case "Immigration": CategoryStyle(tint: Color(light: 0x0B6F7A, dark: 0x5AC8D8), soft: Color(light: 0xDDF1F2, dark: 0x173A3E))
-        case "Housing": CategoryStyle(tint: Color(light: 0x2F6B3A, dark: 0x7BD88F), soft: Color(light: 0xE2F1E4, dark: 0x1C3A22))
-        case "Health": CategoryStyle(tint: Color(light: 0xB0234F, dark: 0xFF7EA3), soft: Color(light: 0xFBE4EB, dark: 0x45202D))
-        case "Tax and money": CategoryStyle(tint: Color(light: 0x1F5FB8, dark: 0x7FB2FF), soft: Color(light: 0xE1ECFA, dark: 0x1D2F4A))
-        case "Education": CategoryStyle(tint: Color(light: 0x7A4BB8, dark: 0xC5A3FF), soft: Color(light: 0xEFE6FA, dark: 0x33264A))
-        case "Work": CategoryStyle(tint: Color(light: 0x8A5A00, dark: 0xF0C060), soft: Color(light: 0xF6EBD6, dark: 0x3D3018))
-        default: CategoryStyle(tint: .dsTint, soft: .dsTintSoft)
+        case "Identity": style(0x4B45C6, 0x8E8BFF, 0xE9E9F8, 0x29284D, "person.text.rectangle")
+        case "Immigration": style(0x0B6F7A, 0x5AC8D8, 0xDDF1F2, 0x173A3E, "globe")
+        case "Health": style(0xB0234F, 0xFF7EA3, 0xFBE4EB, 0x45202D, "heart.text.square")
+        case "Insurance": style(0x6A4FB0, 0xB9A2FF, 0xECE6F8, 0x2F2650, "umbrella")
+        case "Money", "Tax and money": style(0x1F5FB8, 0x7FB2FF, 0xE1ECFA, 0x1D2F4A, "banknote")
+        case "Taxes": style(0x5B6B12, 0xC3D66B, 0xEEF2D9, 0x2E3414, "percent")
+        case "Home", "Housing": style(0x2F6B3A, 0x7BD88F, 0xE2F1E4, 0x1C3A22, "house")
+        case "Vehicles": style(0x4A5A6A, 0xA9B8C8, 0xE5E9EE, 0x2A3038, "car")
+        case "Work": style(0x8A5A00, 0xF0C060, 0xF6EBD6, 0x3D3018, "briefcase")
+        case "Education": style(0x9B3FA0, 0xE59BEA, 0xF5E3F5, 0x40214A, "graduationcap")
+        case "Legal": style(0x6B4E3D, 0xD2B29C, 0xF0E8E2, 0x3A2C23, "building.columns")
+        case "Purchases": style(0xA03A5F, 0xF59BBE, 0xF8E4EC, 0x442330, "bag")
+        case "Travel": style(0x0A7EA4, 0x6CCBF0, 0xDCEFF7, 0x15384A, "airplane")
+        case "Other": style(0x6E6E73, 0xAEAEB2, 0xEDEDF0, 0x2C2C2E, "tray")
+        default: custom(category)
         }
+    }
+
+    /// A category you added gets one of the palette's colors, picked from its name so it stays the same.
+    private static func custom(_ category: String) -> CategoryStyle {
+        let palette = ["Identity", "Immigration", "Health", "Insurance", "Money", "Taxes", "Home", "Vehicles", "Work", "Education", "Legal", "Purchases", "Travel"]
+        let index = category.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % palette.count
+        let base = of(palette[index])
+        return CategoryStyle(tint: base.tint, soft: base.soft, symbol: "folder")
+    }
+
+    private static func style(_ tint: UInt32, _ tintDark: UInt32, _ soft: UInt32, _ softDark: UInt32, _ symbol: String) -> CategoryStyle {
+        CategoryStyle(tint: Color(light: tint, dark: tintDark), soft: Color(light: soft, dark: softDark), symbol: symbol)
     }
 }
 
