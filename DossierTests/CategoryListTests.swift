@@ -24,9 +24,12 @@ struct CategoryListTests {
 
     @Test func addsBeforeOtherAndRefusesRepeats() {
         var list = CategoryList.defaults
-        #expect(list.add("  Pets "))
-        #expect(!list.add("pets"))
-        #expect(!list.add("   "))
+        let addedPets = list.add("  Pets ")
+        #expect(addedPets)
+        let addedPetsAgain = list.add("pets")
+        #expect(!addedPetsAgain)
+        let addedBlank = list.add("   ")
+        #expect(!addedBlank)
         #expect(list.names.suffix(2) == ["Pets", "Other"])
         #expect(list.category(named: "Pets")?.lines.map(\.text) == ["Pets"])
     }
@@ -44,12 +47,15 @@ struct CategoryListTests {
 
     @Test func renameFollowsLinesAndKeepsTheOldNameAsAnAlias() {
         var list = CategoryList.defaults
-        #expect(list.rename("Travel", to: "Trips"))
+        let renamedTravel = list.rename("Travel", to: "Trips")
+        #expect(renamedTravel)
         #expect(list.resolve("travel") == "Trips")
         #expect(list.builtIn("Travel") == "Trips")
         #expect(list.category(named: "Insurance")?.exclusions.contains { $0.pointsTo == "Trips" } == true)
-        #expect(!list.rename("Other", to: "Misc"))
-        #expect(!list.rename("Trips", to: "identity"))
+        let renamedOther = list.rename("Other", to: "Misc")
+        #expect(!renamedOther)
+        let renamedToIdentity = list.rename("Trips", to: "identity")
+        #expect(!renamedToIdentity)
     }
 
     @Test func oldNamesResolveToTheirCategories() {
@@ -67,8 +73,10 @@ struct CategoryListTests {
         var insurance = list.category(named: "Insurance")!.lines
         insurance.append(FilingLine(text: "Trip cancellation cover", pointsTo: "Travel", isYours: true))
         list.setLines(insurance, for: "Insurance")
-        #expect(list.delete("Travel"))
-        #expect(!list.delete("Other"))
+        let deletedTravel = list.delete("Travel")
+        #expect(deletedTravel)
+        let deletedOther = list.delete("Other")
+        #expect(!deletedOther)
         let lines = list.category(named: "Insurance")!.exclusions
         #expect(!lines.contains { $0.text == "Travel insurance" })
         #expect(lines.first { $0.text == "Trip cancellation cover" }?.pointsTo == "Other")
