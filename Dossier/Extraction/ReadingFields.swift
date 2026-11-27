@@ -112,7 +112,21 @@ nonisolated enum FieldRules {
     static func rule(for category: String?) -> ReadingFields? {
         guard let category else { return nil }
         let rules = all
-        return rules[category] ?? rules.first { $0.key.caseInsensitiveCompare(category) == .orderedSame }?.value
+        if let rule = rules[category] ?? rules.first(where: { $0.key.caseInsensitiveCompare(category) == .orderedSame })?.value {
+            return rule
+        }
+        // A rule saved under a category's old name, such as Housing for Home.
+        let list = CategoryList.current
+        guard let resolved = list.resolve(category) else { return nil }
+        return rules.first { list.resolve($0.key) == resolved }?.value
+    }
+
+    /// Moves a category's rule to its new name.
+    static func rename(_ old: String, to new: String) {
+        var rules = all
+        guard let key = rules.keys.first(where: { $0.caseInsensitiveCompare(old) == .orderedSame }), old != new else { return }
+        rules[new] = rules.removeValue(forKey: key)
+        UserDefaults.standard.set(try? JSONEncoder().encode(rules), forKey: rulesKey)
     }
 
     /// Saves a category's rule; nil or an empty rule that reads everything useful removes it.
@@ -159,10 +173,14 @@ nonisolated enum FieldRules {
         case .other, .addedByYou:
             switch category {
             case "Health": return ["Doctor", "Clinic phone", "Next appointment", "Blood type", "Allergies"]
-            case "Tax and money": return ["Tax year", "Total income", "Employer", "Account number", "Amount due"]
+            case "Taxes", "Tax and money": return ["Tax year", "Total income", "Employer", "Amount due"]
+            case "Money": return ["Account number", "Balance", "Statement date", "Interest rate"]
+            case "Insurance": return ["Policy number", "Coverage", "Premium", "Renewal date", "Insurer phone"]
+            case "Vehicles": return ["VIN", "Plate number", "Registration expiry", "Make and model"]
+            case "Travel": return ["Confirmation number", "Departure date", "Return date", "Airline"]
             case "Education": return ["School", "Degree", "Graduation date", "GPA"]
             case "Work": return ["Employer", "Job title", "Start date", "Salary"]
-            case "Housing": return ["Monthly payment", "Account number", "Due date", "Provider phone"]
+            case "Home", "Housing": return ["Monthly payment", "Account number", "Due date", "Provider phone"]
             default: return ["Policy number", "Amount due", "Due date", "Contact phone", "Renewal date"]
             }
         }
@@ -189,22 +207,10 @@ nonisolated struct FileGuess: Equatable, Sendable {
     var kind: DocumentKind
     /// A short word for what it is, such as "Lease" or "Insurance policy".
     var type: String
-    /// A library category, such as Housing.
+    /// A library category, such as Home.
     var category: String
 
     var label: String { "\(type) · \(category)" }
-}
-
-@Generable(description: "What a personal document is")
-nonisolated struct QuickIdentity {
-    @Guide(description: "The kind of document.", .anyOf(DocumentKind.allCases.filter { $0 != .addedByYou }.map(\.rawValue)))
-    var kind: String
-
-    @Guide(description: "Two or three words for what it is, in sentence case, such as \"Lease\", \"Insurance policy\", \"W-2\" or \"Lab results\".")
-    var type: String
-
-    @Guide(description: "Where it belongs.", .anyOf(LibraryNaming.starterCategories))
-    var category: String
 }
 
 nonisolated enum FileIdentifier {
@@ -227,6 +233,18 @@ nonisolated enum FileIdentifier {
         await identify(fileName: fileName, text: pages.first?.lines.joined(separator: "\n") ?? "")
     }
 
+    /// The quick answer's shape: a kind, a type and one of your categories.
+    static func quickIdentitySchema(_ categories: [String]) -> DynamicGenerationSchema {
+        DynamicGenerationSchema(name: "QuickIdentity", description: "What a personal document is", properties: [
+            .init(name: "kind", description: "The kind of document.",
+                  schema: DynamicGenerationSchema(name: "Kind", anyOf: DocumentKind.allCases.filter { $0 != .addedByYou }.map(\.rawValue))),
+            .init(name: "type", description: "Two or three words for what it is, in sentence case, such as \"Lease\", \"Insurance policy\", \"W-2\" or \"Lab results\".",
+                  schema: DynamicGenerationSchema(type: String.self)),
+            .init(name: "category", description: "Where it belongs, exactly as named in the list of categories.",
+                  schema: DynamicGenerationSchema(name: "Category", anyOf: categories)),
+        ])
+    }
+
     static func identify(fileName: String, text: String) async -> FileGuess? {
         let model = SystemLanguageModel.default
         guard model.isAvailable else { return nil }
@@ -238,13 +256,17 @@ nonisolated enum FileIdentifier {
             """
         let prompt = "File name: \(fileName)\nFirst page:\n\(String(text.prefix(1_500)))"
         do {
+            let categories = CategoryList.current
             let session = LanguageModelSession(model: model, instructions: instructions)
-            let answer = try await session.respond(to: prompt, generating: QuickIdentity.self, options: GenerationOptions(samplingMode: .greedy)).content
-            let kind = DocumentKind(rawValue: answer.kind) ?? .other
+            let schema = try GenerationSchema(root: quickIdentitySchema(categories.names), dependencies: [])
+            let answer = try await session.respond(to: "\(categories.promptText)\n\n\(prompt)", schema: schema, options: GenerationOptions(samplingMode: .greedy)).content
+            let kind = DocumentKind(rawValue: try answer.value(String.self, forProperty: "kind")) ?? .other
+            let answerType = (try? answer.value(String.self, forProperty: "type")) ?? ""
+            let answerCategory = (try? answer.value(String.self, forProperty: "category")).flatMap { categories.resolve($0) } ?? CategoryList.other
             // Kinds Dossier recognises always go to the same category.
             let rule = LibraryNaming.rule(for: kind)
-            let type = rule?.type ?? (answer.type.trimmingCharacters(in: .whitespaces).isEmpty ? kind.displayName : answer.type)
-            return FileGuess(kind: kind, type: type, category: rule?.category ?? answer.category)
+            let type = rule?.type ?? (answerType.trimmingCharacters(in: .whitespaces).isEmpty ? kind.displayName : answerType)
+            return FileGuess(kind: kind, type: type, category: LibraryPlanner.ruleCategory(for: kind, in: categories) ?? answerCategory)
         } catch {
             return nil
         }

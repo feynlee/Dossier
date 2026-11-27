@@ -6,9 +6,12 @@ struct CustomFieldsSettingsView: View {
     @AppStorage(FieldRules.askWhenAddingKey) private var asksWhenAdding = true
     @State private var rules: [String: ReadingFields] = [:]
 
-    /// The starter categories, then any others that have a rule.
+    @AppStorage(CategoryList.storageKey) private var categoryJSON = ""
+
+    /// Your categories, then any others that have a rule.
     private var categories: [String] {
-        LibraryNaming.starterCategories + rules.keys.filter { !LibraryNaming.starterCategories.contains($0) }.sorted()
+        let list = CategoryList(json: categoryJSON)
+        return list.names + rules.keys.filter { list.resolve($0) == nil }.sorted()
     }
 
     var body: some View {
@@ -76,11 +79,12 @@ struct CategoryRuleView: View {
 
     /// Files in this category that would be read with the rule: those without fields of their own.
     private var affected: [SourceDocument] {
-        documents.filter { $0.ruleCategory == category && $0.ownFields == nil && $0.bookmark != nil && $0.isReady }
+        let list = CategoryList.current
+        return documents.filter { $0.ruleCategory.flatMap { list.resolve($0) } == category && $0.ownFields == nil && $0.bookmark != nil && $0.isReady }
     }
 
     private var suggestions: [String] {
-        let kind: DocumentKind = category == "Housing" ? .lease : .other
+        let kind: DocumentKind = CategoryList.current.builtIn("Home") == category ? .lease : .other
         return FieldRules.suggestions(for: kind, category: category)
             .filter { name in !fields.fields.contains { $0.id == name.lowercased() } }
     }

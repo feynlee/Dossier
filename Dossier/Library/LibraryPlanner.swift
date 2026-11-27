@@ -51,9 +51,25 @@ nonisolated enum LibraryPlanner {
         !placements.isEmpty
     }
 
-    /// Entries the model has to place: kinds without a rule that have no placement yet.
-    static func needsModel(_ entries: [LibraryEntry]) -> [LibraryEntry] {
-        entries.filter { !$0.isYours && $0.current == nil && LibraryNaming.rule(for: $0.facts.kind) == nil }
+    /// The category a kind with a fixed place goes to, by its name now. Nil when the kind has no fixed place,
+    /// or you deleted its category: then the model places it.
+    static func ruleCategory(for kind: DocumentKind, in categories: CategoryList) -> String? {
+        LibraryNaming.rule(for: kind).flatMap { categories.builtIn($0.category) }
+    }
+
+    /// Entries the model has to place: not yours, with no fixed place, and with no placement yet or one in a
+    /// category that's no longer in your list.
+    static func needsModel(_ entries: [LibraryEntry], categories: CategoryList = .current) -> [LibraryEntry] {
+        entries.filter { entry in
+            guard !entry.isYours, ruleCategory(for: entry.facts.kind, in: categories) == nil else { return false }
+            guard let current = entry.current else { return true }
+            return categories.resolve(current.category) == nil
+        }
+    }
+
+    /// Entries a refile asks the model about again: not yours, and with no fixed place.
+    static func needsModelForRefile(_ entries: [LibraryEntry], categories: CategoryList = .current) -> [LibraryEntry] {
+        entries.filter { !$0.isYours && ruleCategory(for: $0.facts.kind, in: categories) == nil }
     }
 
     /// Placement for every entry. Yours are kept as they are. Others keep their folder (after any `moves`
@@ -62,7 +78,8 @@ nonisolated enum LibraryPlanner {
         _ entries: [LibraryEntry],
         model: [String: ModelPlacement],
         moves: [FolderKey: FolderKey] = [:],
-        people: [String: String]? = nil
+        people: [String: String]? = nil,
+        categories: CategoryList = .current
     ) -> [String: LibraryPlacement] {
         let people = people ?? PersonResolver.names(for: PersonResolver.groups(entries))
         let mainPerson = owner(of: entries, people: people)
@@ -79,22 +96,22 @@ nonisolated enum LibraryPlanner {
             let holder = person(for: entry, owner: mainPerson, among: entries, people: people)
             var key: FolderKey
             var baseName: String
-            if let rule = LibraryNaming.rule(for: entry.facts.kind) {
-                key = FolderKey(category: entry.current?.category ?? rule.category, folder: entry.current?.folder ?? rule.folder)
+            if let rule = LibraryNaming.rule(for: entry.facts.kind), let category = ruleCategory(for: entry.facts.kind, in: categories) {
+                key = FolderKey(category: entry.current.flatMap { categories.resolve($0.category) } ?? category, folder: entry.current?.folder ?? rule.folder)
                 baseName = LibraryNaming.name(for: entry.facts, person: holder)
             } else if let placed = model[entry.id] {
-                key = FolderKey(category: placed.category, folder: placed.folder)
+                key = FolderKey(category: categories.resolve(placed.category) ?? CategoryList.other, folder: placed.folder)
                 let detail = placed.detail.flatMap { LibraryNaming.mayRevealNumber($0) ? nil : $0 }
                 baseName = LibraryNaming.name(for: entry.facts, person: holder, type: placed.type, detail: detail ?? "")
             } else if let current = entry.current {
-                key = FolderKey(category: current.category, folder: current.folder)
+                key = FolderKey(category: categories.resolve(current.category) ?? current.category, folder: current.folder)
                 // The model's name from earlier, with the person brought up to date.
                 let rest = current.name.components(separatedBy: " · ").dropFirst().joined(separator: " · ")
                     .replacingOccurrences(of: #" \(\d+\)$"#, with: "", options: .regularExpression)
                 baseName = rest.isEmpty ? holder : "\(holder) · \(rest)"
             } else {
                 // No model available: keep it findable until the model can place it.
-                key = FolderKey(category: "Other", folder: "Documents")
+                key = FolderKey(category: CategoryList.other, folder: "Documents")
                 baseName = LibraryNaming.name(for: entry.facts, person: holder, type: entry.facts.title, detail: "")
             }
             if let moved = moves[key] { key = moved }
@@ -104,46 +121,5 @@ nonisolated enum LibraryPlanner {
             result[entry.id] = LibraryPlacement(person: holder, category: key.category, folder: key.folder, name: name)
         }
         return result
-    }
-
-    // MARK: Layout
-
-    /// The folders in use, with how many documents each holds and a few of their titles, for the model.
-    struct FolderSummary: Sendable, Equatable {
-        var key: FolderKey
-        var count: Int
-        var examples: [String]
-    }
-
-    static func summary(of placements: [String: LibraryPlacement], titles: [String: String]) -> [FolderSummary] {
-        var folders: [FolderKey: [String]] = [:]
-        for (id, placement) in placements {
-            folders[FolderKey(category: placement.category, folder: placement.folder), default: []].append(titles[id] ?? placement.name)
-        }
-        return folders.map { FolderSummary(key: $0.key, count: $0.value.count, examples: Array(Set($0.value).sorted().prefix(3))) }
-            .sorted { ($0.key.category, $0.key.folder) < ($1.key.category, $1.key.folder) }
-    }
-
-    static let maxCategories = 8
-    static let maxPerCategory = 40
-
-    /// Whether the top level has outgrown its shape: too many categories, one that's crowded, or several that
-    /// hold a single document.
-    static func needsNewLayout(_ folders: [FolderSummary]) -> Bool {
-        let perCategory = Dictionary(folders.map { ($0.key.category, $0.count) }, uniquingKeysWith: +)
-        let singles = perCategory.values.filter { $0 == 1 }.count
-        return perCategory.count > maxCategories || perCategory.values.contains { $0 > maxPerCategory } || (perCategory.count > 4 && singles >= 3)
-    }
-
-    /// Keeps a layout's moves only where they make sense: every folder gets a short, non-empty name, and the
-    /// top level stays within `maxCategories`. Otherwise nothing moves.
-    static func validated(_ moves: [FolderKey: FolderKey], for folders: [FolderSummary]) -> [FolderKey: FolderKey] {
-        let cleaned = moves.compactMapValues { target -> FolderKey? in
-            let category = LibraryNaming.clean(target.category), folder = LibraryNaming.clean(target.folder)
-            guard !category.isEmpty, !folder.isEmpty, category.count <= 24, folder.count <= 32 else { return nil }
-            return FolderKey(category: category, folder: folder)
-        }
-        let after = Set(folders.map { (cleaned[$0.key] ?? $0.key).category })
-        return after.count <= maxCategories ? cleaned.filter { $0.key != $0.value } : [:]
     }
 }

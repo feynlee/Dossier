@@ -1,5 +1,6 @@
 import AppIntents
 import AuthenticationServices
+import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -18,10 +19,33 @@ struct SettingsView: View {
     @State private var lastScanFolder: URL?
     @State private var isChoosingScanFolder = false
     @State private var scanFolderError: String?
+    @Environment(ImportCoordinator.self) private var importer
+    @Environment(\.modelContext) private var modelContext
+    /// Your categories' filing signature when you opened Settings › Categories. Checked when you come back.
+    @State private var filingAtOpen: String?
+    @State private var showsRefile = false
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    NavigationLink {
+                        CategoriesSettingsView()
+                            .onAppear { if filingAtOpen == nil { filingAtOpen = CategoryList.current.filingSignature } }
+                    } label: {
+                        TileRow(symbol: "square.stack.3d.up", badge: nil, title: "Categories", subtitle: "The Vault’s shelves and how documents are filed")
+                    }
+                    .accessibilityIdentifier("settings categories")
+                    NavigationLink {
+                        KeyDocumentsSettingsView()
+                    } label: {
+                        TileRow(symbol: "rectangle.stack", badge: nil, title: "Key documents", subtitle: "The IDs at the top of the Vault")
+                    }
+                    .accessibilityIdentifier("settings key documents")
+                } header: {
+                    Text("Library")
+                }
+
                 Section {
                     Toggle(isOn: $usePrivateCloud) {
                         TileRow(symbol: "cloud", badge: nil, title: "Private Cloud Compute", subtitle: "More accurate. Pages aren’t kept.")
@@ -142,6 +166,8 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .onAppear(perform: checkRefile)
+            .sheet(isPresented: $showsRefile) { RefileSheet() }
             .fileImporter(isPresented: $isChoosingScanFolder, allowedContentTypes: [.folder]) { result in
                 switch result {
                 case .success(let url):
@@ -171,6 +197,23 @@ struct SettingsView: View {
                 privateCloudStatus = DocumentExtractor.privateCloudStatus()
                 lockEnabled = appLock.isEnabled
                 lockTimeout = appLock.timeout
+            }
+        }
+    }
+
+    /// Back from Settings › Categories: if names or lines changed, check where documents go now and show
+    /// the moves for review. A change that moves nothing (a rename, new order) is saved without asking.
+    private func checkRefile() {
+        guard let before = filingAtOpen else { return }
+        filingAtOpen = nil
+        guard before != CategoryList.current.filingSignature else { return }
+        let organizer = importer.organizer
+        showsRefile = true
+        Task {
+            await organizer.proposeRefile(context: modelContext)
+            if organizer.refileMoves?.isEmpty ?? true {
+                await organizer.applyRefile(context: modelContext)
+                showsRefile = false
             }
         }
     }

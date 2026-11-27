@@ -112,19 +112,43 @@ struct LibraryTests {
         #expect(plan["mine"] == yours)
     }
 
-    @Test func asksForANewLayoutOnlyWhenTheTopLevelOutgrowsItsShape() {
-        let summary = { (categories: [String]) in
-            categories.map { LibraryPlanner.FolderSummary(key: FolderKey(category: $0, folder: "F"), count: 1, examples: []) }
-        }
-        #expect(!LibraryPlanner.needsNewLayout(summary(["Identity", "Immigration"])))
-        #expect(LibraryPlanner.needsNewLayout(summary((1...9).map { "C\($0)" })))
-        #expect(LibraryPlanner.needsNewLayout(summary(["A", "B", "C", "D", "E"])))
+    @Test func aLeaseGoesHomeAndFollowsARename() {
+        let entries = [entry("lease", facts(.lease))]
+        #expect(LibraryPlanner.plan(entries, model: [:], categories: .defaults)["lease"]?.category == "Home")
+        var renamed = CategoryList.defaults
+        renamed.rename("Home", to: "Housing")
+        #expect(LibraryPlanner.plan(entries, model: [:], categories: renamed)["lease"]?.category == "Housing")
+    }
 
-        let folders = summary((1...9).map { "C\($0)" })
-        let tooMany = Dictionary(uniqueKeysWithValues: folders.map { ($0.key, FolderKey(category: "X\($0.key.category)", folder: "F")) })
-        #expect(LibraryPlanner.validated(tooMany, for: folders).isEmpty)
-        let merged = Dictionary(uniqueKeysWithValues: folders.map { ($0.key, FolderKey(category: "All", folder: $0.key.category)) })
-        #expect(LibraryPlanner.validated(merged, for: folders).count == 9)
+    @Test func aKindWhoseCategoryYouDeletedIsPlacedByTheModel() {
+        var list = CategoryList.defaults
+        list.delete("Identity")
+        let entries = [entry("p", facts(.passport, given: "Li"))]
+        #expect(LibraryPlanner.needsModel(entries, categories: list).map(\.id) == ["p"])
+        let plan = LibraryPlanner.plan(entries, model: ["p": ModelPlacement(category: "travel", folder: "Passports", type: "Passport")], categories: list)
+        #expect(plan["p"]?.category == "Travel")
+    }
+
+    @Test func aPlacementInACategoryNoLongerInTheListIsPlacedAgain() {
+        let gone = LibraryPlacement(person: "Li", category: "School", folder: "I-20s", name: "Li · I-20")
+        let housing = LibraryPlacement(person: "Household", category: "Housing", folder: "Bills", name: "Household · Water bill")
+        let yours = LibraryPlacement(person: "Li", category: "School", folder: "Mine", name: "Kept")
+        let entries = [
+            entry("i20", facts(.other, title: "I-20", given: "Li"), current: gone),
+            entry("bill", facts(.other, title: "Water bill"), current: housing),
+            entry("mine", facts(.other, title: "Transcript", given: "Li"), current: yours, isYours: true),
+        ]
+        // Housing is an old name for Home, so the bill stays; School is gone; yours never moves.
+        #expect(LibraryPlanner.needsModel(entries, categories: .defaults).map(\.id) == ["i20"])
+        let plan = LibraryPlanner.plan(entries, model: [:], categories: .defaults)
+        #expect(plan["bill"]?.category == "Home")
+        #expect(plan["mine"] == yours)
+    }
+
+    @Test func theModelCanOnlyNameACategoryInTheList() {
+        let entries = [entry("x", facts(.other, title: "Pet adoption papers"))]
+        let plan = LibraryPlanner.plan(entries, model: ["x": ModelPlacement(category: "Pets", folder: "Adoption", type: "Adoption papers")], categories: .defaults)
+        #expect(plan["x"]?.category == "Other")
     }
 
     // MARK: Vault

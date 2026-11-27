@@ -39,7 +39,8 @@ nonisolated enum LibraryGroups {
     /// where every document has ended go after the others.
     static func sections<Item>(
         _ items: [(item: Item, placement: LibraryPlacement)], person: String?,
-        status: (Item) -> DocumentLifecycle.Status = { _ in .current }
+        status: (Item) -> DocumentLifecycle.Status = { _ in .current },
+        categories: CategoryList = .current
     ) -> [Section<Item>] {
         let shown = items.filter { person == nil || $0.placement.person == person || $0.placement.person == LibraryPlacement.household }
         let isShared = { (placement: LibraryPlacement) in
@@ -56,7 +57,7 @@ nonisolated enum LibraryGroups {
                 }
             return Section(category: key.category, isShared: key.isShared, folders: folders)
         }
-        .sorted { ($0.isShared ? 1 : 0, categoryOrder($0.category), $0.category) < ($1.isShared ? 1 : 0, categoryOrder($1.category), $1.category) }
+        .sorted { ($0.isShared ? 1 : 0, categories.order(of: $0.category), $0.category) < ($1.isShared ? 1 : 0, categories.order(of: $1.category), $1.category) }
     }
 
     /// One folder's documents: in use by name, then ended ones, most recently ended first.
@@ -65,10 +66,9 @@ nonisolated enum LibraryGroups {
         return DocumentLifecycle.ordered(byName, status: status, ended: { status($0).endedOn })
     }
 
-    /// Starter categories in their usual order, any others after them, Other last.
-    static func categoryOrder(_ category: String) -> Int {
-        if category == "Other" { return Int.max }
-        return LibraryNaming.starterCategories.firstIndex(of: category) ?? LibraryNaming.starterCategories.count
+    /// Your categories in shelf order, any others after them, Other last.
+    static func categoryOrder(_ category: String, in categories: CategoryList = .current) -> Int {
+        categories.order(of: category)
     }
 
     private struct SectionKey: Hashable {

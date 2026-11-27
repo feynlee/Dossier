@@ -41,7 +41,7 @@ enum SampleVault {
         ),
         Sample(
             file: "Lease 2023.pdf", kind: .lease, title: "Lease for 88 Pine Ave",
-            placement: LibraryPlacement(person: LibraryPlacement.household, category: "Housing", folder: "Leases", name: "Household · Lease 88 Pine Ave · 2023-06-01 to 2024-05-31"),
+            placement: LibraryPlacement(person: LibraryPlacement.household, category: "Home", folder: "Leases", name: "Household · Lease 88 Pine Ave · 2023-06-01 to 2024-05-31"),
             facts: [(.leaseStartDate, "2023-06-01"), (.leaseEndDate, "2024-05-31")]
         ),
         Sample(

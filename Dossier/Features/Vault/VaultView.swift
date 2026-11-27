@@ -13,6 +13,10 @@ struct VaultView: View {
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
+    /// Key documents you pinned, took out or reordered (`KeyDocuments` as JSON).
+    @AppStorage(KeyDocuments.storageKey) private var keyDocumentsJSON = ""
+    /// Set by pulling the Vault down past its top, which opens search.
+    @State private var isSearchPresented = false
     @State private var isPickingFiles = false
     /// A folder dropped on the Vault, to choose files from.
     @State private var pickedFolder: URL?
@@ -28,8 +32,6 @@ struct VaultView: View {
     @State private var rereadingSelected: [SourceDocument] = []
     @State private var editMode: EditMode = .inactive
     @State private var selection = Set<PersistentIdentifier>()
-    /// The person whose documents the Vault shows; nil for everyone.
-    @State private var person: String?
     /// What's open on top of the Vault, kept here so Back always returns one screen.
     @State private var path: [VaultRoute] = []
 
@@ -41,12 +43,14 @@ struct VaultView: View {
     }
 
     private var filtered: [SourceDocument] {
-        guard !searchText.isEmpty else { return documents }
-        return documents.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText)
-                || $0.fileName.localizedCaseInsensitiveContains(searchText)
-                || $0.kind.displayName.localizedCaseInsensitiveContains(searchText)
-        }
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return documents }
+        return documents.filter { $0.matches(query) }
+    }
+
+    /// The Vault as a wallet and shelves: nothing typed, not selecting, and some documents sorted.
+    private var showsLibrary: Bool {
+        searchText.isEmpty && !isSelecting && !documents.isEmpty && !placed.isEmpty
     }
 
     var body: some View {
@@ -55,74 +59,15 @@ struct VaultView: View {
             // selection as well as the link's push, so a folder row (which has no selection tag) opened twice
             // and the stack got out of step with the path: Back then did nothing.
             List(selection: isSelecting ? $selection : nil) {
-                // Rows above the documents stay put while documents are read, so a tap lands on the row you
-                // aimed at: Personal information is there from the first document, and reading progress is
-                // shown at the end of the list.
-                if searchText.isEmpty, !isSelecting, !documents.isEmpty {
-                    Section {
-                        NavigationLink(value: VaultRoute.profile) {
-                            TileRow(
-                                symbol: "person.crop.circle",
-                                badge: !documents.contains(where: \.isReady) ? .reading : profile.conflicts.isEmpty ? .verified : .review,
-                                title: "Personal information", subtitle: profileSummary
-                            )
-                        }
-                    }
-                }
-
-                if searchText.isEmpty, !isSelecting, showsSiriTip, documents.contains(where: \.isReady) {
-                    Section {
-                        SiriTipView(intent: AskDossierIntent(), isVisible: $showsSiriTip)
-                    } footer: {
-                        Text("Or ask Siri to “find my blood type in Dossier”.")
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
-
-                if searchText.isEmpty, !isSelecting {
-                    AttentionSection(documents: documents)
-                }
-
-                if documents.isEmpty {
-                    Section {
-                        EmptyVault(isPickingFiles: $isPickingFiles, isScanning: $isScanning)
-                    }
-                    .listRowBackground(Color.clear)
-                } else if searchText.isEmpty, !isSelecting, !placed.isEmpty {
+                if showsLibrary {
+                    // Wallet first, then Personal information and anything that needs you, then the shelves.
                     librarySections
                 } else {
-                    let statuses = lifecycle
-                    let current = currentDocuments(statuses)
-                    let expired = endedDocuments(statuses)
-                    Section {
-                        if filtered.isEmpty {
-                            Text("No matches.").foregroundStyle(.secondary)
-                        } else if current.isEmpty {
-                            Text("Every document here has expired or been renewed.").foregroundStyle(.secondary)
-                        }
-                        ForEach(current) { row($0, status: statuses[$0.contentHash]) }
-                    } header: {
-                        Text("Documents")
-                    } footer: {
-                        if isSelecting {
-                            Text("Removing a document deletes what Dossier read from it. The file stays where it is, so you can add it again.")
-                        } else if toCheck > 0, searchText.isEmpty {
-                            Text(toCheck == 1
-                                ? "1 document has fields to check. Open it to compare them with the file and confirm or correct them."
-                                : "\(toCheck) documents have fields to check. Open one to compare them with the file and confirm or correct them.")
-                        }
-                    }
-
-                    if !expired.isEmpty {
-                        Section {
-                            ForEach(expired) { row($0, status: statuses[$0.contentHash]) }
-                        } header: {
-                            Text("Expired and renewed")
-                        } footer: {
-                            Text("Kept for your records. They still count for your timeline, like past addresses and trips.")
-                        }
-                    }
+                    // Rows above the documents stay put while documents are read, so a tap lands on the row you
+                    // aimed at: Personal information is there from the first document, and reading progress is
+                    // shown at the end of the list.
+                    summarySections
+                    flatSections
                 }
 
                 if !isSelecting {
@@ -130,6 +75,12 @@ struct VaultView: View {
                 }
             }
             .environment(\.editMode, $editMode)
+            // Pull to search: dragging the Vault well past its top opens the search field.
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top < -70
+            } action: { _, isPulled in
+                if isPulled, !isSelecting, !documents.isEmpty, !isSearchPresented { isSearchPresented = true }
+            }
             .navigationTitle(isSelecting ? selectionTitle : "Vault")
             // Every link in the Vault pushes a value, so the stack stays in step: a link that pushes a view
             // directly can't sit under a link that pushes a value.
@@ -144,6 +95,7 @@ struct VaultView: View {
                         }
                     }
                 case .folder(let folder): LibraryFolderView(folder: folder)
+                case .category(let category): LibraryCategoryView(route: category)
                 case .document(let id):
                     if let document = documents.first(where: { $0.persistentModelID == id }) {
                         DocumentDetailView(document: document)
@@ -158,7 +110,15 @@ struct VaultView: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Search")
+            // Hidden above the wallet until you pull the Vault down.
+            .searchable(text: $searchText, isPresented: $isSearchPresented, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search documents and facts")
+            .searchSuggestions {
+                if searchText.isEmpty {
+                    ForEach(typeSuggestions, id: \.self) { name in
+                        Label(name, systemImage: "folder").searchCompletion(name)
+                    }
+                }
+            }
             .toolbar {
                 if isSelecting {
                     ToolbarItem(placement: .topBarLeading) {
@@ -213,6 +173,79 @@ struct VaultView: View {
         }
     }
 
+    /// Personal information, Siri's tip and documents that need you.
+    @ViewBuilder private var summarySections: some View {
+        if searchText.isEmpty, !isSelecting, !documents.isEmpty {
+            Section {
+                NavigationLink(value: VaultRoute.profile) {
+                    TileRow(
+                        symbol: "person.crop.circle",
+                        badge: !documents.contains(where: \.isReady) ? .reading : profile.conflicts.isEmpty ? .verified : .review,
+                        title: "Personal information", subtitle: profileSummary
+                    )
+                }
+            }
+        }
+
+        if searchText.isEmpty, !isSelecting, showsSiriTip, documents.contains(where: \.isReady) {
+            Section {
+                SiriTipView(intent: AskDossierIntent(), isVisible: $showsSiriTip)
+            } footer: {
+                Text("Or ask Siri to “find my blood type in Dossier”.")
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        }
+
+        if searchText.isEmpty, !isSelecting {
+            AttentionSection(documents: documents)
+        }
+    }
+
+    /// Documents as one list: when searching, selecting, or before anything is sorted. Expired and
+    /// renewed ones get their own section, below the current ones.
+    @ViewBuilder private var flatSections: some View {
+        if documents.isEmpty {
+            Section {
+                EmptyVault(isPickingFiles: $isPickingFiles, isScanning: $isScanning)
+            }
+            .listRowBackground(Color.clear)
+        } else {
+            let statuses = lifecycle
+            let current = currentDocuments(statuses)
+            let expired = endedDocuments(statuses)
+            Section {
+                if filtered.isEmpty {
+                    Text("No matches.").foregroundStyle(.secondary)
+                } else if current.isEmpty {
+                    Text("Every document here has expired or been renewed.").foregroundStyle(.secondary)
+                }
+                ForEach(current) { row($0, status: statuses[$0.contentHash]) }
+            } header: {
+                Text("Documents")
+            } footer: {
+                if isSelecting {
+                    Text("Removing a document deletes what Dossier read from it. The file stays where it is, so you can add it again.")
+                } else if toCheck > 0, searchText.isEmpty {
+                    Text(toCheck == 1
+                        ? "1 document has fields to check. Open it to compare them with the file and confirm or correct them."
+                        : "\(toCheck) documents have fields to check. Open one to compare them with the file and confirm or correct them.")
+                }
+            }
+
+            if !expired.isEmpty {
+                Section {
+                    ForEach(expired) { row($0, status: statuses[$0.contentHash]) }
+                } header: {
+                    Text("Expired and renewed")
+                } footer: {
+                    Text("Kept for your records. They still count for your timeline, like past addresses and trips.")
+                }
+            }
+        }
+
+    }
+
     /// Files dropped on the Vault are added where they are; a folder opens so you can choose files in it.
     /// Copies (from Mail, say) are handled like files shared to Dossier.
     private func receive(_ providers: [NSItemProvider]) async {
@@ -260,23 +293,41 @@ struct VaultView: View {
         return LibraryGroups.people(placements, owner: LibraryGroups.owner(placements))
     }
 
-    /// The Vault laid out like the library: a person switcher when there's more than one person, then a
-    /// section per category. A folder with one document shows the document; one with several opens a list.
+    /// Folder names to jump to from an empty search, in shelf order.
+    private var typeSuggestions: [String] {
+        var seen = Set<String>()
+        return LibraryGroups.sections(placed, person: nil).flatMap { $0.folders.map(\.name) }.filter { seen.insert($0).inserted }
+    }
+
+    /// The Vault laid out like a wallet and shelves, with everyone's documents together: IDs as cards,
+    /// then a shelf per category. A tile with one document opens it; a tile with several
+    /// opens the folder, and See all opens the whole category.
     @ViewBuilder private var librarySections: some View {
-        let names = people
-        if names.count > 1 {
+        // Everyone's documents together: each card and tile says whose it is where that helps.
+        let shownPerson: String? = nil
+        let statuses = lifecycle
+        let status = { (document: SourceDocument) in statuses[document.contentHash] ?? document.lifecycleStatus }
+        let cards = WalletStack.cards(placed.map(\.item), keys: KeyDocuments(json: keyDocumentsJSON), status: status)
+        if !cards.isEmpty {
             Section {
-                Picker("Person", selection: $person) {
-                    Text("Everyone").tag(String?.none)
-                    ForEach(names, id: \.self) { Text($0).tag(Optional($0)) }
+                WalletStack(documents: cards, showsPerson: people.count > 1)
+            } header: {
+                HStack {
+                    Text("Key documents")
+                    Spacer()
+                    NavigationLink("Edit") { KeyDocumentsSettingsView() }
+                        .font(.subheadline)
+                        .textCase(nil)
+                        .accessibilityIdentifier("edit key documents")
                 }
-                .pickerStyle(.segmented)
             }
             .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
+            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
         }
-        let statuses = lifecycle
-        // Files you just added come first, so you see them arrive and get read; each moves to its folder
+
+        summarySections
+
+        // Files you just added come first, so you see them arrive and get read; each moves to its shelf
         // once it's read.
         let unplaced = documents.filter { $0.placement == nil }
         if !unplaced.isEmpty {
@@ -285,24 +336,23 @@ struct VaultView: View {
             } header: {
                 Text("Not sorted yet")
             } footer: {
-                Text("Dossier sorts documents into folders once it has read them.")
+                Text("Dossier sorts documents onto shelves once it has read them.")
             }
         }
-        ForEach(LibraryGroups.sections(placed, person: names.count > 1 ? person : nil, status: { statuses[$0.contentHash] ?? .current })) { section in
-            Section(section.isShared ? "\(section.category) · shared" : section.category) {
-                ForEach(section.folders) { folder in
-                    if folder.items.count == 1, let document = folder.items.first {
-                        row(document, status: statuses[document.contentHash])
-                    } else {
-                        NavigationLink(value: VaultRoute.folder(LibraryFolderRoute(
-                            person: names.count > 1 ? person : nil, category: section.category, folder: folder.name, isShared: section.isShared
-                        ))) {
-                            LibraryFolderRow(name: folder.name, documents: folder.items, statuses: statuses)
-                        }
-                        .accessibilityIdentifier("folder \(folder.name)")
-                    }
-                }
+        // Cards in the wallet aren't on the shelves too.
+        let inWallet = Set(cards.map(\.contentHash))
+        let shelved = placed.filter { !inWallet.contains($0.item.contentHash) }
+        ForEach(LibraryGroups.sections(shelved, person: shownPerson, status: { statuses[$0.contentHash] ?? .current })) { section in
+            Section {
+                CategoryShelf(
+                    section: section, person: shownPerson, statuses: statuses,
+                    onReread: { importer.reread($0, context: modelContext, preferPrivateCloud: usePrivateCloud) },
+                    onRemove: { removing = [$0] }
+                )
             }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+            .listSectionSpacing(.compact)
         }
     }
 
@@ -431,27 +481,17 @@ extension SourceDocument {
     }
 }
 
-/// A folder of several documents: "I-20s · 3 documents · 2019 to 2022", badged with the one that most needs you.
-/// Expired and renewed documents don't count toward its badge unless every document in it has ended.
-private struct LibraryFolderRow: View {
-    let name: String
-    let documents: [SourceDocument]
-    let statuses: [String: DocumentLifecycle.Status]
-
-    var body: some View {
-        let badges = documents.map { $0.badge(status($0)) }
-        let inUse = badges.filter { !$0.isEnded }
-        // When every one has ended, the badge says how the latest one ended.
-        let latestRenewed = documents.first.map { status($0).isRenewed } ?? false
-        let badge: TileBadge = inUse.isEmpty ? (latestRenewed ? .renewed : .expired)
-            : inUse.contains(.review) ? .review : inUse.contains(.expiring) ? .expiring : inUse.contains(.reading) ? .reading : .verified
-        let dates = documents.flatMap { [$0.libraryFacts.from, $0.libraryFacts.until, $0.libraryFacts.date].compactMap { $0 } }
-        let subtitle = ["\(documents.count) documents", LibraryGroups.years(dates)].compactMap { $0 }.joined(separator: " · ")
-        TileRow(symbol: documents.first?.kind.symbol ?? "folder", badge: badge, title: name, subtitle: subtitle)
-    }
-
-    private func status(_ document: SourceDocument) -> DocumentLifecycle.Status {
-        statuses[document.contentHash] ?? document.lifecycleStatus
+extension SourceDocument {
+    /// Whether a search finds this document: its title, file, type, place in the library, or a fact you can
+    /// read without Face ID. Numbers stay hidden, so their last digits don't match.
+    func matches(_ query: String) -> Bool {
+        let fields = [title, fileName, kind.displayName, libraryCategory, libraryFolder, libraryPerson].compactMap { $0 }
+        if fields.contains(where: { $0.localizedCaseInsensitiveContains(query) }) { return true }
+        return facts.contains { fact in
+            guard fact.status != .superseded, !fact.isSensitive else { return false }
+            if fact.displayLabel.localizedCaseInsensitiveContains(query) { return true }
+            return VaultReader.value(of: fact)?.localizedCaseInsensitiveContains(query) ?? false
+        }
     }
 }
 
@@ -459,6 +499,8 @@ private struct LibraryFolderRow: View {
 enum VaultRoute: Hashable {
     case profile
     case folder(LibraryFolderRoute)
+    /// A category's See all, from its shelf.
+    case category(LibraryCategoryRoute)
     case document(PersistentIdentifier)
     /// A document opened on one of its fields, from Personal information.
     case field(document: PersistentIdentifier, fact: PersistentIdentifier)
