@@ -312,7 +312,14 @@ struct VaultView: View {
             Section {
                 WalletStack(documents: cards, showsPerson: people.count > 1)
             } header: {
-                Text("Key documents")
+                HStack {
+                    Text("Key documents")
+                    Spacer()
+                    NavigationLink("Edit") { KeyDocumentsSettingsView() }
+                        .font(.subheadline)
+                        .textCase(nil)
+                        .accessibilityIdentifier("edit key documents")
+                }
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))

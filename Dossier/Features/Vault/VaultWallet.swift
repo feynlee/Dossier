@@ -418,5 +418,17 @@ struct LibraryCategoryView: View {
         }
         .navigationTitle(route.category)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let name = CategoryList.current.resolve(route.category) {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink {
+                        CategoryDetailView(name: name)
+                    } label: {
+                        Label("Edit Category", systemImage: "slider.horizontal.3")
+                    }
+                    .accessibilityIdentifier("edit category")
+                }
+            }
+        }
     }
 }
