@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Environment(AppLock.self) private var appLock
     @State private var lockEnabled = true
     @State private var lockTimeout = AppLockPolicy.defaultTimeout
+    @AppStorage(ScreenCheck.settingKey) private var checkEachScreen = false
     @State private var privateCloudStatus: String?
     @AppStorage(ScanFolders.autoCaptureKey) private var autoCapture = true
     @AppStorage(DetailRequest.findsUsefulDetailsKey) private var findsUsefulDetails = true
@@ -113,12 +114,17 @@ struct SettingsView: View {
                             ForEach(AppLockPolicy.timeoutChoices, id: \.self) { Text(AppLockPolicy.label(for: $0)).tag($0) }
                         }
                     }
+                    Toggle(isOn: Binding(get: { checkEachScreen }, set: { setCheckEachScreen($0) })) {
+                        TileRow(symbol: "faceid", badge: nil, title: "\(AppLock.methodName) for Each Screen", subtitle: "Personal, a Key document, or a document")
+                    }
+                    .accessibilityIdentifier("face id each screen")
                 } header: {
                     Text("App lock")
                 } footer: {
-                    Text(lockEnabled
+                    Text((lockEnabled
                         ? "Dossier always locks when it starts and when your iPhone locks. The time above is how long you can switch to another app and come back without unlocking."
                         : "Anyone who can open your unlocked iPhone can open Dossier. Numbers still need \(AppLock.methodName) to reveal.")
+                        + " Once unlocked, every number shows in full. With \(AppLock.methodName) for Each Screen on, Dossier also asks each time you open the Personal tab, bring a Key document forward or open a document.")
                 }
 
                 Section {
@@ -166,6 +172,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
             .onAppear(perform: checkRefile)
             .sheet(isPresented: $showsRefile) { RefileSheet() }
             .fileImporter(isPresented: $isChoosingScanFolder, allowedContentTypes: [.folder]) { result in
@@ -223,6 +230,14 @@ struct SettingsView: View {
         case 0: return "None"
         case 1, 2: return requested.joined(separator: ", ")
         default: return "\(requested.count) details"
+        }
+    }
+
+    /// Turning the check for each screen off needs Face ID; turning it on doesn't.
+    private func setCheckEachScreen(_ on: Bool) {
+        guard !on else { checkEachScreen = true; return }
+        Task {
+            if await appLock.confirmChange(reason: "Stop asking for \(AppLock.methodName) on each screen") { checkEachScreen = false }
         }
     }
 

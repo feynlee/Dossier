@@ -7,8 +7,8 @@ import UIKit
 ///
 /// - Always on a fresh launch.
 /// - Always when the iPhone locks.
-/// - After the app has been in the background for longer than the chosen time (1 minute by default), so a
-///   quick trip to Safari to paste a number doesn't ask again.
+/// - Each time you come back to Dossier from another app (the default). In Settings you can choose a delay,
+///   so a quick trip to Safari to paste a number doesn't ask again.
 ///
 /// Face ID falls back to the device passcode, so you can't be locked out of your own vault.
 ///
@@ -16,7 +16,7 @@ import UIKit
 nonisolated enum AppLockPolicy {
     static let enabledKey = "appLockEnabled"
     static let timeoutKey = "appLockTimeoutSeconds"
-    static let defaultTimeout = 60
+    static let defaultTimeout = 0
     static let timeoutChoices = [0, 60, 300, 900]
 
     static func shouldLock(afterBackground elapsed: Duration, timeout: Int) -> Bool {

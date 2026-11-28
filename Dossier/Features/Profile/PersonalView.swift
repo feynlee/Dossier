@@ -21,6 +21,7 @@ struct PersonalView: View {
                     }
                 }
             }
+            .screenCheck(reason: "Show your personal details")
             .navigationDestination(for: PersonalRoute.self) { route in
                 if let document = documents.first(where: { $0.persistentModelID == route.document }) {
                     DocumentDetailView(document: document, focus: route.fact)

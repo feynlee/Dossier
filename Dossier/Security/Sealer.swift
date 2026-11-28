@@ -62,8 +62,9 @@ enum Authenticator {
 
     /// Returns a context that has passed Face ID, for handing to the Secure Enclave.
     /// While Dossier is unlocked, the check that unlocked it is used again, with no second prompt.
-    static func authenticate(reason: String) async throws -> LAContext {
-        if let unlocked { return unlocked }
+    /// `fresh` always asks, for a screen that wants its own check.
+    static func authenticate(reason: String, fresh: Bool = false) async throws -> LAContext {
+        if !fresh, let unlocked { return unlocked }
         let context = LAContext()
         context.localizedCancelTitle = "Cancel"
         var error: NSError?

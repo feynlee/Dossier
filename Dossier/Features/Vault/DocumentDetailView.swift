@@ -198,6 +198,7 @@ struct DocumentDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         // The file and its fields fill the screen; the tab bar would cover the end of the list.
         .toolbar(.hidden, for: .tabBar)
+        .screenCheck(reason: "Open \(document.title)")
         // Opening a document asks for Face ID once, which shows the file and every number together. They stay
         // shown until you leave the page or Dossier locks; editing or scanning from here isn't leaving.
         .task { unlockAutomatically() }

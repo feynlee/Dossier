@@ -38,7 +38,7 @@ final class VaultNavigationTests: XCTestCase {
 
     func testOpeningADocumentInTheVaultAndGoingBack() {
         // The passport is a Key document: tapping its card brings it forward, and Open document opens its page.
-        tap(app.buttons["document Li · Passport · 2019-03-14 to 2029-03-14"])
+        tap(app.buttons["card Li · Passport · 2019-03-14 to 2029-03-14"])
         let open = app.buttons["open document"]
         XCTAssertTrue(open.waitForExistence(timeout: 5), "The passport's card didn't come forward")
         open.tap()
@@ -87,10 +87,10 @@ final class VaultNavigationTests: XCTestCase {
     }
 
     func testTappingAKeyDocumentBringsItForward() {
-        tap(app.buttons["document Li · Passport · 2019-03-14 to 2029-03-14"])
+        tap(app.buttons["card Li · Passport · 2019-03-14 to 2029-03-14"])
         let done = app.buttons["Done"]
         XCTAssertTrue(app.buttons["open document"].waitForExistence(timeout: 5), "The card didn't come forward")
-        XCTAssertTrue(app.navigationBars["Passport"].exists, "The card's title isn't its type")
+        XCTAssertTrue(app.staticTexts["Passport"].exists, "The card's title isn't its type")
         keepScreenshot("Key document brought forward")
 
         // Tapping a field copies it: the row reads "Copied" for a moment.
@@ -104,11 +104,10 @@ final class VaultNavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
     }
 
-    func testSearchButtonOpensSearch() {
-        let button = app.buttons["search documents"]
-        XCTAssertTrue(button.waitForExistence(timeout: 5), "No search button")
-        button.tap()
-        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "The search button didn't show search")
+    func testSearchIsNotInTheToolbar() {
+        // Search is on the page: pull down to open it. The toolbar has only More and +.
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["search documents"].exists, "The toolbar still has a search button")
     }
 
     func testPullingDownOpensSearch() {
@@ -117,17 +116,18 @@ final class VaultNavigationTests: XCTestCase {
         list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
             .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)))
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "Pulling down didn't show search")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Pulling down didn't put the keyboard up for search")
         keepScreenshot("Pulled down to search")
     }
 
-    func testPersonalInformationOpensAndGoesBack() {
+    func testPersonalInformationIsATabNotAVaultRow() {
+        // Personal has its own tab, so the Vault doesn't list it too.
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Personal information'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
-        // Li's vault: Mei's EAD cards are hers, so they don't make Li's given names disagree.
-        XCTAssertFalse(row.label.contains("disagree"), "Family members' documents count as yours: \(row.label)")
-        tap(row)
-        XCTAssertTrue(app.navigationBars["Personal information"].waitForExistence(timeout: 5))
-        goBack()
+        XCTAssertFalse(row.waitForExistence(timeout: 2), "The Vault still shows a Personal information row")
+        app.tabBars.buttons["Personal"].tap()
+        XCTAssertTrue(app.navigationBars["Personal"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Vault"].tap()
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
     }
 
@@ -144,8 +144,8 @@ final class VaultNavigationTests: XCTestCase {
     }
 
     func testPersonalInformationCopiesAndOpensTheSource() {
-        tap(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Personal information'")).firstMatch)
-        XCTAssertTrue(app.navigationBars["Personal information"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Personal"].tap()
+        XCTAssertTrue(app.navigationBars["Personal"].waitForExistence(timeout: 5))
 
         // Tapping a value copies it: the row reads "Copied" for a moment.
         let surname = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Surname'")).firstMatch
@@ -165,10 +165,10 @@ final class VaultNavigationTests: XCTestCase {
             XCTAssertTrue(item.waitForExistence(timeout: 3), "The menu doesn't list the passport")
             item.tap()
         }
-        XCTAssertTrue(app.navigationBars["Personal information"].waitForNonExistence(timeout: 5), "The document didn't open")
+        XCTAssertTrue(app.navigationBars["Personal"].waitForNonExistence(timeout: 5), "The document didn't open")
         keepScreenshot("Source document on the field")
         goBack()
-        XCTAssertTrue(app.navigationBars["Personal information"].waitForExistence(timeout: 5), "Back didn't return to Personal information")
+        XCTAssertTrue(app.navigationBars["Personal"].waitForExistence(timeout: 5), "Back didn't return to Personal")
     }
 
     func testPersonalTabIsFirstAndCopies() {
@@ -224,7 +224,7 @@ final class VaultNavigationTests: XCTestCase {
         app.buttons["Done"].tap()
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 5))
         // Out of Select mode, the passport is a card again: a tap brings it forward, and Open document opens it.
-        tap(app.buttons["document Li · Passport · 2019-03-14 to 2029-03-14"])
+        tap(app.buttons["card Li · Passport · 2019-03-14 to 2029-03-14"])
         let open = app.buttons["open document"]
         XCTAssertTrue(open.waitForExistence(timeout: 5), "After Select mode, the card didn't come forward")
         open.tap()

@@ -42,6 +42,7 @@ struct FormsView: View {
                 }
             }
             .navigationTitle("Forms")
+            .navigationBarTitleDisplayMode(.inline)
             .fileImporter(isPresented: $isPicking, allowedContentTypes: [.pdf]) { result in
                 open(result)
             }

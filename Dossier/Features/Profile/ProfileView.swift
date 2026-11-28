@@ -95,6 +95,7 @@ struct ProfileView: View {
             }
         }
         .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
         .modifier(Subtitle(text: subtitle))
         .task(id: documents.map { "\($0.persistentModelID.hashValue)\($0.stateRaw)" } + overrides.map { "\($0.keyRaw)\($0.editedAt)" }) {
             profile = Profile.build(documents: documents, overrides: overrides)
@@ -255,10 +256,15 @@ struct ProfileView: View {
         return Self.sourceLabel(entry.references, fallback: entry.sources.first)
     }
 
+    /// "1 document" or "3 documents": a count, never a document's name, so long titles don't push the value
+    /// aside. The button still says which document it opens to VoiceOver, and the menu lists them.
     private static func sourceLabel(_ references: [Profile.Reference], fallback: String?) -> String {
-        if references.count == 1, let reference = references.first { return reference.document.title }
-        if references.count > 1 { return "\(references.count) documents" }
-        return fallback ?? ""
+        let count = references.isEmpty ? (fallback == nil ? 0 : 1) : references.count
+        switch count {
+        case 0: return ""
+        case 1: return "1 document"
+        default: return "\(count) documents"
+        }
     }
 
     private func badge(_ entry: Profile.Entry) -> SourceButton.Badge? {

@@ -8,17 +8,20 @@ struct VaultView: View {
     @Environment(ImportCoordinator.self) private var importer
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Settings.usePrivateCloudKey) private var usePrivateCloud = true
-    /// Siri's tip ("Ask Dossier…") under Personal information until you close it: nobody guesses Siri phrases.
+    /// Siri's tip ("Ask Dossier…") under Key documents until you close it: nobody guesses Siri phrases.
     @AppStorage("showsSiriTip") private var showsSiriTip = true
     @Query(sort: \SourceDocument.ingestedAt, order: .reverse) private var documents: [SourceDocument]
-    @Query private var overrides: [ProfileOverride]
     @State private var searchText = ""
     /// Key documents you pinned, took out or reordered (`KeyDocuments` as JSON).
     @AppStorage(KeyDocuments.storageKey) private var keyDocumentsJSON = ""
     /// Set by the search button, or by pulling the Vault down past its top, which opens search.
     @State private var isSearchPresented = false
+    /// The search field has the keyboard: set with isSearchPresented when you pull down.
+    @FocusState private var isSearchFocused: Bool
     /// The Key document brought forward from the wallet.
     @State private var focusedCard: SourceDocument?
+    /// Where each Key document card is on screen, so a tapped card comes forward from its place.
+    @State private var cardFrames: [String: CGRect] = [:]
     /// Documents on their way to another shelf, from a drop or Move to….
     @State private var moving: MoveRequest?
     @State private var isPickingFiles = false
@@ -26,7 +29,6 @@ struct VaultView: View {
     @State private var pickedFolder: URL?
     @Environment(IncomingFiles.self) private var incoming
     @State private var isScanning = false
-    @State private var profile = Profile(entries: [])
     /// Documents waiting for you to confirm removing them.
     @State private var removing: [SourceDocument] = []
     /// Set from the More menu: every document, to remove or read again.
@@ -64,12 +66,11 @@ struct VaultView: View {
             // and the stack got out of step with the path: Back then did nothing.
             List(selection: isSelecting ? $selection : nil) {
                 if showsLibrary {
-                    // Wallet first, then Personal information and anything that needs you, then the shelves.
+                    // Wallet first, then Siri's tip and anything that needs you, then the shelves.
                     librarySections
                 } else {
                     // Rows above the documents stay put while documents are read, so a tap lands on the row you
-                    // aimed at: Personal information is there from the first document, and reading progress is
-                    // shown at the end of the list.
+                    // aimed at: reading progress is shown at the end of the list.
                     summarySections
                     flatSections
                 }
@@ -83,21 +84,17 @@ struct VaultView: View {
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentOffset.y + geometry.contentInsets.top < -70
             } action: { _, isPulled in
-                if isPulled, !isSelecting, !documents.isEmpty, !isSearchPresented { isSearchPresented = true }
+                if isPulled, !isSelecting, !documents.isEmpty, !isSearchPresented {
+                    isSearchPresented = true
+                    isSearchFocused = true
+                }
             }
             .navigationTitle(isSelecting ? selectionTitle : "Vault")
+            .navigationBarTitleDisplayMode(.inline)
             // Every link in the Vault pushes a value, so the stack stays in step: a link that pushes a view
             // directly can't sit under a link that pushes a value.
             .navigationDestination(for: VaultRoute.self) { route in
                 switch route {
-                case .profile:
-                    ProfileView { document, fact in
-                        if let fact {
-                            path.append(.field(document: document.persistentModelID, fact: fact.persistentModelID))
-                        } else {
-                            path.append(.document(document.persistentModelID))
-                        }
-                    }
                 case .folder(let folder): LibraryFolderView(folder: folder)
                 case .category(let category): LibraryCategoryView(route: category)
                 case .document(let id):
@@ -116,6 +113,7 @@ struct VaultView: View {
             }
             // Hidden above the wallet until you tap Search or pull the Vault down.
             .searchable(text: $searchText, isPresented: $isSearchPresented, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search documents and facts")
+            .searchFocused($isSearchFocused)
             .searchSuggestions {
                 if searchText.isEmpty {
                     ForEach(typeSuggestions, id: \.self) { name in
@@ -147,10 +145,6 @@ struct VaultView: View {
                     }
                 } else {
                     ToolbarItemGroup(placement: .primaryAction) {
-                        if !documents.isEmpty {
-                            Button("Search", systemImage: "magnifyingglass") { isSearchPresented = true }
-                                .accessibilityIdentifier("search documents")
-                        }
                         Menu {
                             AddDocumentsMenuItems(isPickingFiles: $isPickingFiles, isScanning: $isScanning)
                         } label: {
@@ -164,7 +158,7 @@ struct VaultView: View {
                     }
                 }
             }
-            .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
+            .toolbar(isSelecting || focusedCard != nil ? .hidden : .automatic, for: .tabBar)
             .addDocuments(choosingFiles: $isPickingFiles, folder: $pickedFolder)
             .onDrop(of: [.item], isTargeted: nil) { providers in
                 Task { await receive(providers) }
@@ -174,36 +168,25 @@ struct VaultView: View {
             .sheet(item: $moving) { request in
                 MoveDocumentSheet(documents: request.documents, category: request.category)
             }
-            .sheet(item: $focusedCard) { document in
-                WalletFocusView(document: document, cards: walletCards) { open in
-                    path.append(.document(open.persistentModelID))
-                }
-            }
             .removeDocuments($removing) { endSelecting() }
             .onChange(of: documents.count) { _, count in
                 if count == 0 { endSelecting() }
             }
-            .task(id: documents.map { "\($0.persistentModelID.hashValue)\($0.stateRaw)" } + overrides.map { "\($0.keyRaw)\($0.editedAt)" }) {
-                profile = Profile.build(documents: documents, overrides: overrides)
+        }
+        // A tapped card comes forward over the whole Vault, its title bar too, like a card in Apple Wallet.
+        .overlay {
+            if focusedCard != nil {
+                WalletFocusOverlay(cards: walletCards, stackFrames: cardFrames, focused: $focusedCard) { open in
+                    path.append(.document(open.persistentModelID))
+                }
             }
         }
     }
 
-    /// Personal information, Siri's tip and documents that need you.
+    /// Siri's tip and documents that need you. Personal information has its own tab.
     @ViewBuilder private var summarySections: some View {
-        if searchText.isEmpty, !isSelecting, !documents.isEmpty {
-            Section {
-                NavigationLink(value: VaultRoute.profile) {
-                    TileRow(
-                        symbol: "person.crop.circle",
-                        badge: !documents.contains(where: \.isReady) ? .reading : profile.conflicts.isEmpty ? .verified : .review,
-                        title: "Personal information", subtitle: profileSummary
-                    )
-                }
-            }
-        }
-
-        if searchText.isEmpty, !isSelecting, showsSiriTip, documents.contains(where: \.isReady) {
+        // Documents read before count while they're read again, so the tip doesn't come and go and move the rows.
+        if searchText.isEmpty, !isSelecting, showsSiriTip, documents.contains(where: \.hasBeenRead) {
             Section {
                 SiriTipView(intent: AskDossierIntent(), isVisible: $showsSiriTip)
             } footer: {
@@ -320,7 +303,14 @@ struct VaultView: View {
         let cards = walletCards
         if !cards.isEmpty {
             Section {
-                WalletStack(documents: cards) { focusedCard = $0 }
+                WalletStack(
+                    documents: cards,
+                    onSelect: { card in
+                        Task { if await ScreenCheck.pass(reason: "Show \(card.kind.displayName)") { focusedCard = card } }
+                    },
+                    isLifted: focusedCard != nil,
+                    onFrame: { cardFrames[$0] = $1 }
+                )
             } header: {
                 HStack {
                     Text("Key documents")
@@ -349,10 +339,8 @@ struct VaultView: View {
                 Text("Dossier sorts documents onto shelves once it has read them.")
             }
         }
-        // Cards in the wallet aren't on the shelves too.
-        let inWallet = Set(cards.map(\.contentHash))
-        let shelved = placed.filter { !inWallet.contains($0.item.contentHash) }
-        ForEach(LibraryGroups.sections(shelved, person: shownPerson, status: { statuses[$0.contentHash] ?? .current })) { section in
+        // Key documents stay on their shelves too, so each category shows everything in it.
+        ForEach(LibraryGroups.sections(placed, person: shownPerson, status: { statuses[$0.contentHash] ?? .current })) { section in
             Section {
                 CategoryShelf(
                     section: section, person: shownPerson, statuses: statuses,
@@ -427,14 +415,6 @@ struct VaultView: View {
             editMode = .inactive
             selection = []
         }
-    }
-
-    private var profileSummary: String {
-        let name = [profile.entry(.givenNames)?.value, profile.entry(.surname)?.value].compactMap { $0 }.joined(separator: " ")
-        let birth = profile.entry(.dateOfBirth)?.value.flatMap(SimpleDate.init(iso:)).map { "born \($0.display)" }
-        let summary = [name.isEmpty ? nil : name, birth].compactMap { $0 }.joined(separator: " · ")
-        if !profile.conflicts.isEmpty { return "Documents disagree on \(profile.conflicts.map(\.key.label).joined(separator: ", ").lowercased())" }
-        return summary.isEmpty ? "Compiled from your documents" : summary
     }
 }
 
@@ -522,12 +502,11 @@ extension SourceDocument {
 
 /// Where a link in the Vault goes.
 enum VaultRoute: Hashable {
-    case profile
     case folder(LibraryFolderRoute)
     /// A category's See all, from its shelf.
     case category(LibraryCategoryRoute)
     case document(PersistentIdentifier)
-    /// A document opened on one of its fields, from Personal information.
+    /// A document opened on one of its fields.
     case field(document: PersistentIdentifier, fact: PersistentIdentifier)
 }
 

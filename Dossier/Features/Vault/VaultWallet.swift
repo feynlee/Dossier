@@ -134,6 +134,10 @@ struct WalletStack: View {
     let documents: [SourceDocument]
     /// Called when you tap a card.
     var onSelect: (SourceDocument) -> Void = { _ in }
+    /// True while the cards are drawn forward on top of the Vault: the stack keeps its place, empty.
+    var isLifted = false
+    /// Where each card is on screen, by content hash, so the cards can come forward from there.
+    var onFrame: (String, CGRect) -> Void = { _, _ in }
 
     static let cardHeight: CGFloat = 196
     static let peek: CGFloat = 54
@@ -141,7 +145,7 @@ struct WalletStack: View {
     /// The Key documents among these, top of the screen first.
     static func cards(_ documents: [SourceDocument], keys: KeyDocuments, status: (SourceDocument) -> DocumentLifecycle.Status) -> [SourceDocument] {
         let chosen = documents.filter {
-            $0.isReady && keys.contains(hash: $0.contentHash, kind: $0.kind, isInUse: !status($0).isEnded)
+            $0.hasBeenRead && keys.contains(hash: $0.contentHash, kind: $0.kind, isInUse: !status($0).isEnded)
         }
         return keys.sorted(chosen, hash: { $0.contentHash }, kind: { $0.kind }, person: { $0.libraryPerson ?? "" })
     }
@@ -154,7 +158,8 @@ struct WalletStack: View {
                         .frame(height: Self.cardHeight)
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
+                .accessibilityIdentifier("card \(document.libraryName ?? document.title)")
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { onFrame(document.contentHash, $0) }
                 .contextMenu {
                     Button("Remove from Key Documents", systemImage: "rectangle.stack.badge.minus") {
                         KeyDocuments.update { $0.remove(document.contentHash, kind: document.kind) }
@@ -163,6 +168,7 @@ struct WalletStack: View {
                 .offset(y: CGFloat(index) * Self.peek)
             }
         }
+        .opacity(isLifted ? 0 : 1)
         .frame(height: Self.cardHeight + CGFloat(max(documents.count - 1, 0)) * Self.peek, alignment: .top)
         .padding(.vertical, 4)
     }
@@ -250,8 +256,13 @@ struct WalletCard: View {
 }
 
 extension SourceDocument {
-    /// "Passport · Li": the card's type and whose it is.
-    var walletTitle: String { WalletText.title(kind: kind.displayName, person: libraryPerson) }
+    /// Read, or being read again with what was read before: a card stays in the stack meanwhile, so the
+    /// Vault doesn't jump while documents are read again.
+    var hasBeenRead: Bool { isReady || (!facts.isEmpty && state != .failed && state != .awaitingDecision) }
+
+    /// "Passport · Li": the card's type and whose it is. A document of no set kind goes by its own title,
+    /// not "Document".
+    var walletTitle: String { WalletText.title(kind: kind == .other ? title : kind.displayName, person: libraryPerson) }
 
     /// The document number, or the A-Number, in full. The Vault's Face ID unlock opens every number.
     var walletNumber: String? {
