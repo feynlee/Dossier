@@ -114,4 +114,25 @@ struct CategoryListTests {
         list.add("Pets")
         #expect(list.filingSignature != before)
     }
+
+    @Test func yourRuleIsSavedFirstAndPromptedBeforeTheCategories() {
+        var list = CategoryList.defaults
+        list.addRule("Hotel and flight bookings go in Travel", to: "travel")
+        list.addRule("hotel and flight bookings go in travel", to: "Travel")
+        let travel = list.category(named: "Travel")!
+        #expect(travel.lines.first == FilingLine(id: travel.lines.first!.id, text: "Hotel and flight bookings go in Travel", isYours: true))
+        #expect(travel.lines.filter(\.isYours).count == 1)
+        let text = list.promptText
+        let rule = text.range(of: "- Hotel and flight bookings go in Travel → Travel")
+        let categories = text.range(of: "Categories (choose exactly one name):")
+        #expect(rule != nil && categories != nil)
+        if let rule, let categories { #expect(rule.lowerBound < categories.lowerBound) }
+    }
+
+    @Test func blankRuleIsNotSaved() {
+        var list = CategoryList.defaults
+        list.addRule("  ", to: "Travel")
+        #expect(list.rules.isEmpty)
+        #expect(!list.promptText.contains("owner's rules"))
+    }
 }

@@ -164,6 +164,15 @@ nonisolated struct CategoryList: Codable, Equatable, Sendable {
         self = normalized()
     }
 
+    /// Saves a rule in your words as one of your "What goes here" lines, first on the category's page. The
+    /// on-device model follows your lines before its own. Nothing when the text is blank or already there.
+    mutating func addRule(_ text: String, to name: String) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, let name = resolve(name), let index = categories.firstIndex(where: { $0.name == name }) else { return }
+        guard !categories[index].lines.contains(where: { $0.text.lowercased() == text.lowercased() && $0.pointsTo == nil }) else { return }
+        categories[index].lines.insert(FilingLine(text: text, isYours: true), at: 0)
+    }
+
     /// Replaces a category's lines.
     mutating func setLines(_ lines: [FilingLine], for name: String) {
         guard let name = resolve(name), let index = categories.firstIndex(where: { $0.name == name }) else { return }
@@ -206,16 +215,31 @@ nonisolated struct CategoryList: Codable, Equatable, Sendable {
 
     /// The categories and their lines, for the on-device model that files documents.
     var promptText: String {
-        var lines = ["Categories (choose exactly one name):"]
+        var lines: [String] = []
+        // Your rules first: the model must follow them before the category lines.
+        let rules = self.rules
+        if !rules.isEmpty {
+            lines.append("The owner's rules (follow these first; they win over every line below):")
+            for rule in rules { lines.append("- \(rule.line.text) → \(rule.line.pointsTo ?? rule.category)") }
+            lines.append("")
+        }
+        lines.append("Categories (choose exactly one name):")
         for category in categories {
             lines.append("- \(category.name)")
-            let includes = category.includes.map(\.text).filter { !$0.isEmpty }
+            let includes = category.includes.filter { !$0.isYours }.map(\.text).filter { !$0.isEmpty }
             if !includes.isEmpty { lines.append("  Goes here: \(includes.joined(separator: "; "))") }
-            let exclusions = category.exclusions.filter { !$0.text.isEmpty }
+            let exclusions = category.exclusions.filter { !$0.text.isEmpty && !$0.isYours }
                 .map { "\($0.text) (use \($0.pointsTo ?? Self.other))" }
             if !exclusions.isEmpty { lines.append("  Not here: \(exclusions.joined(separator: "; "))") }
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// Lines you wrote, with the category each is on, in shelf order.
+    var rules: [(category: String, line: FilingLine)] {
+        categories.flatMap { category in
+            category.lines.filter { $0.isYours && !$0.text.isEmpty }.map { (category: category.name, line: $0) }
+        }
     }
 
     // MARK: Defaults

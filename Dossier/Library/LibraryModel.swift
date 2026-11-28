@@ -29,6 +29,7 @@ actor LibraryModel {
         You file documents in a personal document library for a household. Folders go Category › Folder. \
         Choose the category only from the list you are given, following its lines: "Goes here" says what \
         belongs in it, and "Not here" says which category to use instead. When nothing fits, choose Other. \
+        The owner's rules come before everything else: when one of them fits the document, follow it. \
         Reuse an existing folder whenever the document is the same kind, so documents of the same kind end up \
         together. Never put numbers, IDs or account details in any name.
         """

@@ -2,15 +2,18 @@ import LocalAuthentication
 import SwiftData
 import SwiftUI
 
-/// Your personal information, compiled from all your documents. Tap a value to copy it; the document button
-/// beside it opens the document it comes from (or, when several show it, lets you choose one). Press and hold a
-/// value, or swipe it, to edit it.
+/// Your personal information, compiled from all your documents. Each row shows the value in full, numbers too
+/// while Dossier is unlocked. Tap a value to copy it; the source on the right opens the document it comes from
+/// (or, when several show it, lets you choose one). Press and hold a value, or swipe it, to edit it.
 struct ProfileView: View {
+    /// "Personal" as a tab; "Personal information" when the Vault opens it.
+    var title = "Personal information"
+    /// The line under the title. When there's none, the tip is under the first section instead.
+    var subtitle: String? = nil
     /// Opens a document, on the given field when there is one.
     var open: (SourceDocument, Fact?) -> Void = { _, _ in }
 
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.scenePhase) private var scenePhase
     @Query private var documents: [SourceDocument]
     @Query private var overrides: [ProfileOverride]
     @State private var profile = Profile(entries: [])
@@ -57,8 +60,8 @@ struct ProfileView: View {
                     } header: {
                         Text(title)
                     } footer: {
-                        if title == firstGroup {
-                            Text("Tap a value to copy it. The document button shows where it comes from.")
+                        if subtitle == nil, title == firstGroup {
+                            Text("Tap a value to copy it. The source on the right opens the document.")
                         }
                     }
                 }
@@ -84,22 +87,20 @@ struct ProfileView: View {
                     }
                 }
             }
+            // Only when the unlock can't open numbers: the app lock is off, or you unlocked with the passcode.
             if hasNumbers, unlocked.context == nil {
                 Section {
-                    Button("Reveal numbers with Face ID", systemImage: "faceid") { unlocked.unlock() }
+                    Button("Show numbers with Face ID", systemImage: "faceid") { unlocked.unlock() }
                 }
             }
         }
-        .navigationTitle("Personal information")
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .modifier(Subtitle(text: subtitle))
         .task(id: documents.map { "\($0.persistentModelID.hashValue)\($0.stateRaw)" } + overrides.map { "\($0.keyRaw)\($0.editedAt)" }) {
             profile = Profile.build(documents: documents, overrides: overrides)
             details = ProfileDetails.build(documents: documents)
         }
-        // Numbers stay shown until you leave this screen or the app.
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .background { unlocked.lock() }
-        }
-        .onDisappear { unlocked.lock() }
         .sensoryFeedback(.success, trigger: copyCount)
         .task(id: copyCount) {
             guard copyCount > 0 else { return }
@@ -154,16 +155,25 @@ struct ProfileView: View {
 
     private func entryRow(_ entry: Profile.Entry) -> some View {
         let row = entry.key.rawValue
-        return HStack(spacing: 4) {
+        return HStack(spacing: 8) {
             Button { tap(entry) } label: {
-                ProfileRow(entry: entry, profile: profile, unlocked: unlocked, copied: copiedRow == row)
+                ProfileRow(entry: entry, profile: profile, unlocked: unlocked)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.primary)
+            .layoutPriority(1)
+            .accessibilityValue(entry.status.summary(sources: entry.sources, edited: entry.override != nil))
             .accessibilityHint(entry.needsAttention ? "Choose the right value" : "Copies the value")
-            SourceButton(references: entry.references, open: open)
+            // "Copied" takes the source's place for a moment, so the value stays in view.
+            if copiedRow == row {
+                CopiedLabel()
+                    .fixedSize()
+            } else {
+                SourceButton(references: entry.references, label: sourceLabel(entry), badge: badge(entry), open: open)
+                    .fixedSize()
+            }
         }
         .listRowBackground(copiedRow == row ? Color.dsTintSoft : nil)
         .swipeActions {
@@ -187,7 +197,7 @@ struct ProfileView: View {
     private func detailRow(_ detail: ProfileDetails.Detail) -> some View {
         let row = "detail|\(detail.id)|\(detail.fact.persistentModelID.hashValue)"
         let references = detail.references
-        return HStack(spacing: 4) {
+        return HStack(spacing: 8) {
             Button { copy(detail, row: row) } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(detail.label).font(.footnote).foregroundStyle(.secondary)
@@ -195,20 +205,9 @@ struct ProfileView: View {
                         Text(unlocked.context.flatMap { try? VaultReader.reveal(detail.fact, context: $0) } ?? VaultReader.masked(detail.fact))
                             .font(.dsFieldValue)
                     } else {
+                        // Dates are monospaced, like numbers.
                         Text(detail.value.map { VaultReader.display($0, for: .detail) } ?? "—")
-                    }
-                    // "Copied" takes the source line's place for a moment, so the value stays in view.
-                    if copiedRow == row {
-                        CopiedLabel()
-                    } else {
-                        HStack(spacing: 4) {
-                            if detail.needsReview || detail.differs {
-                                Image(systemName: "questionmark.circle.fill").foregroundStyle(Color.dsBadgeNeutral)
-                            }
-                            Text(detail.differs ? "Documents differ · showing \(detail.fact.document?.title ?? "the newest")" : "From \(detail.sources.joined(separator: ", "))")
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                            .font(detail.value.flatMap(SimpleDate.init(iso:)) != nil ? .dsFieldValue : .body)
                     }
                 }
                 .padding(.vertical, 2)
@@ -217,8 +216,20 @@ struct ProfileView: View {
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.primary)
+            .layoutPriority(1)
+            .accessibilityValue(detail.differs ? "Documents differ · showing \(detail.fact.document?.title ?? "the newest")" : "From \(detail.sources.joined(separator: ", "))")
             .accessibilityHint("Copies the value")
-            SourceButton(references: references, open: open)
+            // "Copied" takes the source's place for a moment, so the value stays in view.
+            if copiedRow == row {
+                CopiedLabel()
+                    .fixedSize()
+            } else {
+                SourceButton(
+                    references: references, label: Self.sourceLabel(references, fallback: detail.sources.first),
+                    badge: detail.needsReview || detail.differs ? .question : nil, open: open
+                )
+                .fixedSize()
+            }
         }
         .listRowBackground(copiedRow == row ? Color.dsTintSoft : nil)
         .swipeActions {
@@ -237,9 +248,34 @@ struct ProfileView: View {
         }
     }
 
+    // MARK: Sources
+
+    /// "Passport", "3 documents" or "Edited".
+    private func sourceLabel(_ entry: Profile.Entry) -> String {
+        if entry.override != nil { return "Edited" }
+        return Self.sourceLabel(entry.references, fallback: entry.sources.first)
+    }
+
+    /// "1 document" or "3 documents": a count, never a document's name, so long titles don't push the value
+    /// aside. The button still says which document it opens to VoiceOver, and the menu lists them.
+    private static func sourceLabel(_ references: [Profile.Reference], fallback: String?) -> String {
+        let count = references.isEmpty ? (fallback == nil ? 0 : 1) : references.count
+        switch count {
+        case 0: return ""
+        case 1: return "1 document"
+        default: return "\(count) documents"
+        }
+    }
+
+    private func badge(_ entry: Profile.Entry) -> SourceButton.Badge? {
+        if entry.needsAttention || entry.status == .uncertain { return .question }
+        if entry.override == nil, case .agreed = entry.status { return .agreed }
+        return nil
+    }
+
     // MARK: Copying
 
-    /// Copies the value, after Face ID for a number. A value the documents disagree on, or one Dossier
+    /// Copies the value. A number needs no Face ID while Dossier is unlocked. A value the documents disagree on, or one Dossier
     /// doesn't have yet, opens the editor instead: there's nothing to copy.
     private func tap(_ entry: Profile.Entry) {
         let row = entry.key.rawValue
@@ -328,41 +364,58 @@ extension SimpleDate {
     var usDisplay: String { String(format: "%02d/%02d/%04d", month, day, year) }
 }
 
-/// The document button at the end of a row: one document opens straight away; several open a menu to choose.
+/// Where a value comes from, at the end of its row: "Passport" or "3 documents". One document opens straight
+/// away; several open a menu to choose.
 private struct SourceButton: View {
+    enum Badge { case agreed, question }
+
     let references: [Profile.Reference]
+    let label: String
+    var badge: Badge?
     let open: (SourceDocument, Fact?) -> Void
 
     var body: some View {
         if references.count == 1, let reference = references.first {
-            Button { open(reference.document, reference.fact) } label: {
-                chip(symbol: reference.document.kind.symbol, count: nil)
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Open \(reference.document.title)")
+            Button { open(reference.document, reference.fact) } label: { text }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Open \(reference.document.title)")
         } else if references.count > 1 {
             Menu {
                 SourceMenuItems(references: references, open: open)
-            } label: {
-                chip(symbol: "doc.on.doc", count: references.count)
-            }
+            } label: { text }
             .buttonStyle(.borderless)
             .accessibilityLabel("Sources: \(references.count) documents")
+        } else if !label.isEmpty {
+            text
         }
     }
 
-    private func chip(symbol: String, count: Int?) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: symbol)
-            if let count { Text("\(count)").monospacedDigit() }
+    private var text: some View {
+        HStack(spacing: 4) {
+            switch badge {
+            case .agreed: Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.dsTint)
+            case .question: Image(systemName: "questionmark.circle.fill").foregroundStyle(Color.dsBadgeNeutral)
+            case nil: EmptyView()
+            }
+            Text(label).lineLimit(1)
         }
-        .font(.footnote.weight(.semibold))
-        .foregroundStyle(Color.dsTint)
-        .padding(.horizontal, 7)
-        .frame(minWidth: 32, minHeight: 28)
-        .background(Color.dsTintSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .frame(width: 44, height: 44)
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
+    }
+}
+
+/// The line under the title, when there is one.
+private struct Subtitle: ViewModifier {
+    let text: String?
+
+    func body(content: Content) -> some View {
+        if let text {
+            content.navigationSubtitle(text)
+        } else {
+            content
+        }
     }
 }
 
@@ -425,11 +478,13 @@ private struct SourceMenuItems: View {
     }
 }
 
+/// "Copied" with a checkmark, in place of a row's source for a moment.
 private struct CopiedLabel: View {
     var body: some View {
         Label("Copied", systemImage: "checkmark.circle.fill")
             .font(.footnote.weight(.semibold))
             .foregroundStyle(Color.dsTint)
+            .frame(minHeight: 44)
             .transition(.opacity)
     }
 }
@@ -461,12 +516,15 @@ extension ProfileKey: Identifiable {
     var id: String { rawValue }
 }
 
-/// A Face ID context kept while you're on the screen, so every number can be shown after one look.
+/// Opens numbers with the check that unlocked Dossier, so they show in full with no second Face ID.
 @Observable
 final class UnlockState {
-    private(set) var context: LAContext?
+    /// The unlock's check, while Dossier is unlocked and it can open numbers.
+    var context: LAContext? { VaultSession.shared.context }
     var error: String?
 
+    /// Runs the action with the unlock's check. Face ID is asked for only when there's none (the app lock
+    /// is off, or you unlocked with the passcode), and that check is then kept until the app locks.
     func unlock(then action: @escaping (LAContext) -> Void = { _ in }) {
         if let context {
             action(context)
@@ -474,17 +532,15 @@ final class UnlockState {
         }
         Task {
             do {
-                let context = try await Authenticator.authenticate(reason: "Reveal your document numbers")
-                self.context = context
+                let context = try await Authenticator.authenticate(reason: "Show your document numbers")
+                VaultSession.shared.begin(context)
                 action(context)
+            } catch let error as LAError where [.userCancel, .appCancel, .systemCancel].contains(error.code) {
+                // You chose not to look: numbers stay masked.
             } catch {
                 self.error = error.localizedDescription
             }
         }
-    }
-
-    func lock() {
-        context = nil
     }
 }
 
@@ -492,7 +548,6 @@ private struct ProfileRow: View {
     let entry: Profile.Entry
     let profile: Profile
     let unlocked: UnlockState
-    var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -505,21 +560,6 @@ private struct ProfileRow: View {
             } else {
                 Text(display(entry.value))
                     .font(entry.key.isDate ? .dsFieldValue : .body)
-            }
-            // "Copied" takes the source line's place for a moment, so the value stays in view.
-            if copied {
-                CopiedLabel()
-            } else {
-                HStack(spacing: 4) {
-                    if entry.needsAttention || entry.status == .uncertain {
-                        Image(systemName: "questionmark.circle.fill").foregroundStyle(Color.dsBadgeNeutral)
-                    } else if entry.override == nil, case .agreed = entry.status {
-                        Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.dsTint)
-                    }
-                    Text(entry.status.summary(sources: entry.sources, edited: entry.override != nil))
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 2)

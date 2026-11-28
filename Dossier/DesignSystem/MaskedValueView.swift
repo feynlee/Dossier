@@ -2,8 +2,9 @@ import LocalAuthentication
 import SwiftData
 import SwiftUI
 
-/// A sensitive value: masked as `•••• •• 4821` in a chip until the user reveals it with Face ID. Revealed
-/// values mask again after 30 seconds, when the app leaves the foreground, or after a screenshot.
+/// A sensitive value: shown in full while Dossier is unlocked. Masked as `•••• •• 4821` in a chip only when
+/// the unlock can't open numbers (the app lock is off, or you unlocked with the passcode); one Face ID then
+/// opens every number until the app locks.
 struct MaskedValueView: View {
     let masked: String
     let revealed: String?
@@ -47,13 +48,14 @@ final class RevealState {
     private(set) var isAuthenticating = false
     var error: String?
 
-    /// Opens every number on the screen with one Face ID. `reusing` is a check that just passed (unlocking
-    /// the app): it's tried first without showing anything, and Face ID is asked for only if it doesn't work.
+    /// Opens every number on the screen. The check that unlocked Dossier is tried first without showing
+    /// anything (and `reusing`, if given); Face ID is asked for only if none works, and that check is then
+    /// kept for every other number until the app locks.
     func reveal(_ facts: [Fact], reason: String, reusing recent: LAContext? = nil, then: @escaping () -> Void = {}) {
         Task {
-            if let recent {
-                recent.interactionNotAllowed = true
-                if open(facts, with: recent) {
+            for context in [VaultSession.shared.context, recent].compactMap({ $0 }) {
+                context.interactionNotAllowed = true
+                if open(facts, with: context) {
                     isUnlocked = true
                     then()
                     return
@@ -63,6 +65,7 @@ final class RevealState {
             defer { isAuthenticating = false }
             do {
                 let context = try await Authenticator.authenticate(reason: reason)
+                VaultSession.shared.begin(context)
                 for fact in facts where fact.isSensitive {
                     values[fact.persistentModelID] = try VaultReader.reveal(fact, context: context)
                     alternates[fact.persistentModelID] = VaultReader.alternate(of: fact, context: context)

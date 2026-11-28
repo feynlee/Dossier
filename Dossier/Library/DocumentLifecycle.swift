@@ -151,7 +151,9 @@ extension Array where Element == SourceDocument {
 extension SourceDocument {
     var lifecycleEntry: DocumentLifecycle.Entry {
         let printedExpiry = expiryDate.map { SimpleDate(utc: $0) }
-        guard isReady else { return DocumentLifecycle.Entry(id: contentHash, series: nil, isExpired: false, expiredOn: nil) }
+        // A document being read again keeps what was read before, so it doesn't look in use meanwhile.
+        let wasRead = isReady || (!facts.isEmpty && state != .failed && state != .awaitingDecision)
+        guard wasRead else { return DocumentLifecycle.Entry(id: contentHash, series: nil, isExpired: false, expiredOn: nil) }
         let facts = libraryFacts
         // A lease or an EAD card can end on a date that isn't labelled an expiry date.
         let ended = facts.until.map { $0.date < .now } ?? false

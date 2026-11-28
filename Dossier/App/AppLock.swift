@@ -7,14 +7,16 @@ import UIKit
 ///
 /// - Always on a fresh launch.
 /// - Always when the iPhone locks.
-/// - After the app has been in the background for longer than the chosen time (1 minute by default), so a
-///   quick trip to Safari to paste a number doesn't ask again.
+/// - Each time you come back to Dossier from another app (the default). In Settings you can choose a delay,
+///   so a quick trip to Safari to paste a number doesn't ask again.
 ///
 /// Face ID falls back to the device passcode, so you can't be locked out of your own vault.
+///
+/// One unlock opens every number until the app locks again (see `VaultSession`): no second Face ID per value.
 nonisolated enum AppLockPolicy {
     static let enabledKey = "appLockEnabled"
     static let timeoutKey = "appLockTimeoutSeconds"
-    static let defaultTimeout = 60
+    static let defaultTimeout = 0
     static let timeoutChoices = [0, 60, 300, 900]
 
     static func shouldLock(afterBackground elapsed: Duration, timeout: Int) -> Bool {
@@ -40,9 +42,6 @@ final class AppLock {
     /// Set when you cancel the prompt, so it isn't shown again until you tap Unlock.
     @ObservationIgnored private var declined = false
     @ObservationIgnored private var lockWatch: UIBackgroundTaskIdentifier = .invalid
-    /// The Face ID check that just unlocked the app, so the screen behind the lock can use it instead of
-    /// asking again.
-    @ObservationIgnored private var lastUnlock: (context: LAContext, at: ContinuousClock.Instant)?
 
     var isEnabled: Bool {
         get { Self.isEnabledByDefault }
@@ -71,6 +70,8 @@ final class AppLock {
 
     func didEnterBackground() {
         backgroundedAt = .now
+        // With the app lock off, Dossier never locks: numbers need Face ID again after each visit.
+        if !isEnabled { VaultSession.shared.end() }
         watchForDeviceLock()
     }
 
@@ -96,7 +97,7 @@ final class AppLock {
     func didBecomeActive() {
         if isEnabled, let backgroundedAt, AppLockPolicy.shouldLock(afterBackground: .now - backgroundedAt, timeout: timeout) {
             isLocked = true
-            lastUnlock = nil
+            VaultSession.shared.end()
             declined = false
         }
         backgroundedAt = nil
@@ -106,16 +107,16 @@ final class AppLock {
         }
     }
 
-    /// The check that unlocked the app, if it was in the last few seconds.
-    func recentUnlock(within window: Duration = .seconds(10)) -> LAContext? {
-        guard let lastUnlock, ContinuousClock.now - lastUnlock.at < window else { return nil }
-        return lastUnlock.context
+    /// The check that unlocked the app, while it stays unlocked. It opens numbers without asking again.
+    func recentUnlock() -> LAContext? {
+        isLocked ? nil : VaultSession.shared.context
     }
 
     /// The iPhone locked: always lock.
     func deviceDidLock() {
         guard isEnabled else { return }
         isLocked = true
+        VaultSession.shared.end()
         declined = false
     }
 
@@ -141,7 +142,8 @@ final class AppLock {
         }
         do {
             try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Dossier")
-            lastUnlock = (context, .now)
+            // This check opens every number until the app locks again.
+            VaultSession.shared.begin(context)
             isLocked = false
             errorMessage = nil
         } catch let error as LAError where [.userCancel, .appCancel, .systemCancel].contains(error.code) {

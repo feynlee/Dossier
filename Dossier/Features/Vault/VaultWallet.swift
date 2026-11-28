@@ -127,21 +127,25 @@ nonisolated struct KeyDocuments: Codable, Equatable, Sendable {
 
 // MARK: Wallet
 
-/// Key documents as a stack of cards at the top of the Vault. Each card opens its document in one tap.
+/// Key documents as a stack of cards at the top of the Vault. Tapping a card brings it forward.
 /// IDs that expired or were renewed leave the stack and stay on the shelves.
 struct WalletStack: View {
     /// Back to front: the last card is drawn whole.
     let documents: [SourceDocument]
-    /// Show whose card it is, when the Vault shows more than one person.
-    let showsPerson: Bool
+    /// Called when you tap a card.
+    var onSelect: (SourceDocument) -> Void = { _ in }
+    /// True while the cards are drawn forward on top of the Vault: the stack keeps its place, empty.
+    var isLifted = false
+    /// Where each card is on screen, by content hash, so the cards can come forward from there.
+    var onFrame: (String, CGRect) -> Void = { _, _ in }
 
-    private static let cardHeight: CGFloat = 196
-    private static let peek: CGFloat = 54
+    static let cardHeight: CGFloat = 196
+    static let peek: CGFloat = 54
 
     /// The Key documents among these, top of the screen first.
     static func cards(_ documents: [SourceDocument], keys: KeyDocuments, status: (SourceDocument) -> DocumentLifecycle.Status) -> [SourceDocument] {
         let chosen = documents.filter {
-            $0.isReady && keys.contains(hash: $0.contentHash, kind: $0.kind, isInUse: !status($0).isEnded)
+            $0.hasBeenRead && keys.contains(hash: $0.contentHash, kind: $0.kind, isInUse: !status($0).isEnded)
         }
         return keys.sorted(chosen, hash: { $0.contentHash }, kind: { $0.kind }, person: { $0.libraryPerson ?? "" })
     }
@@ -149,12 +153,13 @@ struct WalletStack: View {
     var body: some View {
         ZStack(alignment: .top) {
             ForEach(Array(documents.enumerated()), id: \.element.persistentModelID) { index, document in
-                NavigationLink(value: VaultRoute.document(document.persistentModelID)) {
-                    WalletCard(document: document, showsPerson: showsPerson, isFront: index == documents.count - 1)
+                Button { onSelect(document) } label: {
+                    WalletCard(document: document, isFront: index == documents.count - 1)
                         .frame(height: Self.cardHeight)
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
+                .accessibilityIdentifier("card \(document.libraryName ?? document.title)")
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { onFrame(document.contentHash, $0) }
                 .contextMenu {
                     Button("Remove from Key Documents", systemImage: "rectangle.stack.badge.minus") {
                         KeyDocuments.update { $0.remove(document.contentHash, kind: document.kind) }
@@ -163,15 +168,16 @@ struct WalletStack: View {
                 .offset(y: CGFloat(index) * Self.peek)
             }
         }
+        .opacity(isLifted ? 0 : 1)
         .frame(height: Self.cardHeight + CGFloat(max(documents.count - 1, 0)) * Self.peek, alignment: .top)
         .padding(.vertical, 4)
     }
 }
 
-/// One ID as a card: its type, whose it is, the masked number and the expiry date.
+/// One Key document as a card: its type and whose it is, the full number, the name and the expiry date.
+/// Collapsed cards show the top row only; the front card adds a picture of the document.
 struct WalletCard: View {
     let document: SourceDocument
-    let showsPerson: Bool
     let isFront: Bool
 
     private var color: Color {
@@ -182,50 +188,51 @@ struct WalletCard: View {
         }
     }
 
-    private var number: String? {
-        guard let fact = document.fact(.documentNumber) ?? document.fact(.alienNumber) else { return nil }
-        return fact.isSensitive ? VaultReader.masked(fact) : VaultReader.value(of: fact)
-    }
-
     private var isExpiring: Bool { document.badge == .expiring }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(document.kind.displayName)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(document.walletTitle)
                     .font(.headline)
-                Spacer()
-                if isExpiring, let expiry = document.expiryDate {
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if isFront, isExpiring, let expiry = document.expiryDate {
                     Label("Expires \(SimpleDate(utc: expiry).display)", systemImage: "clock")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color(light: 0xB25000, dark: 0xB25000))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(.white))
-                } else if showsPerson, let person = document.libraryPerson {
-                    Text(person).font(.subheadline).opacity(0.9)
+                } else if !isFront {
+                    if isExpiring {
+                        Image(systemName: "clock.fill")
+                            .font(.footnote)
+                            .foregroundStyle(Color(light: 0xFFB340, dark: 0xFFB340))
+                            .accessibilityLabel("Expiring")
+                    }
+                    if let number = document.walletNumber {
+                        Text(number)
+                            .font(.system(.subheadline, design: .monospaced).weight(.medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
                 }
             }
-            Spacer(minLength: 8)
             if isFront {
-                HStack(spacing: 14) {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.white.opacity(0.18))
-                        .frame(width: 54, height: 66)
-                        .overlay {
-                            Image(systemName: document.kind.symbol)
-                                .font(.system(size: 24, weight: .medium))
+                Spacer(minLength: 8)
+                HStack(alignment: .center, spacing: 14) {
+                    WalletThumbnail(document: document)
+                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                        if let number = document.walletNumber {
+                            GridRow {
+                                field("Number", number, font: .system(.title3, design: .monospaced).weight(.semibold))
+                                    .gridCellColumns(2)
+                            }
                         }
-                    VStack(alignment: .leading, spacing: 2) {
-                        if let number {
-                            Text("Number").font(.caption).opacity(0.8)
-                            Text(number).font(.system(.title3, design: .monospaced).weight(.medium))
-                        }
-                        if let expiry = document.expiryDate {
-                            Text("Expires \(SimpleDate(utc: expiry).display)").font(.caption).opacity(0.8)
-                        }
-                        if showsPerson, isExpiring, let person = document.libraryPerson {
-                            Text(person).font(.caption).opacity(0.8)
+                        GridRow {
+                            field("Name", document.walletName ?? "—", font: .subheadline.weight(.medium))
+                            field("Expires", document.expiryDate.map { SimpleDate(utc: $0).display } ?? "—", font: .subheadline.weight(.medium))
                         }
                     }
                 }
@@ -239,6 +246,47 @@ struct WalletCard: View {
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityElement(children: .combine)
     }
+
+    private func field(_ label: String, _ value: String, font: Font) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label).font(.caption).opacity(0.8)
+            Text(value).font(font).lineLimit(1).minimumScaleFactor(0.6)
+        }
+    }
+}
+
+extension SourceDocument {
+    /// Read, or being read again with what was read before: a card stays in the stack meanwhile, so the
+    /// Vault doesn't jump while documents are read again.
+    var hasBeenRead: Bool { isReady || (!facts.isEmpty && state != .failed && state != .awaitingDecision) }
+
+    /// "Passport · Li": the card's type and whose it is. A document of no set kind goes by its own title,
+    /// not "Document".
+    var walletTitle: String { WalletText.title(kind: kind == .other ? title : kind.displayName, person: libraryPerson) }
+
+    /// The document number, or the A-Number, in full. The Vault's Face ID unlock opens every number.
+    var walletNumber: String? {
+        guard let fact = fact(.documentNumber) ?? fact(.alienNumber) else { return nil }
+        return VaultReader.cardValue(fact)
+    }
+
+    /// The holder's name as printed: given names, then surname.
+    var walletName: String? {
+        WalletText.name(given: fact(.givenNames).flatMap(VaultReader.cardValue), surname: fact(.surname).flatMap(VaultReader.cardValue))
+    }
+}
+
+/// The text on a wallet card, kept apart from the views so tests can check it.
+nonisolated enum WalletText {
+    static func title(kind: String, person: String?) -> String {
+        guard let person = person?.trimmingCharacters(in: .whitespaces), !person.isEmpty else { return kind }
+        return "\(kind) · \(person)"
+    }
+
+    static func name(given: String?, surname: String?) -> String? {
+        let parts = [given, surname].compactMap { $0?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
 }
 
 // MARK: Shelves
@@ -250,24 +298,41 @@ struct CategoryShelf: View {
     let statuses: [String: DocumentLifecycle.Status]
     var onReread: (SourceDocument) -> Void = { _ in }
     var onRemove: (SourceDocument) -> Void = { _ in }
+    /// Opens the Move sheet for these documents: from Move to… (no category yet), or a drop on this shelf.
+    var onMove: (_ documents: [SourceDocument], _ category: String?) -> Void = { _, _ in }
+    /// Content hashes dropped on this shelf, to move here.
+    var onDrop: (_ hashes: [String], _ category: String) -> Void = { _, _ in }
+
+    /// True while a dragged tile is over this shelf.
+    @State private var isTargeted = false
 
     private var style: CategoryStyle { .of(section.category) }
+
+    /// What a dragged tile carries: its documents' content hashes, one per line.
+    static func dragPayload(_ documents: [SourceDocument]) -> String {
+        documents.map(\.contentHash).joined(separator: "\n")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(section.category)
                     .font(.title3.bold())
+                    .foregroundStyle(isTargeted ? style.tint : .primary)
                 if section.isShared {
                     Text("shared").font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
-                NavigationLink(value: VaultRoute.category(LibraryCategoryRoute(person: person, category: section.category, isShared: section.isShared))) {
-                    Text("See all").font(.subheadline)
+                if isTargeted {
+                    Text("Drop to move here").font(.subheadline.weight(.semibold)).foregroundStyle(style.tint)
+                } else {
+                    NavigationLink(value: VaultRoute.category(LibraryCategoryRoute(person: person, category: section.category, isShared: section.isShared))) {
+                        Text("See all").font(.subheadline)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.dsTint)
+                    .accessibilityIdentifier("category \(section.category)")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.dsTint)
-                .accessibilityIdentifier("category \(section.category)")
             }
             .padding(.horizontal, 20)
 
@@ -282,6 +347,21 @@ struct CategoryShelf: View {
             .scrollIndicators(.hidden)
         }
         .padding(.vertical, 6)
+        // Touch and hold a tile, then drag it onto another shelf: the shelf lights up, and the drop opens Move.
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(style.soft)
+                .strokeBorder(style.tint, lineWidth: 2)
+                .padding(.horizontal, 8)
+                .opacity(isTargeted ? 1 : 0)
+        }
+        .dropDestination(for: String.self) { items, _ in
+            let hashes = items.flatMap { $0.split(separator: "\n").map(String.init) }
+            guard !hashes.isEmpty else { return false }
+            onDrop(hashes, section.category)
+            return true
+        } isTargeted: { isTargeted = $0 }
+        .animation(.snappy, value: isTargeted)
     }
 
     @ViewBuilder private func tile(_ folder: LibraryGroups.Folder<SourceDocument>) -> some View {
@@ -292,7 +372,11 @@ struct CategoryShelf: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("document \(document.libraryName ?? document.title)")
+            .draggable(Self.dragPayload([document])) {
+                ShelfTile(symbol: document.kind.symbol, badge: document.badge(status), title: folder.name, subtitle: shortSubtitle(document, status: status), style: style)
+            }
             .contextMenu {
+                Button("Move to…", systemImage: "folder") { onMove([document], nil) }
                 Button("Add to Key Documents", systemImage: "rectangle.stack.badge.plus") {
                     KeyDocuments.update { $0.add(document.contentHash) }
                 }
@@ -305,6 +389,12 @@ struct CategoryShelf: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("folder \(folder.name)")
+            .draggable(Self.dragPayload(folder.items)) {
+                ShelfTile(symbol: folder.items.first?.kind.symbol ?? "folder", badge: folderBadge(folder.items), title: folder.name, subtitle: folderSubtitle(folder.items), style: style, count: folder.items.count)
+            }
+            .contextMenu {
+                Button("Move to…", systemImage: "folder") { onMove(folder.items, nil) }
+            }
         }
     }
 

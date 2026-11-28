@@ -50,6 +50,8 @@ enum Authenticator {
     /// True while a Face ID prompt from inside the app is on screen. The prompt makes the app inactive for a
     /// moment; that isn't leaving the app, so the privacy cover stays hidden and revealed values stay shown.
     @MainActor private(set) static var isPrompting = false
+    /// The check that unlocked Dossier, set by the app's unlock session. Nil in the extensions.
+    @MainActor static var unlocked: LAContext?
     enum AuthError: LocalizedError {
         case unavailable(String)
         var errorDescription: String? {
@@ -59,7 +61,10 @@ enum Authenticator {
     }
 
     /// Returns a context that has passed Face ID, for handing to the Secure Enclave.
-    static func authenticate(reason: String) async throws -> LAContext {
+    /// While Dossier is unlocked, the check that unlocked it is used again, with no second prompt.
+    /// `fresh` always asks, for a screen that wants its own check.
+    static func authenticate(reason: String, fresh: Bool = false) async throws -> LAContext {
+        if !fresh, let unlocked { return unlocked }
         let context = LAContext()
         context.localizedCancelTitle = "Cancel"
         var error: NSError?
